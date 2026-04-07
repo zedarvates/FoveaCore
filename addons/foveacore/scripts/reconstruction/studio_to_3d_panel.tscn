@@ -1,0 +1,159 @@
+[gd_scene load_steps=2 format=3 uid="uid://b8x1p1v2q7x1e"]
+
+[ext_resource type="Script" path="res://addons/foveacore/scripts/reconstruction/studio_to_3d_panel.gd" id="1_a1b2c"]
+
+[node name="StudioTo3D" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_a1b2c")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="Label" parent="VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "StudioTo3D Reconstruction"
+horizontal_alignment = 1
+
+[node name="HSeparator" type="HSeparator" parent="VBox"]
+layout_mode = 2
+
+[node name="VideoSource" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBox/VideoSource"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "Video Input:"
+
+[node name="PathEdit" type="LineEdit" parent="VBox/VideoSource"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Select source video from studio..."
+
+[node name="Browse" type="Button" parent="VBox/VideoSource"]
+layout_mode = 2
+text = "Browse"
+
+[node name="SessionName" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBox/SessionName"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "Session Name:"
+
+[node name="NameEdit" type="LineEdit" parent="VBox/SessionName"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "my_object_reconstruction"
+
+[node name="Settings" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+
+[node name="MaskHeader" type="Label" parent="VBox/Settings"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "Masking Mode:"
+
+[node name="MaskOption" type="OptionButton" parent="VBox/Settings"]
+layout_mode = 2
+size_flags_horizontal = 3
+item_count = 3
+selected = 0
+popup/item_0/text = "Studio White"
+popup/item_0/id = 0
+popup/item_1/text = "Chroma Green"
+popup/item_1/id = 1
+popup/item_2/text = "Chroma Blue"
+popup/item_2/id = 2
+
+[node name="ThresholdLabel" type="Label" parent="VBox/Settings"]
+layout_mode = 2
+text = " - Threshold:"
+
+[node name="ThresholdSlider" type="HSlider" parent="VBox/Settings"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+max_value = 1.0
+step = 0.05
+value = 0.95
+
+[node name="HSeparator2" type="HSeparator" parent="VBox"]
+layout_mode = 2
+
+[node name="PipelineHeader" type="Label" parent="VBox"]
+layout_mode = 2
+text = "Pipeline Actions:"
+horizontal_alignment = 1
+
+[node name="Pipeline" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+alignment = 1
+
+[node name="Extract" type="Button" parent="VBox/Pipeline"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "1. Extract & Mask"
+
+[node name="Sfm" type="Button" parent="VBox/Pipeline"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "2. Run COLMAP (SfM)"
+
+[node name="Train" type="Button" parent="VBox/Pipeline"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "3. Train 3DGS"
+
+[node name="Preview" type="Button" parent="VBox/Pipeline"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "4. Preview Results"
+
+[node name="HSeparator3" type="HSeparator" parent="VBox"]
+layout_mode = 2
+
+[node name="Status" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+
+[node name="StatusLabel" type="Label" parent="VBox/Status"]
+layout_mode = 2
+text = "Status: Idle"
+
+[node name="Progress" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+
+[node name="ProgressBar" type="ProgressBar" parent="VBox/Progress"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Logs" type="VBoxContainer" parent="VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Label" type="Label" parent="VBox/Logs"]
+layout_mode = 2
+text = "Logs:"
+
+[node name="LogEdit" type="TextEdit" parent="VBox/Logs"]
+layout_mode = 2
+size_flags_vertical = 3
+editable = false
+
+[connection signal="pressed" from="VBox/VideoSource/Browse" to="." method="_on_browse_pressed"]
+[connection signal="pressed" from="VBox/Pipeline/Extract" to="." method="_on_extract_pressed"]
+[connection signal="pressed" from="VBox/Pipeline/Sfm" to="." method="_on_sfm_pressed"]
+[connection signal="pressed" from="VBox/Pipeline/Train" to="." method="_on_train_pressed"]
+[connection signal="pressed" from="VBox/Pipeline/Preview" to="." method="_on_preview_pressed"]

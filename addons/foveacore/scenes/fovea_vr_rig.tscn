@@ -1,0 +1,28 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://addons/foveacore/scripts/vr/fovea_vr_rig.gd" id="1_rig"]
+[ext_resource type="Script" path="res://addons/foveacore/scripts/vr/fovea_xr_initializer.gd" id="2_xr_init"]
+
+[node name="FoveaVRRig" type="XROrigin3D"]
+script = ExtResource("1_rig")
+
+[node name="XRCamera3D" type="XRCamera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
+fov = 90.0
+
+[node name="LeftHand" type="XRController3D" parent="."]
+tracker = &"left_hand"
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="LeftHand"]
+visible = false
+
+[node name="RightHand" type="XRController3D" parent="."]
+tracker = &"right_hand"
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="RightHand"]
+visible = false
+
+[node name="FoveaXRInitializer" type="Node" parent="."]
+script = ExtResource("2_xr_init")
+auto_initialize = true
+foveation_level = 2

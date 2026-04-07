@@ -1,0 +1,45 @@
+import os
+
+# Configuration
+env = Environment()
+
+# Variables
+godot_cpp_path = "#godot-cpp"
+target = ARGUMENTS.get("target", "template_release")
+platform = ARGUMENTS.get("platform", "windows")
+arch = ARGUMENTS.get("arch", "x86_64")
+
+# Compiler flags - MSVC compatible
+if platform == "windows":
+    env.Append(CXXFLAGS=["/std:c++17", "/O2", "/nologo", "/EHsc"])
+    env.Append(CPPDEFINES=["GDEXTENSION", "NDEBUG"])
+else:
+    env.Append(CXXFLAGS=["-std=c++17", "-O3"])
+    env.Append(CPPDEFINES=["GDEXTENSION", "NDEBUG"])
+
+# Include paths - add gdextension directory from godot-cpp
+env.Append(CPPPATH=[
+    godot_cpp_path,
+    godot_cpp_path + "/gen/include",
+    godot_cpp_path + "/include",
+    godot_cpp_path + "/gdextension",
+    "#src"
+])
+
+# Libraries
+env.Append(LIBS=[
+    "godot-cpp/bin/libgodot-cpp.windows.template_release.x86_64.lib"
+])
+
+# Sources
+sources = Glob("src/*.cpp")
+
+# Output
+if platform == "windows":
+    env.SharedLibrary(target="#bin/foveacore", source=sources)
+else:
+    env.SharedLibrary(target="#bin/libfoveacore", source=sources)
+
+print("Building FoveaCore GDExtension...")
+print(f"  Platform: {platform}")
+print(f"  Target: {target}")

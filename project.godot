@@ -1,0 +1,37 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="FoveaEngine"
+run/main_scene="res://test_foveacore.tscn"
+config/features=PackedStringArray("4.6", "Forward Plus")
+xr/openxr/enabled=true
+xr/shaders/enabled=true
+xr/openxr/default_action_map="res://addons/foveacore/resources/xr_action_map.tres"
+config/icon="res://icon.svg"
+
+[dotnet]
+
+project/assembly_name="FoveaEngine"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/foveacore/plugin.cfg")
+
+[physics]
+
+3d/physics_engine="Jolt Physics"
+
+[rendering]
+
+rendering_device/driver.windows="d3d12"
+vrs/mode=2
+vrs/texture_size=1

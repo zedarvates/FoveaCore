@@ -1,0 +1,5 @@
+[gd_resource type="OpenXRActionMap" load_steps=1 format=3]
+
+[resource]
+action_sets = []
+interaction_profiles = []
