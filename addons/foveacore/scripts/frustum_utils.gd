@@ -25,7 +25,7 @@ class Frustum:
 	func from_matrix(view_projection: Projection, camera_transform: Transform3D):
 		# Matrice combinée
 		var inv_transform: Transform3D = camera_transform.affine_inverse()
-		var vp: Projection = view_projection * Projection(Transform3D(inv_transform.basis.inverse(), -inv_transform.basis.inverse() * inv_transform.origin))
+		var vp: Projection = view_projection * Projection(inv_transform)
 
 		# Extraire les 6 plans
 		# Left plane

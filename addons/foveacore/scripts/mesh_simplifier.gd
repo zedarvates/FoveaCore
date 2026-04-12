@@ -1,4 +1,5 @@
 class_name MeshSimplifier
+extends Resource
 
 ## MeshSimplifier - Quadric Error Metrics (QEM) mesh simplification
 ## Implements Garland & Heckbert (1997) algorithm
@@ -12,10 +13,11 @@ class SimplificationResult:
 	var processing_time_ms: float = 0.0
 
 class Quadric:
-	var q: Array = [0.0] * 10
+	var q: Array = []
 	
 	func _init():
-		pass
+		q.resize(10)
+		q.fill(0.0)
 	
 	func add_plane(a: float, b: float, c: float, d: float):
 		q[0] += a * a

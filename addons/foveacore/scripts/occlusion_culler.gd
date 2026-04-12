@@ -1,3 +1,4 @@
+extends Node
 class_name OcclusionCuller
 
 ## OcclusionCuller - Culling d'occlusion via Hi-Z buffer (pyramide de profondeur)
@@ -59,8 +60,8 @@ func is_occluded(world_position: Vector3, view_projection: Projection, camera_tr
 
 	# Transformer la position en espace écran
 	var inv_transform: Transform3D = camera_transform.affine_inverse()
-	var world_pos4: Vector4 = Vector4(world_position.x, world_position.y, world_position.z, 1.0)
-	var clip_pos: Vector4 = view_projection * Projection(Transform3D(inv_transform.basis.inverse(), -inv_transform.basis.inverse() * inv_transform.origin)) * world_pos4
+	var pos_cam: Vector3 = inv_transform * world_position
+	var clip_pos: Vector4 = view_projection * Vector4(pos_cam.x, pos_cam.y, pos_cam.z, 1.0)
 	if clip_pos.w <= 0:
 		return false
 

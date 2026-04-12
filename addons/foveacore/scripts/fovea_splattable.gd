@@ -13,6 +13,9 @@ class_name FoveaSplattable
 ## Activer/désactiver le splatting pour cet objet
 @export var splatting_enabled := true
 
+## Masquer le mesh original (pour ne voir que le nuage de points/splats)
+@export var hide_mesh_when_splatting := true
+
 ## Priorité de culling (0 = toujours culler en premier si nécessaire)
 @export_range(0, 10) var culling_priority := 5
 
@@ -34,9 +37,16 @@ func _exit_tree():
 
 func _ready():
 	_capture_mesh_reference()
+	if hide_mesh_when_splatting and splatting_enabled:
+		if self is MeshInstance3D:
+			self.visible = false
+		elif has_node("MeshInstance3D"):
+			get_node("MeshInstance3D").visible = false
 
 func _capture_mesh_reference():
-	if has_node("MeshInstance3D"):
+	if self is MeshInstance3D:
+		original_mesh = self.mesh
+	elif has_node("MeshInstance3D"):
 		var mesh_instance = $MeshInstance3D as MeshInstance3D
 		if mesh_instance:
 			original_mesh = mesh_instance.mesh

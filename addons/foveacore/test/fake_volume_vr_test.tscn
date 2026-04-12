@@ -1,0 +1,33 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://addons/foveacore/scripts/vr/fovea_vr_rig.gd" id="1_rig"]
+[ext_resource type="Script" path="res://addons/foveacore/scripts/vr/fovea_xr_initializer.gd" id="2_xr_init"]
+[ext_resource type="Script" path="res://addons/foveacore/scripts/proxy_face_renderer.gd" id="3_proxy"]
+
+[node name="FakeVolumeVRTest" type="Node3D"]
+
+[node name="FoveaVRRig" type="XROrigin3D" parent="."]
+script = ExtResource("1_rig")
+
+[node name="XRCamera3D" type="XRCamera3D" parent="FoveaVRRig"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
+fov = 90.0
+
+[node name="LeftHand" type="XRController3D" parent="FoveaVRRig"]
+tracker = &"left_hand"
+
+[node name="RightHand" type="XRController3D" parent="FoveaVRRig"]
+tracker = &"right_hand"
+
+[node name="FoveaXRInitializer" type="Node" parent="FoveaVRRig"]
+script = ExtResource("2_xr_init")
+auto_initialize = true
+foveation_level = 2
+
+[node name="ProxyFaceRenderer" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, -2)
+script = ExtResource("3_proxy")
+radius = 0.3
+falloff = 2.5
+splat_color = Color(0.9, 0.7, 0.5, 1)
+show_debug = true

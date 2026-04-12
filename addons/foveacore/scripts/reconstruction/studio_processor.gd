@@ -21,16 +21,26 @@ func extract_frames(session: ReconstructionSession) -> void:
     _simulate_extraction(session)
 
 ## Mask background based on mode (White, Green, Blue)
-func mask_background(image: Image, mode: String, threshold: float = 0.9) -> Image:
+func mask_background(image: Image, mode: String, threshold: float = 0.9, roi: Rect2i = Rect2i(0,0,0,0)) -> Image:
     var masked: Image = image.duplicate()
     var size: Vector2i = image.get_size()
 
     for y in range(size.y):
         for x in range(size.x):
+            # 1. Apply ROI (Region of Interest)
+            if roi.size != Vector2i.ZERO:
+                if not roi.has_point(Vector2i(x, y)):
+                    masked.set_pixel(x, y, Color(0, 0, 0, 0)) # Mask outside ROI
+                    continue
+
             var pixel: Color = image.get_pixel(x, y)
             var mask_it: bool = false
             
             match mode:
+                "Smart Studio":
+                    # Mask both extremes: very bright (background) and very dark (edges/black gaps)
+                    var luma = pixel.r * 0.299 + pixel.g * 0.587 + pixel.b * 0.114
+                    mask_it = luma > threshold or luma < 0.15 # 0.15 is the dark tolerance
                 "Studio White":
                     mask_it = pixel.r > threshold and pixel.g > threshold and pixel.b > threshold
                 "Chroma Green":

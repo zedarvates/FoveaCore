@@ -4,7 +4,7 @@ class_name PhysicsProxyGenerator
 ## PhysicsProxyGenerator — Binds high-fidelity Gaussian Splats to Physical Colliders
 ## Uses the Low-Poly mesh from StudioTo3D as a proxy for the high-end splats
 
-@export var rigid_body_mode := RigidBody3D.FREE
+@export var rigid_body_mode := RigidBody3D.FREEZE_MODE_STATIC
 @export var mesh_simplifier: MeshSimplifier = null
 @export var collision_layers := 1
 @export var mass := 1.0

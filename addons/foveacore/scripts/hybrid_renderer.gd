@@ -175,7 +175,7 @@ func set_mesh_opacity(opacity: float):
 ## Obtenir les stats
 func get_stats() -> Dictionary:
 	return {
-		"mode": RenderMode.keys[current_mode],
+		"mode": RenderMode.keys()[current_mode],
 		"mesh_enabled": config.mesh_enabled,
 		"splat_enabled": config.splat_enabled,
 		"mesh_opacity": config.mesh_opacity

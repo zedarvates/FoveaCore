@@ -37,7 +37,9 @@ The engine doesn't just render points; it renders **artistic layers**.
 ## 📂 Project Structure
 
 - `addons/foveacore/`: The core plugin and scripts.
-- `plans/`: Detailed architecture, implementation, and advanced feature documents.
+- `addons/foveacore/scenes/`: Ready-to-use scenes (VR Rig, Playground, Workspace).
+- `plans/`: Detailed architecture, [Roadmap](ROADMAP.md), and [reconstruction_prompts.md](plans/reconstruction_prompts.md).
+- `tutorials/`: [Get Started Guide](tutorials/get_started.md).
 - `scripts/reconstruction/`: The StudioTo3D backend and UI.
 - `scripts/advanced/`: High-end rendering and interaction controllers.
 
@@ -46,9 +48,10 @@ The engine doesn't just render points; it renders **artistic layers**.
 ## 🛠️ Usage
 
 1. **Install Plugin**: Enable `FoveaCore` in Godot project settings.
-2. **Reconstruction**: Open the `StudioTo3D` panel in the bottom dock.
-3. **Rendering**: Use the `FoveaSplattable` node to display your results.
-4. **Optimization**: Add the `EyeTrackingBridge` and `LayeredFoveatedController` to your scene.
+2. **Reconstruction**: Open the `StudioTo3D` panel or run `studio_workspace.tscn`.
+3. **Optimized Masking**: Use **Smart Studio** mode and **Draw ROI Mask** to isolate your objects from complex backgrounds (black edges, shadows).
+4. **Rendering**: Use the `FoveaSplattable` node. It automatically captures your mesh and can hide it to show splats.
+5. **Testing**: Run `splat_brush_playground.tscn` to test VR interactions.
 
 ---
 

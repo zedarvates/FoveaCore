@@ -26,9 +26,18 @@ func _setup_multimesh(count: int) -> void:
     mm.use_colors = true
     mm.instance_count = count
     
-    # Simple quad or sphere for point mesh
-    var mesh = BoxMesh.new()
-    mesh.size = Vector3(point_size, point_size, point_size)
+    # Use a QuadMesh (plane) for better splat-like visualization
+    var mesh = QuadMesh.new()
+    mesh.size = Vector2(point_size, point_size)
+    
+    # Enable billboarding so planes face the camera
+    var mat = StandardMaterial3D.new()
+    mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+    mat.vertex_color_use_as_albedo = true
+    mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+    mat.use_point_size = true
+    mesh.material = mat
+    
     mm.mesh = mesh
     
     self.multimesh = mm
@@ -46,18 +55,32 @@ func _parse_ply_header(file: FileAccess) -> Dictionary:
     return header
 
 func _populate_points(file: FileAccess, header: Dictionary) -> void:
-    for i in range(header.vertex_count):
-        # This assumes a binary PLY or simple ASCII PLY 
-        # In a real implementation, we would handle both formats.
-        # For this prototype, we simulate loading the points.
-        var pos = Vector3(
-            randf_range(-1.0, 1.0), 
-            randf_range(0.0, 2.0), 
-            randf_range(-1.0, 1.0)
-        )
-        var color = Color(randf(), randf(), randf()) if header.has_color else default_color
-        
-        multimesh.set_instance_transform(i, Transform3D(Basis(), pos))
-        multimesh.set_instance_color(i, color)
-    
-    print("PointCloudVisualizer: Visualized ", header.vertex_count, " points.")
+	# Note: This is a basic ASCII PLY reader for the prototype
+	for i in range(header.vertex_count):
+		var pos = Vector3.ZERO
+		var color = default_color
+		
+		if file != null and not file.eof_reached():
+			var line = file.get_line().strip_edges()
+			if line.is_empty():
+				continue
+				
+			var parts = line.split(" ")
+			if parts.size() >= 3:
+				pos = Vector3(parts[0].to_float(), parts[1].to_float(), parts[2].to_float())
+				
+				if header.has_color and parts.size() >= 6:
+					color = Color(
+						parts[3].to_float() / 255.0,
+						parts[4].to_float() / 255.0,
+						parts[5].to_float() / 255.0
+					)
+		else:
+			# Fallback for preview or missing file
+			pos = Vector3(randf_range(-1,1), randf_range(0,2), randf_range(-1,1))
+			color = Color(randf(), randf(), randf())
+			
+		multimesh.set_instance_transform(i, Transform3D(Basis(), pos))
+		multimesh.set_instance_color(i, color)
+	
+	print("PointCloudVisualizer: Visualized ", header.vertex_count, " points.")

@@ -11,6 +11,7 @@ class_name ReconstructionSession
 @export var extraction_fps: int = 2
 @export var background_threshold: float = 0.95
 @export var blur_threshold: float = 0.5
+@export var roi_rect: Rect2i = Rect2i(0, 0, 0, 0) # (0,0,0,0) means full image
 
 @export_group("Reconstruction State")
 @export var is_processed: bool = false

@@ -1,34 +1,36 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene format=3 uid="uid://cp31xg8xlwqcr"]
 
-[ext_resource type="Script" path="res://test_foveacore.gd" id="1_test"]
-[ext_resource type="Script" path="res://addons/foveacore/scripts/fovea_splattable.gd" id="2_splattable"]
+[ext_resource type="Script" uid="uid://b8vfypmnc5k1k" path="res://test_foveacore.gd" id="1_test"]
+[ext_resource type="Script" uid="uid://cnfwe7vihmm4h" path="res://addons/foveacore/scripts/fovea_splattable.gd" id="2_splattable"]
 
 [sub_resource type="BoxMesh" id="BoxMesh_1"]
+
 [sub_resource type="SphereMesh" id="SphereMesh_1"]
+
 [sub_resource type="PlaneMesh" id="PlaneMesh_1"]
 
-[node name="TestFoveaCore" type="Node"]
+[node name="TestFoveaCore" type="Node" unique_id=120034931]
 script = ExtResource("1_test")
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1883790301]
 
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=2051180720]
 transform = Transform3D(1, 0, 0, 0, 0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 5, 0)
 
-[node name="Camera3D" type="Camera3D" parent="."]
+[node name="Camera3D" type="Camera3D" parent="." unique_id=1457346003]
 transform = Transform3D(1, 0, 0, 0, 0.92388, -0.382683, 0, 0.382683, 0.92388, 0, 2, 5)
 
-[node name="Cube" type="MeshInstance3D" parent="."]
+[node name="Cube" type="MeshInstance3D" parent="." unique_id=7212231]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 1, 0)
 mesh = SubResource("BoxMesh_1")
 script = ExtResource("2_splattable")
 
-[node name="Sphere" type="MeshInstance3D" parent="."]
+[node name="Sphere" type="MeshInstance3D" parent="." unique_id=514235856]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 mesh = SubResource("SphereMesh_1")
 script = ExtResource("2_splattable")
 
-[node name="Plane" type="MeshInstance3D" parent="."]
+[node name="Plane" type="MeshInstance3D" parent="." unique_id=2029839914]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, 0)
 mesh = SubResource("PlaneMesh_1")
 script = ExtResource("2_splattable")

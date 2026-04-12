@@ -1,10 +1,18 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://addons/foveacore/scripts/vr/fovea_vr_rig.gd" id="1_rig"]
 [ext_resource type="Script" path="res://addons/foveacore/scripts/vr/fovea_xr_initializer.gd" id="2_xr_init"]
+[ext_resource type="Script" path="res://addons/foveacore/scripts/proxy_face_renderer.gd" id="3_proxy_renderer"]
+[ext_resource type="Script" path="res://addons/foveacore/scripts/vr/fovea_proxy_manager.gd" id="4_proxy_manager"]
 
 [node name="FoveaVRRig" type="XROrigin3D"]
 script = ExtResource("1_rig")
+
+[node name="ProxyFaceRenderer" type="Node3D" parent="."]
+script = ExtResource("3_proxy_renderer")
+radius = 0.5
+falloff = 2.0
+show_debug = true
 
 [node name="XRCamera3D" type="XRCamera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
@@ -26,3 +34,11 @@ visible = false
 script = ExtResource("2_xr_init")
 auto_initialize = true
 foveation_level = 2
+
+[node name="FoveaProxyManager" type="Node" parent="."]
+script = ExtResource("4_proxy_manager")
+enable_density_scaling = true
+min_reconstruction_density = 0.1
+max_reconstruction_density = 1.0
+density_falloff_distance = 10.0
+foveal_zone_angle = 30.0

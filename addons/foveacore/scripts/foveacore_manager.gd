@@ -63,6 +63,8 @@ var hybrid_mode_enabled: bool = false
 ## Occlusion culler for Hi-Z buffer occlusion testing
 var _occlusion_culler: OcclusionCuller = null
 
+var _frame_count: int = 0
+
 func _ready():
 	_initialize_renderer()
 	_setup_vr()
@@ -132,42 +134,67 @@ func _setup_vr():
 
 func _process(delta):
 	if vr_enabled and renderer_initialized:
+		_frame_count += 1
 		_update_foveated_zones()
 		_perform_culling()
 
 func _update_foveated_zones():
-	# TODO: Mettre à jour les zones de foveated rendering
-	pass
+	if foveated_enabled and _foveated_controller:
+		# Update settings from manager export variables
+		_foveated_controller.setup_zones(
+			foveal_radius,
+			foveal_density_multiplier,
+			parafoveal_density_multiplier,
+			peripheral_density_multiplier
+		)
+		
+		# If eye tracking is not active, look forward from camera
+		if not _foveated_controller.has_eye_tracking():
+			var camera = get_viewport().get_camera_3d()
+			if camera:
+				var forward = -camera.global_transform.basis.z
+				var target = camera.global_transform.origin + forward * 10.0
+				_foveated_controller.update_gaze(target, forward)
 
 func _perform_culling():
 	if _visibility_manager and foveated_enabled:
 		var visibility_result: VisibilityManager.FrameVisibilityResult = _visibility_manager.extract_visible_surfaces()
 
-		# Apply occlusion culling if available
-		if _occlusion_culler:
-			var camera = get_viewport().get_camera_3d()
-			if camera:
-				var view_proj = camera.camera_projection
-				var cam_transform = camera.global_transform
-
-		# Générer les splats depuis les triangles visibles
+		var camera = get_viewport().get_camera_3d()
 		var camera_pos: Vector3 = _get_main_camera_position()
+		
+		# --- Hi-Z Occlusion Culling ---
+		if _occlusion_culler and camera:
+			# In a real engine, we'd grab the actual depth buffer from the renderer.
+			# For this implementation, we rely on the visibility manager's results.
+			# Future: _occlusion_culler.build_hi_z_pyramid(renderer.get_depth_texture())
+			pass
 
-		# Utiliser la reprojection temporelle si activée
+		# --- Splat Generation & Filtering ---
 		if _temporal_reprojector:
 			_current_splats = []
 			for node in visibility_result.per_node_results:
 				var extraction: SurfaceExtractor.ExtractionResult = visibility_result.per_node_results[node] as SurfaceExtractor.ExtractionResult
+				
+				# Filter visible triangles through occlusion culler
+				var filtered_triangles = []
+				if _occlusion_culler and camera:
+					var view_proj = camera.get_camera_projection() * Projection(camera.global_transform.affine_inverse())
+					for tri in extraction.visible_triangles:
+						if not _occlusion_culler.is_occluded(tri.center, view_proj, camera.global_transform):
+							filtered_triangles.append(tri)
+				else:
+					filtered_triangles = extraction.visible_triangles
+				
 				var reprojected: Array[GaussianSplat] = _temporal_reprojector.reproject_splats(
 					node,
-					[],  # Splats actuels (vide car on regenère)
+					[],  # Empty because we rotate/regen based on visibility
 					camera_pos,
 					_previous_camera_position,
-					extraction.visible_triangles
+					filtered_triangles
 				)
 				_current_splats.append_array(reprojected)
 		else:
-			# Sans reprojection : génération complète
 			_current_splats = SplatGenerator.generate_all_splats(
 				visibility_result,
 				camera_pos,
@@ -175,10 +202,10 @@ func _perform_culling():
 				global_splat_density
 			)
 
-		# Trier les splats par profondeur
+		# Sort splats by depth (painter's algorithm)
 		_current_splats = SplatSorter.sort_by_depth(_current_splats, camera_pos)
 
-		# Appliquer le foveated rendering via le contrôleur
+		# --- Foveated Rendering Optimization ---
 		if foveated_enabled and _foveated_controller:
 			var gaze_point: Vector3 = _foveated_controller.get_gaze_point()
 			var foveated_splats: Array[GaussianSplat] = []
@@ -189,20 +216,21 @@ func _perform_culling():
 
 				splat.apply_foveal_weight(weight * density / 2.0)
 
+				# Aggressive culling for peripheral splats with low alpha
 				if splat.opacity > 0.05:
 					foveated_splats.append(splat)
 
 			_current_splats = foveated_splats
 
-		# Minimiser l'overdraw
+		# Minimize overdraw by merging nearby similar splats
 		_current_splats = SplatSorter.minimize_overdraw(_current_splats)
 
-		# RENDU GPU des splats
+		# --- GPU Rendering ---
 		if _splat_renderer:
 			var rendered: int = _splat_renderer.render_splats(_current_splats)
-			print("Frame: ", _current_splats.size(), " splats → ", rendered, " rendered")
+			if _frame_count % 60 == 0:
+				print("FoveaCore: Rendering %d splats (%d before culling)" % [rendered, _current_splats.size()])
 
-		# Mettre à jour la position précédente de la caméra
 		_previous_camera_position = camera_pos
 
 ## API publique

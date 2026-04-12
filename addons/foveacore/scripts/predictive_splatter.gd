@@ -96,9 +96,8 @@ func _compute_angular_velocity() -> Vector3:
 		dt = 0.016
 
 	var delta_rotation: Quaternion = recent["rotation"] * older["rotation"].inverse()
-	var axis: Vector3 = Vector3.ZERO
-	var angle: float = 0.0
-	delta_rotation.get_axis_angle(axis, angle)
+	var axis: Vector3 = delta_rotation.get_axis()
+	var angle: float = delta_rotation.get_angle()
 
 	return axis * (angle / dt)
 

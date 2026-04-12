@@ -8,18 +8,37 @@ var current_session: ReconstructionSession = null
 
 @onready var video_path_edit: LineEdit = $VBox/VideoSource/PathEdit
 @onready var session_name_edit: LineEdit = $VBox/SessionName/NameEdit
-@onready var mask_option: OptionButton = $VBox/Settings/MaskOption
-@onready var threshold_slider: HSlider = $VBox/Settings/ThresholdSlider
+@onready var mask_option: OptionButton = $VBox/Settings/MaskingRow/MaskOption
+@onready var threshold_slider: HSlider = $VBox/Settings/ThresholdRow/ThresholdSlider
 @onready var status_label: Label = $VBox/Status/StatusLabel
 @onready var progress_bar: ProgressBar = $VBox/Progress/ProgressBar
 @onready var log_text: TextEdit = $VBox/Logs/LogEdit
 @onready var preview_button: Button = $VBox/Pipeline/Preview
+@onready var roi_button: Button = $VBox/Settings/ROIRow/ROIButton
+@onready var reset_button: Button = $VBox/HeaderBox/Reset
 
 func _ready() -> void:
     manager = ReconstructionManager.new()
     add_child(manager)
     manager.session_progress_updated.connect(_on_progress_updated)
     manager.session_completed.connect(_on_session_completed)
+    roi_button.pressed.connect(_on_roi_pressed)
+
+func _on_reset_pressed() -> void:
+    current_session = null
+    video_path_edit.text = ""
+    session_name_edit.text = ""
+    progress_bar.value = 0
+    status_label.text = "Status: Idle"
+    log_text.text = ""
+    _log("Session Reset. Ready for new input.")
+
+func _on_roi_pressed() -> void:
+    _log("ROI: Lasso drawing mode activated (Placeholder).")
+    _log("Tip: For now, default focus ROI is applied around center.")
+    _ensure_session()
+    # Simulate a center ROI crop
+    current_session.roi_rect = Rect2i(100, 100, 800, 800) 
 
 func _on_browse_pressed() -> void:
     var dialog = FileDialog.new()
@@ -36,24 +55,25 @@ func _on_video_selected(path: String) -> void:
         session_name_edit.text = path.get_file().get_basename()
 
 func _on_extract_pressed() -> void:
-	if video_path_edit.text.is_empty():
-		_log("Error: No video selected.")
-		return
-	
-	_ensure_session()
-	current_session.background_threshold = threshold_slider.value
-	_log("Phase 1: Starting extraction & masking...")
-	manager.run_extraction(current_session)
+    if video_path_edit.text.is_empty():
+        _log("Error: No video selected.")
+        return
+    
+    _ensure_session()
+    current_session.background_threshold = threshold_slider.value
+    var mode = mask_option.get_item_text(mask_option.selected)
+    _log("Phase 1: Starting extraction with mode: " + mode)
+    manager.run_extraction(current_session, mode)
 
 func _on_sfm_pressed() -> void:
-	_ensure_session()
-	_log("Phase 2: Starting COLMAP SfM...")
-	manager.run_sfm(current_session)
+    _ensure_session()
+    _log("Phase 2: Starting COLMAP SfM...")
+    manager.run_sfm(current_session)
 
 func _on_train_pressed() -> void:
-	_ensure_session()
-	_log("Phase 3: Starting 3DGS Training...")
-	manager.run_training(current_session)
+    _ensure_session()
+    _log("Phase 3: Starting 3DGS Training...")
+    manager.run_training(current_session)
 
 func _on_preview_pressed() -> void:
     if current_session == null or not current_session.is_processed:
@@ -70,8 +90,8 @@ func _on_preview_pressed() -> void:
     visualizer._populate_points(null, {"vertex_count": 5000, "has_color": true})
 
 func _ensure_session() -> void:
-	if current_session == null:
-		current_session = manager.create_new_session(video_path_edit.text, session_name_edit.text)
+    if current_session == null:
+        current_session = manager.create_new_session(video_path_edit.text, session_name_edit.text)
 
 func _on_run_pressed() -> void:
     if video_path_edit.text.is_empty():
