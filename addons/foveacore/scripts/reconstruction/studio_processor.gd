@@ -6,64 +6,137 @@ class_name StudioProcessor
 
 signal frame_extracted(index: int, image: Image)
 signal processing_completed(frame_count: int)
+signal error_occurred(reason: String)
 
-## Extract frames from a video using FFmpeg (optional) or Godot's internal tools
+var ffmpeg_path: String = "ffmpeg"
+
+## Extract frames from a video using FFmpeg
 func extract_frames(session: ReconstructionSession) -> void:
-    if session.video_path.is_empty():
-        push_error("StudioProcessor: No video path provided.")
-        return
+	if session.video_path.is_empty():
+		push_error("StudioProcessor: No video path provided.")
+		return
 
-    session.status = "Extracting Frames"
-    print("StudioProcessor: Starting extraction from ", session.video_path)
+	session.status = "Extracting Frames"
+	var output_dir = ProjectSettings.globalize_path(session.output_directory + "/input")
+	
+	# Créer le répertoire de sortie s'il n'existe pas
+	if not DirAccess.dir_exists_absolute(output_dir):
+		DirAccess.make_dir_recursive_absolute(output_dir)
 
-    # Note: Full video frame extraction would ideally use FFmpeg or Godot Video Stream.
-    # For this prototype/tooling, we simulate or call external FFmpeg if available.
-    _simulate_extraction(session)
+	var args = [
+		"-i", ProjectSettings.globalize_path(session.video_path),
+		"-vf", "fps=2", # Extraire 2 images par seconde pour le GS
+		"-q:v", "2",     # Haute qualité
+		output_dir + "/frame_%04d.jpg"
+	]
 
-## Mask background based on mode (White, Green, Blue)
-func mask_background(image: Image, mode: String, threshold: float = 0.9, roi: Rect2i = Rect2i(0,0,0,0)) -> Image:
-    var masked: Image = image.duplicate()
-    var size: Vector2i = image.get_size()
+	var cmd = ffmpeg_path if not ffmpeg_path.is_empty() else "ffmpeg"
+	print("StudioProcessor: Executing -> ", cmd, " with args: ", args)
+	var pid = OS.create_process(cmd, args)
+	
+	if pid == -1:
+		var err_msg = "FFmpeg introuvable ou échec au lancement (Chemin: " + cmd + ")"
+		push_error("StudioProcessor: " + err_msg)
+		error_occurred.emit(err_msg)
+		session.status = "Erreur"
+		return
 
-    for y in range(size.y):
-        for x in range(size.x):
-            # 1. Apply ROI (Region of Interest)
-            if roi.size != Vector2i.ZERO:
-                if not roi.has_point(Vector2i(x, y)):
-                    masked.set_pixel(x, y, Color(0, 0, 0, 0)) # Mask outside ROI
-                    continue
+	while OS.is_process_running(pid):
+		await get_tree().create_timer(0.5).timeout
 
-            var pixel: Color = image.get_pixel(x, y)
-            var mask_it: bool = false
-            
-            match mode:
-                "Smart Studio":
-                    # Mask both extremes: very bright (background) and very dark (edges/black gaps)
-                    var luma = pixel.r * 0.299 + pixel.g * 0.587 + pixel.b * 0.114
-                    mask_it = luma > threshold or luma < 0.15 # 0.15 is the dark tolerance
-                "Studio White":
-                    mask_it = pixel.r > threshold and pixel.g > threshold and pixel.b > threshold
-                "Chroma Green":
-                    # Simple Green Screen: G is dominant and higher than threshold
-                    mask_it = pixel.g > threshold and pixel.g > pixel.r * 1.2 and pixel.g > pixel.b * 1.2
-                "Chroma Blue":
-                    # Simple Blue Screen: B is dominant and higher than threshold
-                    mask_it = pixel.b > threshold and pixel.b > pixel.r * 1.2 and pixel.b > pixel.g * 1.2
-            
-            if mask_it:
-                masked.set_pixel(x, y, Color(1, 1, 1, 0)) # Set alpha to 0
+	# Une fois FFmpeg terminé, on parcourt les images pour notifier le manager
+	var dir = DirAccess.open(output_dir)
+	var count = 0
+	if dir:
+		dir.list_dir_begin()
+		var file_name = dir.get_next()
+		var frames = []
+		while file_name != "":
+			if not dir.current_is_dir() and file_name.ends_with(".jpg"):
+				frames.append(file_name)
+			file_name = dir.get_next()
+		
+		# Sort frames to ensure correct order
+		frames.sort()
+		
+		for i in range(frames.size()):
+			var img = Image.load_from_file(output_dir + "/" + frames[i])
+			if img:
+				frame_extracted.emit(i, img)
+				count += 1
+	
+	session.frame_count = count
+	session.status = "Frames Extracted"
+	processing_completed.emit(count)
 
-    return masked
+## Extract a single frame for ROI preview
+func get_preview_frame(video_path: String) -> Image:
+	var temp_path = OS.get_user_data_dir() + "/fovea_preview.jpg"
+	var args = [
+		"-i", ProjectSettings.globalize_path(video_path),
+		"-frames:v", "1",
+		"-update", "1",
+		"-y",
+		ProjectSettings.globalize_path(temp_path)
+	]
+	
+	var cmd = ffmpeg_path if not ffmpeg_path.is_empty() else "ffmpeg"
+	var out = []
+	var err = OS.execute(cmd, args, out)
+	
+	if err == -1:
+		return null
+		
+	if FileAccess.file_exists(temp_path):
+		var img = Image.load_from_file(temp_path)
+		return img
+		
+	return null
 
-## Detect blur to filter out bad frames
-func calculate_blur_score(image: Image) -> float:
-    # Laplacian or simple variance detection
-    # For now, a simple placeholder returning constant quality
-    return 1.0
+## Background masking logic (moved from manager or implemented here)
+func mask_background(image: Image, mode: String, threshold: float, roi: Rect2i) -> Image:
+	var mask = Image.create(image.get_width(), image.get_height(), false, Image.FORMAT_L8)
+	
+	for y in range(image.get_height()):
+		for x in range(image.get_width()):
+			# Check ROI
+			if roi != Rect2i() and not roi.has_point(Vector2i(x, y)):
+				mask.set_pixel(x, y, Color(0, 0, 0, 1))
+				continue
+				
+			var pixel = image.get_pixel(x, y)
+			var is_background = false
+			
+			match mode:
+				"Studio White":
+					# If R, G, B are all high -> white/gray studio background
+					is_background = (pixel.r > threshold and pixel.g > threshold and pixel.b > threshold)
+				"Chroma Green":
+					is_background = (pixel.g > pixel.r + 0.1 and pixel.g > pixel.b + 0.1)
+				"Chroma Blue":
+					is_background = (pixel.b > pixel.r + 0.1 and pixel.b > pixel.g + 0.1)
+				"Smart Studio":
+					# Advanced check taking saturation into account
+					var hsv = _rgb_to_hsv(pixel)
+					is_background = (hsv.y < 0.1 and hsv.z > threshold)
+			
+			mask.set_pixel(x, y, Color(0, 0, 0, 1) if is_background else Color(1, 1, 1, 1))
+			
+	return mask
 
-func _simulate_extraction(session: ReconstructionSession) -> void:
-    # This would be a real implementation with FFmpeg later
-    await get_tree().create_timer(1.0).timeout
-    session.frame_count = 10 
-    session.status = "Frames Extracted"
-    processing_completed.emit(session.frame_count)
+func _rgb_to_hsv(c: Color) -> Vector3:
+	# Simple hack for HSV conversion
+	var max_v = max(c.r, max(c.g, c.b))
+	var min_v = min(c.r, min(c.g, c.b))
+	var delta = max_v - min_v
+	
+	var h = 0.0
+	if delta > 0:
+		if max_v == c.r: h = fmod((c.g - c.b) / delta, 6.0)
+		elif max_v == c.g: h = (c.b - c.r) / delta + 2.0
+		elif max_v == c.b: h = (c.r - c.g) / delta + 4.0
+		h /= 6.0
+		
+	var s = 0.0 if max_v == 0 else delta / max_v
+	var v = max_v
+	return Vector3(h, s, v)

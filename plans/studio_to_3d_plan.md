@@ -8,42 +8,47 @@ The goal is to create a set of tools within FoveaEngine to automate the conversi
 
 ```mermaid
 graph TD
-    subgraph Studio Input
-        V[Video Capture]
-        C[Calibration/Config]
-    end
+	subgraph Studio Input
+		V[Video Capture]
+		C[Calibration/Config]
+	end
 
-    subgraph Pre-processing
-        FE[Frame Extraction]
-        BM[Background Masking]
-        QC[Quality Control / Blur Filtering]
-    end
+	subgraph Pre-processing
+		FE[Frame Extraction]
+		BM[Background Masking]
+		QC[Quality Control / Blur Filtering]
+	end
 
-    subgraph Reconstruction (External/Tools)
-        SFM[SfM - COLMAP/OpenMVG]
-        GS[Gaussian Splat Training]
-        PM[Photogrammetry - Mesh Extraction]
-    end
+	subgraph Reconstruction (External/Tools)
+		SFM[SfM - COLMAP/OpenMVG]
+		DA3[Monocular Depth - DA3]
+		GS[Gaussian Splat Training]
+		PM[Photogrammetry - Mesh Extraction]
+		STAR[STAR Anchor - Point Cloud Rendering]
+	end
 
-    subgraph FoveaEngine Integration
-        IM[Import Manager]
-        LPS[Low-Poly Simplification (QEM)]
-        SPR[Splat Renderer Linking]
-        PV[StudioTo3D Preview Tool]
-    end
+	subgraph FoveaEngine Integration
+		IM[Import Manager]
+		LPS[Low-Poly Simplification (QEM)]
+		SPR[Splat Renderer Linking]
+		PV[StudioTo3D Preview Tool]
+	end
 
-    V --> FE
-    C --> BM
-    FE --> BM
-    BM --> QC
-    QC --> SFM
-    SFM --> GS
-    SFM --> PM
-    GS --> IM
-    PM --> LPS
-    LPS --> IM
-    IM --> SPR
-    IM --> PV
+	V --> FE
+	C --> BM
+	FE --> BM
+	BM --> QC
+	QC --> SFM
+	QC --> DA3
+	SFM --> GS
+	DA3 --> STAR
+	STAR --> GS
+	SFM --> PM
+	GS --> IM
+	PM --> LPS
+	LPS --> IM
+	IM --> SPR
+	IM --> PV
 ```
 
 ## 2. Key Components
@@ -116,16 +121,20 @@ graph TD
 
 ---
 
-## 5. Pending & High-Priority Validation
+## 6. Phase 6: Fast Monocular Path (InSpatio STAR Integration) - NEW
 
-- [ ] **Eye-Tracking Connectivity**: Connect the GazeTracker logic to the actual OpenXR eye-tracking runtime (requires specific XR interface setup).
-- [ ] **Hardware Validation**: Perform comprehensive end-to-end testing on physical equipment (Quest Pro / Vision Pro).
-- [ ] **GitHub Documentation Sync**: Refresh repository README and Wiki after successful hardware verification.
+**Objectif:** Permettre une reconstruction instantanée sans dépendre de COLMAP pour les scènes monoculaires simples.
+
+- [ ] **Modèle DA3 Integration**: Intégration de `Depth-Anything-3` pour l'estimation de profondeur sub-centimétrique.
+- [ ] **Point Cloud Anchoring**: Utilisation de la technique de "Splattable Point Cloud" d'InSpatio pour créer une ancre spatiale 3D à partir des frames 2D.
+- [ ] **Reprojection Temporelle (STAR)**: Implémentation du moteur d'autorégression spatiotemporelle pour garantir que les splats ne dérivent pas lors de la navigation VR.
+- [ ] **Hybrid Initialization**: Utiliser le nuage de points DA3 pour initialiser les Gaussian Splats au lieu des points SfM de COLMAP.
 
 ---
 
-## 5. Risks & Mitigations (Resolved)
+## 7. Risks & Mitigations (Updated)
 
 - **Heavy Processing**: Resolved by background process execution via `ReconstructionBackend`.
 - **Masking Quality**: Resolved by multi-mode (Chroma/Luma) keying system.
 - **VR Performance**: Resolved by Foveated Layered Rendering and Hierarchical Splatting.
+- **SfM Failure**: Mitigated by the new **Fast Monocular Path (DA3)** which provides a fallback geometry.

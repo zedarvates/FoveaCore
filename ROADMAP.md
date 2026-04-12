@@ -9,7 +9,8 @@ Ce document trace la route pour transformer FoveaCore en un moteur de rendu hybr
 
 - [x] **Smart Studio Masking** : Gestion intelligente des fonds blancs et noirs.
 - [x] **ROI (Region of Interest)** : Système de Lasso pour isoler l'objet.
-- [ ] **Visual ROI Tool** : Interface de dessin direct sur la première image de la vidéo.
+- [x] **Visual ROI Tool** : Interface de dessin direct (Pinceau/Gomme) sur l'aperçu.
+- [x] **STAR Integration** : Pipeline rapide (DA3 Depth) inspiré d'InSpatio-World.
 - [ ] **Real-time Mask Preview** : Feedback instantané des réglages de détourage.
 - [ ] **Reset & Session Management** : Facilitation des tests itératifs.
 
@@ -25,7 +26,7 @@ Ce document trace la route pour transformer FoveaCore en un moteur de rendu hybr
 *Objectif : Créer une esthétique unique "Digital Painting".*
 
 - [ ] **Anisotropic Splats** : Passer des cercles aux ellipses pour une fidélité photographique.
-- [ ] **Parallax Proxy Rendering** : Technique inspirée de *Crimson Desert* pour simuler une profondeur extrême sur des surfaces simplifiées via POM (Parallax Occlusion Mapping).
+- [x] **Parallax Proxy Rendering** : (Prototype STAR implémenté) Simulation de profondeur sur surfaces simplifiées.
 - [ ] **Vectorized Splat Dispatcher** : Traitement par lots (Batching SIMD) pour une saturation maximale du GPU.
 - [ ] **Spatial Chunking & Streaming** : Division des modèles en chunks spatiaux pour un chargement progressif (Priorité à la "première ligne" devant la caméra).
 - [ ] **Splat Pattern Compression** : Optimisation algorithmique par reconnaissance de formes pour fusionner les splats redondants (Batching intelligent).

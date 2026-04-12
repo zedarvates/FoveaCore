@@ -1,25 +1,50 @@
 extends Node
-class_name ReconstructionManager
+class_name FoveaReconstructionManager
 
 ## ReconstructionManager — Coordinates reconstruction sessions
 ## Interaces with externally compiled tools for SfM and 3DGS-Training
 
 signal session_started(name: String)
 signal session_progress_updated(progress: float)
-signal session_completed(result: Resource)
+signal session_completed(result: ReconstructionSession)
+signal reconstruction_failed(reason: String)
 
 @export var processor: StudioProcessor = null
 @export var exporter: DatasetExporter = null
 @export var backend: ReconstructionBackend = null
+
+## Chemins des outils externes
+var ffmpeg_path: String = "ffmpeg":
+	set(val):
+		ffmpeg_path = val
+		if processor: processor.ffmpeg_path = val
+		ProjectSettings.set_setting("fovea/tools/ffmpeg_path", val)
+		ProjectSettings.save()
+
+var colmap_path: String = "colmap":
+	set(val):
+		colmap_path = val
+		if backend: backend.colmap_path = val
+		ProjectSettings.set_setting("fovea/tools/colmap_path", val)
+		ProjectSettings.save()
+
 @export var metrics: ReconstructionMetrics = null
 @export var default_output_dir: String = "res://reconstructions/"
 
 var active_sessions: Dictionary = {}
 
 func _ready() -> void:
+	# Charger les chemins depuis les paramètres du projet s'ils existent
+	if ProjectSettings.has_setting("fovea/tools/ffmpeg_path"):
+		ffmpeg_path = ProjectSettings.get_setting("fovea/tools/ffmpeg_path")
+	if ProjectSettings.has_setting("fovea/tools/colmap_path"):
+		colmap_path = ProjectSettings.get_setting("fovea/tools/colmap_path")
+
 	if processor == null:
 		processor = StudioProcessor.new()
 		add_child(processor)
+	processor.ffmpeg_path = ffmpeg_path
+	processor.error_occurred.connect(func(err): reconstruction_failed.emit(err))
 	
 	if exporter == null:
 		exporter = DatasetExporter.new()
@@ -28,8 +53,77 @@ func _ready() -> void:
 	if backend == null:
 		backend = ReconstructionBackend.new()
 		add_child(backend)
+		backend.colmap_path = colmap_path
 		backend.command_started.connect(_on_backend_started)
 		backend.command_finished.connect(_on_backend_finished)
+
+func check_tools() -> Dictionary:
+	var results = {"ffmpeg": false, "colmap": false}
+	
+	# Tentative d'auto-détection si les chemins par défaut échouent
+	if not _is_tool_available(ffmpeg_path, ["-version"]):
+		_auto_detect_ffmpeg()
+	
+	if not _is_tool_available(colmap_path, ["--help"]):
+		_auto_detect_colmap()
+
+	results["ffmpeg"] = _is_tool_available(ffmpeg_path, ["-version"])
+	results["colmap"] = _is_tool_available(colmap_path, ["--help"])
+	return results
+
+func _is_tool_available(path: String, args: Array) -> bool:
+	var out = []
+	var err = OS.execute(path, args, out)
+	return err != -1
+
+func _auto_detect_ffmpeg() -> void:
+	var home_path = OS.get_environment("HOME") if OS.has_feature("unix") else OS.get_environment("USERPROFILE")
+	var is_windows = OS.has_feature("windows")
+	var bin_name = "ffmpeg.exe" if is_windows else "ffmpeg"
+	
+	var possible_paths = [
+		"ffmpeg",
+		"C:/ffmpeg/bin/ffmpeg.exe",
+		"/usr/bin/ffmpeg",
+		"/usr/local/bin/ffmpeg",
+		"/opt/homebrew/bin/ffmpeg" # Apple Silicon Mac
+	]
+	
+	if not home_path.is_empty():
+		possible_paths.append(home_path + "/Documents/ffmpeg-8.0-win-x64/" + bin_name)
+		possible_paths.append(home_path + "/Documents/ffmpeg/bin/" + bin_name)
+		possible_paths.append(home_path + "/Documents/ffmpeg-master-latest-win64-gpl-shared/ffmpeg-master-latest-win64-gpl-shared/bin/" + bin_name)
+		possible_paths.append(home_path + "/Documents/ffmpeg/bin/" + bin_name)
+	
+	for p in possible_paths:
+		if _is_tool_available(p, ["-version"]):
+			print("FoveaManager: FFmpeg détecté automatiquement à : ", p)
+			ffmpeg_path = p 
+			return
+
+func _auto_detect_colmap() -> void:
+	var home_path = OS.get_environment("HOME") if OS.has_feature("unix") else OS.get_environment("USERPROFILE")
+	var is_windows = OS.has_feature("windows")
+	var bin_name = "colmap.exe" if is_windows else "colmap"
+	
+	var possible_paths = [
+		"colmap",
+		"C:/colmap/colmap.exe",
+		"/usr/bin/colmap",
+		"/usr/local/bin/colmap"
+	]
+	
+	if not home_path.is_empty():
+		possible_paths.append(home_path + "/Documents/colmap-x64-windows-cuda/bin/" + bin_name)
+		possible_paths.append(home_path + "/Documents/colmap-x64-windows-cuda/" + bin_name)
+		possible_paths.append(home_path + "/Documents/colmap/bin/" + bin_name)
+		possible_paths.append(home_path + "/Documents/colmap/" + bin_name)
+	
+	for p in possible_paths:
+		if _is_tool_available(p, ["--help"]):
+			print("FoveaManager: COLMAP détecté automatiquement à : ", p)
+			colmap_path = p
+			return
 
 ## Start a reconstruction session
 func create_new_session(video_path: String, name: String = "") -> ReconstructionSession:
@@ -44,30 +138,31 @@ func create_new_session(video_path: String, name: String = "") -> Reconstruction
 ## Step 1: Extraction & Masking
 func run_extraction(session: ReconstructionSession, mask_mode: String = "Studio White") -> void:
 	session_started.emit(session.session_name)
-	session.status = "Pre-processing"
-	
-	# Prepare metrics
-	metrics = ReconstructionMetrics.new()
+	session.status = "Extracting Frames"
 	
 	# Prepare workspace
 	exporter.prepare_workspace(session)
+	metrics = ReconstructionMetrics.new()
 	
-	# Extract frames
-	processor.frame_extracted.connect(func(idx, img): 
+	# Connecter le masquage automatique pendant l'extraction
+	var masking_func = func(idx, img): 
 		var mask = processor.mask_background(img, mask_mode, session.background_threshold, session.roi_rect)
 		exporter.export_frame(session, idx, img, mask)
-		
-		# Calculate mask coverage metrics
 		var coverage = _calculate_mask_coverage(mask)
 		metrics.add_frame_metrics(idx, 1.0, coverage)
-	)
 	
+	processor.frame_extracted.connect(masking_func)
+	
+	# Lancer l'extraction réelle
 	await processor.extract_frames(session)
+	
+	# Nettoyage
+	processor.frame_extracted.disconnect(masking_func)
 	exporter.create_metadata_json(session)
 	
 	session.status = "Pre-processed"
 	print(metrics.get_quality_report())
-	session_progress_updated.emit(100.0)
+	session_progress_updated.emit(33.0)
 
 func _calculate_mask_coverage(mask: Image) -> float:
 	# Estimate surface covered by non-transparent pixels
@@ -82,19 +177,103 @@ func _calculate_mask_coverage(mask: Image) -> float:
 	var total_sampled = (size.x/10) * (size.y/10)
 	return 1.0 - (float(transparent_pixels) / float(total_sampled))
 
+## Lancer le pipeline complet en séquence (Phase 1 + 2 + 3)
+func run_reconstruction(session: ReconstructionSession) -> void:
+	if session == null:
+		push_error("ReconstructionManager: session est null")
+		return
+
+	session_started.emit(session.session_name)
+	print("ReconstructionManager: Démarrage du pipeline complet pour '", session.session_name, "'")
+
+	# Phase 1 : Extraction & Masquage
+	var mask_mode := "Smart Studio"
+	print("Manager: Starting Phase 1 (Extraction)...")
+	await run_extraction(session, mask_mode)
+
+	if session.status == "Erreur":
+		reconstruction_failed.emit("Échec Phase 1 : Extraction")
+		return
+
+	# Phase 2 : SfM (COLMAP) ou STAR (InSpatio)
+	print("Manager: Phase 1 Done. Starting Phase 2...")
+	session_progress_updated.emit(40.0)
+	
+	if session.use_fast_sync:
+		print("Manager: Using Fast STAR-Lite Path (Monocular Depth)")
+		await run_star_sync(session)
+	else:
+		print("Manager: Using Standard SfM Path (COLMAP)")
+		await run_sfm(session)
+
+	if session.status == "Erreur":
+		reconstruction_failed.emit("Échec Phase 2 : Géométrie")
+		return
+
+	# Phase 3 : Training 3DGS
+	session_progress_updated.emit(70.0)
+	await run_training(session)
+
+	if session.status == "Erreur":
+		reconstruction_failed.emit("Échec Phase 3 : 3DGS Training")
+		return
+
+	session_progress_updated.emit(100.0)
+	session_completed.emit(session)
+	print("ReconstructionManager: Pipeline terminé avec succès !")
+
 ## Step 2: SfM (COLMAP)
 func run_sfm(session: ReconstructionSession) -> void:
 	session.status = "SfM Running"
+	session.is_processed = false # S'assurer qu'on ne lance pas le training
+	print("ReconstructionManager: Phase 2 - COLMAP SfM...")
 	backend.execute_reconstruction(session)
+	# Attendre la fin du backend
+	await backend.command_finished
+	session_progress_updated.emit(55.0)
+	session.status = "SfM Finished"
+
+## Step 2 (Alternative): STAR Path (Monocular Depth DA3)
+func run_star_sync(session: ReconstructionSession) -> void:
+	session.status = "STAR Syncing (DA3)"
+	session.is_processed = false
+	print("ReconstructionManager: Phase 2 - STAR Monocular Path...")
+	backend.execute_reconstruction(session)
+	# Attendre la fin du bridge Python
+	await backend.command_finished
+	
+	# Vérification du workspace STAR
+	var star_path = ProjectSettings.globalize_path(session.output_directory) + "/star_workspace/star_metadata.json"
+	if FileAccess.file_exists(star_path):
+		session_progress_updated.emit(60.0)
+		session.status = "STAR Workspace Ready"
+	else:
+		session.status = "Erreur"
+		reconstruction_failed.emit("Le STAR Workspace n'a pas été généré.")
 
 ## Step 3: Training (3DGS)
 func run_training(session: ReconstructionSession) -> void:
-	session.is_processed = true # Toggle for backend to run training instead of SfM
+	session.status = "Training Splats (Long)..."
+	session_progress_updated.emit(70.0)
+	print("ReconstructionManager: Phase 3 - 3DGS Training (This can take 5-20 mins)...")
+	session.is_processed = true
 	backend.execute_reconstruction(session)
+	
+	# Simuler une progression pendant que le process tourne (optionnel)
+	# car OS.create_process n'envoie pas de feedback granulaire facilement
+	await get_tree().create_timer(10.0).timeout
+	session_progress_updated.emit(85.0)
+
+	await backend.command_finished
+	if session.status != "Erreur":
+		session.status = "Finalizing..."
+		exporter.finalize_session(session)
+		session.status = "Terminé"
 
 func _on_backend_started(task: String) -> void:
 	print("Manager: Backend started -> ", task)
 
 func _on_backend_finished(status: int, output: String) -> void:
 	print("Manager: Backend finished -> ", output)
-	# Update manager state here if needed
+	if status != 0:
+		push_warning("ReconstructionManager: commande terminée avec code d'erreur %d" % status)

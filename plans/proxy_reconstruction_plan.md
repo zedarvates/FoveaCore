@@ -7,12 +7,12 @@ Ce document détaille l'intégration de la méthode "All models can be 1 face" (
 Le principe fondamental est de réduire la charge géométrique au minimum absolu (parfois un seul quad) et d'utiliser le **Style Engine** de FoveaCore pour reconstruire visuellement la complexité, les volumes et la matière.
 
 ### Comparaison des Approches
-| Élément | Méthode CGMatter (Shader) | FoveaCore (Proxy-Splat) |
+| Élément | Méthode CGMatter (Shader) | FoveaCore (Proxy-Splat/STAR) |
 | :--- | :--- | :--- |
-| **Géométrie** | 1 Quad / Low Poly Extrême | Proxies visibles uniquement |
-| **Reconstruction** | Shader Procédural | Splatting + Style Engine |
-| **Détails** | Simulation via Shader | Gaussian Splats dynamiques |
-| **Usage** | Rendu artistique fixe/vidéo | VR Temps Réel & Stéréoscopie |
+| **Géométrie** | 1 Quad / Low Poly Extrême | Proxies visibles + STAR Anchoring |
+| **Reconstruction** | Shader Procédural | Splatting + DA3 Depth Maps |
+| **Détails** | Simulation via Shader | STAR Spatiotemporal Cache |
+| **Usage** | Rendu artistique fixe/vidéo | VR 4D Interactive & Stéréoscopie |
 
 ---
 
@@ -42,8 +42,10 @@ Optimisation du pipeline de splatting pour ne traiter que les surfaces projetée
 ## 🚀 Feuille de Route (Roadmap)
 
 ### Phase 1 : Recherche & Prototype (Preuve de Concept)
-- [ ] Étude de la projection de Splats sur des géométries planes (Proxy Alignment).
-- [ ] Création d'un shader de base "Fake Volume" pour les quads.
+- [x] Étude de la projection de Splats sur des géométries planes (Proxy Alignment).
+- [ ] Intégration du pipeline **DA3** pour générer des depth maps "world-aligned".
+- [ ] Prototype de cache spatiotemporel (Inspiration InSpatio STAR) pour l'ancrage des proxies.
+- [ ] Création d'un shader de base "Fake Volume" pour les quads utilisant la profondeur DA3.
 - [ ] Test de perception en VR pour valider l'illusion de profondeur.
 
 ### Phase 2 : Développement du `ProxyFaceRenderer`
