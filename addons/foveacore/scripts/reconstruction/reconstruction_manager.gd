@@ -431,9 +431,14 @@ func run_training(session: ReconstructionSession) -> void:
 		var global_ply = ProjectSettings.globalize_path(ply_path)
 		if FileAccess.file_exists(global_ply):
 			print("ReconstructionManager: Loading result PLY from ", global_ply)
-			var gaussians = PLYLoader.load_gaussians_from_ply(global_ply)
-			# Here we would inject them into the renderer
-			session.status = "Terminé (%d splats)" % gaussians.size()
+			var load_result = PlyLoader.load_ply(global_ply)
+			if load_result.success:
+				var gaussians = load_result.splats
+				# Here we would inject them into the renderer
+				session.status = "Terminé (%d splats)" % gaussians.size()
+			else:
+				session.status = "Erreur Chargement PLY"
+				push_error("ReconstructionManager: " + load_result.error_message)
 		else:
 			session.status = "Terminé (PLY non trouvé)"
 

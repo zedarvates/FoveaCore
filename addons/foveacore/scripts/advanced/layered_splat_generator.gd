@@ -49,7 +49,7 @@ static func generate_layered_splats(mesh: Mesh, config: Dictionary = {}) -> Arra
 				
 	return splats
 
-static func _create_splat(pos: Vector3, norm: Vector3, col: Color, type: GaussianSplat.LayerType) -> GaussianSplat:
+static func _create_splat(pos: Vector3, norm: Vector3, col: Color, type) -> GaussianSplat:
 	var splat = GaussianSplat.new()
 	splat.position = pos
 	splat.normal = norm

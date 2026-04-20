@@ -16,8 +16,8 @@ class EyeCullResult:
 	var cull_time_ms: float = 0.0
 
 ## Frustums pour chaque œil
-var _left_frustum: FrustumUtils.Frustum
-var _right_frustum: FrustumUtils.Frustum
+var _left_frustum: RefCounted
+var _right_frustum: RefCounted
 
 ## Cache des nœuds à culler
 var _splattable_nodes: Array[FoveaSplattable] = []
@@ -44,20 +44,20 @@ func update_frustums(
 	_right_frustum.from_matrix(right_projection, right_transform)
 
 ## Enregistrer un nœud splattable pour le culling
-func register_splattable(node: FoveaSplattable):
+func register_splattable(node):
 	if not _splattable_nodes.has(node):
 		_splattable_nodes.append(node)
 
 ## Retirer un nœud splattable
-func unregister_splattable(node: FoveaSplattable):
+func unregister_splattable(node):
 	_splattable_nodes.erase(node)
 
 ## Exécuter le culling pour les deux yeux
 func cull_all() -> Dictionary:
 	var start_time: int = Time.get_ticks_usec()
 
-	var left_result: EyeCullResult = EyeCullResult.new()
-	var right_result: EyeCullResult = EyeCullResult.new()
+	var left_result = EyeCullResult.new()
+	var right_result = EyeCullResult.new()
 	left_result.frustum = _left_frustum
 	right_result.frustum = _right_frustum
 
