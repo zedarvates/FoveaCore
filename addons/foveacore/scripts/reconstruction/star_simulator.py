@@ -28,8 +28,8 @@ def simulate_star_dataset(session_path):
         h, w = 480, 832
         y, x = np.ogrid[:h, :w]
         dist_from_center = np.sqrt((x - w/2)**2 + (y - h/2)**2)
-        # Depth: closer in the middle, far at the edges
-        depth = (30000 + (1 - dist_from_center / (w/2)) * 20000).clip(0, 65535).astype(np.uint16)
+        # Depth: farther in the middle, closer at the edges (corrected for OpenGL coordinate system)
+        depth = (30000 + (dist_from_center / (w/2)) * 20000).clip(0, 65535).astype(np.uint16)
         
         depth_filename = f"sim_depth_{i:04d}.png"
         cv2.imwrite(os.path.join(workspace_path, depth_filename), depth)

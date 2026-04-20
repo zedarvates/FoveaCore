@@ -21,8 +21,12 @@ func _ready():
     
     # Switch to the STAR shader
     if _proxy_mesh_instance and _proxy_mesh_instance.material_override:
+        var shader = load("res://addons/foveacore/shaders/star_proxy.gdshader")
+        if not shader:
+            push_error("StarLoader: Impossible de charger le shader star_proxy.gdshader")
+            return
         var mat = _proxy_mesh_instance.material_override as ShaderMaterial
-        mat.shader = load("res://addons/foveacore/shaders/star_proxy.gdshader")
+        mat.shader = shader
 
 func load_star_data(path: String):
     var abs_path = ProjectSettings.globalize_path(path)

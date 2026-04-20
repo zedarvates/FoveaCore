@@ -63,7 +63,7 @@ static func generate_splats_from_triangles(
 			var splat_color: Color = _compute_color(pos, normal, tri_area)
 
 			# Créer le splat
-			var splat: GaussianSplat = GaussianSplat.from_triangle_point(
+			var splat: GaussianSplat = GaussianSplat.create_from_triangle(
 				pos, normal, splat_color, tri_area, camera_position, splat_density
 			)
 

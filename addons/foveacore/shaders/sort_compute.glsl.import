@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://k66a86gemhqc"
+path="res://.godot/imported/sort_compute.glsl-2810589d7b578fa8a241439fb23d5d4a.res"
+
+[deps]
+
+source_file="res://addons/foveacore/shaders/sort_compute.glsl"
+dest_files=["res://.godot/imported/sort_compute.glsl-2810589d7b578fa8a241439fb23d5d4a.res"]
+
+[params]
+

@@ -11,75 +11,93 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_a1b2c")
 
-[node name="VBox" type="VBoxContainer" parent="."]
+[node name="VSplit" type="VSplitContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+split_offset = 500
+
+[node name="TopScroll" type="ScrollContainer" parent="VSplit"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="VBoxTop" type="VBoxContainer" parent="VSplit/TopScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
 theme_override_constants/separation = 10
 
-[node name="HeaderBox" type="HBoxContainer" parent="VBox"]
+[node name="HeaderBox" type="HBoxContainer" parent="VSplit/TopScroll/VBoxTop"]
 layout_mode = 2
 
-[node name="Header" type="Label" parent="VBox/HeaderBox"]
+[node name="Header" type="Label" parent="VSplit/TopScroll/VBoxTop/HeaderBox"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 24
 text = "StudioTo3D Reconstruction"
 horizontal_alignment = 1
 
-[node name="Reset" type="Button" parent="VBox/HeaderBox"]
+[node name="Load" type="Button" parent="VSplit/TopScroll/VBoxTop/HeaderBox"]
+layout_mode = 2
+text = "Load"
+
+[node name="Save" type="Button" parent="VSplit/TopScroll/VBoxTop/HeaderBox"]
+layout_mode = 2
+text = "Save"
+
+[node name="Reset" type="Button" parent="VSplit/TopScroll/VBoxTop/HeaderBox"]
 layout_mode = 2
 text = "Reset"
 
-[node name="HSeparator" type="HSeparator" parent="VBox"]
+[node name="HSeparator" type="HSeparator" parent="VSplit/TopScroll/VBoxTop"]
 layout_mode = 2
 
-[node name="VideoSource" type="HBoxContainer" parent="VBox"]
+[node name="VideoSource" type="HBoxContainer" parent="VSplit/TopScroll/VBoxTop"]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="VBox/VideoSource"]
+[node name="Label" type="Label" parent="VSplit/TopScroll/VBoxTop/VideoSource"]
 custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 text = "Video Input:"
 
-[node name="PathEdit" type="LineEdit" parent="VBox/VideoSource"]
+[node name="PathEdit" type="LineEdit" parent="VSplit/TopScroll/VBoxTop/VideoSource"]
 layout_mode = 2
 size_flags_horizontal = 3
 placeholder_text = "Select source video from studio..."
 
-[node name="Browse" type="Button" parent="VBox/VideoSource"]
+[node name="Browse" type="Button" parent="VSplit/TopScroll/VBoxTop/VideoSource"]
 layout_mode = 2
 text = "Browse"
 
-[node name="SessionName" type="HBoxContainer" parent="VBox"]
+[node name="SessionName" type="HBoxContainer" parent="VSplit/TopScroll/VBoxTop"]
 layout_mode = 2
 
-[node name="Label" type="Label" parent="VBox/SessionName"]
+[node name="Label" type="Label" parent="VSplit/TopScroll/VBoxTop/SessionName"]
 custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 text = "Session Name:"
 
-[node name="NameEdit" type="LineEdit" parent="VBox/SessionName"]
+[node name="NameEdit" type="LineEdit" parent="VSplit/TopScroll/VBoxTop/SessionName"]
 layout_mode = 2
 size_flags_horizontal = 3
 placeholder_text = "my_object_reconstruction"
 
-[node name="Settings" type="VBoxContainer" parent="VBox"]
+[node name="Settings" type="VBoxContainer" parent="VSplit/TopScroll/VBoxTop"]
 layout_mode = 2
 theme_override_constants/separation = 5
 
-[node name="MaskingRow" type="HBoxContainer" parent="VBox/Settings"]
+[node name="MaskingRow" type="HBoxContainer" parent="VSplit/TopScroll/VBoxTop/Settings"]
 layout_mode = 2
 
-[node name="MaskHeader" type="Label" parent="VBox/Settings/MaskingRow"]
+[node name="MaskHeader" type="Label" parent="VSplit/TopScroll/VBoxTop/Settings/MaskingRow"]
 custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 text = "Mode:"
 
-[node name="MaskOption" type="OptionButton" parent="VBox/Settings/MaskingRow"]
+[node name="MaskOption" type="OptionButton" parent="VSplit/TopScroll/VBoxTop/Settings/MaskingRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 item_count = 4
@@ -93,97 +111,245 @@ popup/item_2/id = 2
 popup/item_3/text = "Smart Studio"
 popup/item_3/id = 3
 
-[node name="ThresholdRow" type="HBoxContainer" parent="VBox/Settings"]
+[node name="ShowMaskToggle" type="CheckBox" parent="VSplit/TopScroll/VBoxTop/Settings/MaskingRow"]
+layout_mode = 2
+text = "Show Mask"
+button_pressed = true
+
+[node name="ThresholdRow" type="HBoxContainer" parent="VSplit/TopScroll/VBoxTop/Settings"]
 layout_mode = 2
 
-[node name="ThresholdLabel" type="Label" parent="VBox/Settings/ThresholdRow"]
+[node name="ThresholdLabel" type="Label" parent="VSplit/TopScroll/VBoxTop/Settings/ThresholdRow"]
 custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 text = "Threshold:"
 
-[node name="ThresholdSlider" type="HSlider" parent="VBox/Settings/ThresholdRow"]
+[node name="ThresholdSlider" type="HSlider" parent="VSplit/TopScroll/VBoxTop/Settings/ThresholdRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 max_value = 1.0
 step = 0.05
 value = 0.95
 
-[node name="ROIRow" type="HBoxContainer" parent="VBox/Settings"]
+[node name="ROIRow" type="HBoxContainer" parent="VSplit/TopScroll/VBoxTop/Settings"]
 layout_mode = 2
 
-[node name="ROILabel" type="Label" parent="VBox/Settings/ROIRow"]
+[node name="ROILabel" type="Label" parent="VSplit/TopScroll/VBoxTop/Settings/ROIRow"]
 custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
 text = "Region (ROI):"
 
-[node name="ROIButton" type="Button" parent="VBox/Settings/ROIRow"]
+[node name="ROIButton" type="Button" parent="VSplit/TopScroll/VBoxTop/Settings/ROIRow"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Draw ROI Mask..."
 
-[node name="HSeparator2" type="HSeparator" parent="VBox"]
+[node name="ShowROIToggle" type="CheckBox" parent="VSplit/TopScroll/VBoxTop/Settings/ROIRow"]
+layout_mode = 2
+text = "Show ROI"
+button_pressed = false
+
+[node name="HSeparatorTools" type="HSeparator" parent="VSplit/TopScroll/VBoxTop/Settings"]
 layout_mode = 2
 
-[node name="PipelineHeader" type="Label" parent="VBox"]
+[node name="ToolsHeader" type="Label" parent="VSplit/TopScroll/VBoxTop/Settings"]
+layout_mode = 2
+text = "External Tools Configuration:"
+horizontal_alignment = 1
+
+[node name="FFmpegRow" type="HBoxContainer" parent="VSplit/TopScroll/VBoxTop/Settings"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VSplit/TopScroll/VBoxTop/Settings/FFmpegRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "FFmpeg Path:"
+
+[node name="FFmpegPath" type="LineEdit" parent="VSplit/TopScroll/VBoxTop/Settings/FFmpegRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "ffmpeg (or full path to ffmpeg.exe)"
+
+[node name="BrowseFFmpeg" type="Button" parent="VSplit/TopScroll/VBoxTop/Settings/FFmpegRow"]
+layout_mode = 2
+text = "..."
+
+[node name="ColmapRow" type="HBoxContainer" parent="VSplit/TopScroll/VBoxTop/Settings"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VSplit/TopScroll/VBoxTop/Settings/ColmapRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "COLMAP Path:"
+
+[node name="ColmapPath" type="LineEdit" parent="VSplit/TopScroll/VBoxTop/Settings/ColmapRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "colmap (or full path to colmap.exe)"
+
+[node name="BrowseColmap" type="Button" parent="VSplit/TopScroll/VBoxTop/Settings/ColmapRow"]
+layout_mode = 2
+text = "..."
+
+[node name="CheckTools" type="Button" parent="VSplit/TopScroll/VBoxTop/Settings"]
+layout_mode = 2
+text = "Check & Re-detect Tools"
+
+[node name="PreviewLabel" type="Label" parent="VSplit/TopScroll/VBoxTop"]
+layout_mode = 2
+text = "Masking Preview:"
+horizontal_alignment = 1
+
+[node name="PreviewCenter" type="CenterContainer" parent="VSplit/TopScroll/VBoxTop"]
+layout_mode = 2
+
+[node name="PreviewRect" type="TextureRect" parent="VSplit/TopScroll/VBoxTop/PreviewCenter"]
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="HSeparator2" type="HSeparator" parent="VSplit/TopScroll/VBoxTop"]
+layout_mode = 2
+
+[node name="RenderOptions" type="VBoxContainer" parent="VSplit/TopScroll/VBoxTop"]
+layout_mode = 2
+
+[node name="RenderHeader" type="Label" parent="VSplit/TopScroll/VBoxTop/RenderOptions"]
+layout_mode = 2
+text = "Render Options:"
+horizontal_alignment = 1
+
+[node name="AnisotropicRow" type="HBoxContainer" parent="VSplit/TopScroll/VBoxTop/RenderOptions"]
+layout_mode = 2
+
+[node name="AnisoLabel" type="Label" parent="VSplit/TopScroll/VBoxTop/RenderOptions/AnisotropicRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Anisotropic:"
+
+[node name="AnisoToggle" type="CheckBox" parent="VSplit/TopScroll/VBoxTop/RenderOptions/AnisotropicRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+button_pressed = true
+
+[node name="LODRow" type="HBoxContainer" parent="VSplit/TopScroll/VBoxTop/RenderOptions"]
+layout_mode = 2
+
+[node name="LODLabel" type="Label" parent="VSplit/TopScroll/VBoxTop/RenderOptions/LODRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "LOD Enabled:"
+
+[node name="LODToggle" type="CheckBox" parent="VSplit/TopScroll/VBoxTop/RenderOptions/LODRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+button_pressed = false
+
+[node name="PointSizeRow" type="HBoxContainer" parent="VSplit/TopScroll/VBoxTop/RenderOptions"]
+layout_mode = 2
+
+[node name="PointSizeLabel" type="Label" parent="VSplit/TopScroll/VBoxTop/RenderOptions/PointSizeRow"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Point Size:"
+
+[node name="PointSizeSlider" type="HSlider" parent="VSplit/TopScroll/VBoxTop/RenderOptions/PointSizeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.01
+max_value = 0.2
+step = 0.01
+value = 0.05
+
+[node name="HSeparatorPipeline" type="HSeparator" parent="VSplit/TopScroll/VBoxTop"]
+layout_mode = 2
+
+[node name="PipelineHeader" type="Label" parent="VSplit/TopScroll/VBoxTop"]
 layout_mode = 2
 text = "Pipeline Actions:"
 horizontal_alignment = 1
 
-[node name="Pipeline" type="GridContainer" parent="VBox"]
+[node name="Pipeline" type="GridContainer" parent="VSplit/TopScroll/VBoxTop"]
 layout_mode = 2
 theme_override_constants/h_separation = 5
 theme_override_constants/v_separation = 5
 columns = 2
 
-[node name="Extract" type="Button" parent="VBox/Pipeline"]
+[node name="Extract" type="Button" parent="VSplit/TopScroll/VBoxTop/Pipeline"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "1. Extract & Mask"
 
-[node name="Sfm" type="Button" parent="VBox/Pipeline"]
+[node name="Sfm" type="Button" parent="VSplit/TopScroll/VBoxTop/Pipeline"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "2. Run COLMAP"
 
-[node name="Train" type="Button" parent="VBox/Pipeline"]
+[node name="Train" type="Button" parent="VSplit/TopScroll/VBoxTop/Pipeline"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "3. Train 3DGS"
 
-[node name="Preview" type="Button" parent="VBox/Pipeline"]
+[node name="Preview" type="Button" parent="VSplit/TopScroll/VBoxTop/Pipeline"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "4. Preview"
 
-[node name="HSeparator3" type="HSeparator" parent="VBox"]
+[node name="ReloadPLY" type="Button" parent="VSplit/TopScroll/VBoxTop/Pipeline"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Reload PLY"
+
+[node name="ExportPLY" type="Button" parent="VSplit/TopScroll/VBoxTop/Pipeline"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Export PLY"
+
+[node name="ToggleRenderer" type="Button" parent="VSplit/TopScroll/VBoxTop/Pipeline"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Toggle Renderer"
+
+[node name="HSeparator3" type="HSeparator" parent="VSplit/TopScroll/VBoxTop"]
 layout_mode = 2
 
-[node name="Status" type="HBoxContainer" parent="VBox"]
+[node name="Stats" type="HBoxContainer" parent="VSplit/TopScroll/VBoxTop"]
 layout_mode = 2
 
-[node name="StatusLabel" type="Label" parent="VBox/Status"]
+[node name="StatsLabel" type="Label" parent="VSplit/TopScroll/VBoxTop/Stats"]
+layout_mode = 2
+text = "Stats: Ready"
+size_flags_horizontal = 3
+
+[node name="Status" type="HBoxContainer" parent="VSplit/TopScroll/VBoxTop"]
+layout_mode = 2
+
+[node name="StatusLabel" type="Label" parent="VSplit/TopScroll/VBoxTop/Status"]
 layout_mode = 2
 text = "Status: Idle"
 
-[node name="Progress" type="HBoxContainer" parent="VBox"]
+[node name="Progress" type="HBoxContainer" parent="VSplit/TopScroll/VBoxTop"]
 layout_mode = 2
 
-[node name="ProgressBar" type="ProgressBar" parent="VBox/Progress"]
+[node name="ProgressBar" type="ProgressBar" parent="VSplit/TopScroll/VBoxTop/Progress"]
 layout_mode = 2
 size_flags_horizontal = 3
 
-[node name="Logs" type="VBoxContainer" parent="VBox"]
+[node name="Logs" type="VBoxContainer" parent="VSplit"]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="Label" type="Label" parent="VBox/Logs"]
+[node name="Label" type="Label" parent="VSplit/Logs"]
 layout_mode = 2
 text = "Logs:"
 
-[node name="LogEdit" type="TextEdit" parent="VBox/Logs"]
+[node name="LogEdit" type="TextEdit" parent="VSplit/Logs"]
 layout_mode = 2
 size_flags_vertical = 3
+theme_override_font_sizes/font_size = 12
 editable = false
+wrap_mode = 1
+scroll_past_end_of_file = true
 
 [connection signal="pressed" from="VBox/HeaderBox/Reset" to="." method="_on_reset_pressed"]
 [connection signal="pressed" from="VBox/VideoSource/Browse" to="." method="_on_browse_pressed"]

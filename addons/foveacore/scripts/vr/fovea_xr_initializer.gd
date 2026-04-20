@@ -12,6 +12,7 @@ signal xr_failed(reason: String)
 @export var passthrough_enabled := false
 @export var foveation_level := 2 # 0: None, 1: Low, 2: Med, 3: High
 @export var prefer_vulkan_mobile := true
+@export var xr_shader_enabled := true
 
 var xr_interface: XRInterface = null
 var xr_is_initialized := false
@@ -70,6 +71,7 @@ func _setup_viewport() -> void:
     
     # Performance optimizations for VR
     # Godot 4.x specific:
+    ProjectSettings.set_setting("xr/shaders/enabled", xr_shader_enabled)
     ProjectSettings.set_setting("rendering/driver/threads/thread_model", 2) # Multi-threaded
     
     # Set Refresh Rate (if possible)

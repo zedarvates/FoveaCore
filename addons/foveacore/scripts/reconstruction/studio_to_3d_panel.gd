@@ -5,37 +5,71 @@ extends Control
 ## Version sécurisée avec preloads et connexions robustes
 
 const _PCVisualizerScript = preload("res://addons/foveacore/scripts/reconstruction/point_cloud_visualizer.gd")
+const _SplatRendererScript = preload("res://addons/foveacore/scripts/reconstruction/splat_renderer.gd")
+const _PLYLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/ply_loader.gd")
+const _GaussianSplatScript = preload("res://addons/foveacore/scripts/reconstruction/gaussian_splat.gd")
 
 var manager: FoveaReconstructionManager = null
 var current_session: ReconstructionSession = null
 
-@onready var video_path_edit: LineEdit = $VBox/VideoSource/PathEdit
-@onready var session_name_edit: LineEdit = $VBox/SessionName/NameEdit
-@onready var mask_option: OptionButton = $VBox/Settings/MaskingRow/MaskOption
-@onready var threshold_slider: HSlider = $VBox/Settings/ThresholdRow/ThresholdSlider
-@onready var status_label: Label = $VBox/Status/StatusLabel
-@onready var progress_bar: ProgressBar = $VBox/Progress/ProgressBar
-@onready var log_text: TextEdit = $VBox/Logs/LogEdit
+@onready var video_path_edit: LineEdit = get_node_or_null("VSplit/TopScroll/VBoxTop/VideoSource/PathEdit")
+@onready var session_name_edit: LineEdit = get_node_or_null("VSplit/TopScroll/VBoxTop/SessionName/NameEdit")
+@onready var mask_option: OptionButton = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/MaskingRow/MaskOption")
+@onready var threshold_slider: HSlider = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/ThresholdRow/ThresholdSlider")
+@onready var status_label: Label = get_node_or_null("VSplit/TopScroll/VBoxTop/Status/StatusLabel")
+@onready var progress_bar: ProgressBar = get_node_or_null("VSplit/TopScroll/VBoxTop/Progress/ProgressBar")
+@onready var log_text: TextEdit = get_node_or_null("VSplit/Logs/LogEdit")
+@onready var stats_label: Label = get_node_or_null("VSplit/TopScroll/VBoxTop/Stats/StatsLabel")
+
+# Preview controls
+@onready var show_mask_toggle: CheckBox = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/MaskingRow/ShowMaskToggle")
+@onready var roi_toggle: CheckBox = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/ROIRow/ShowROIToggle")
+
+# Render options
+@onready var aniso_toggle: CheckBox = get_node_or_null("VSplit/TopScroll/VBoxTop/RenderOptions/AnisotropicRow/AnisoToggle")
+@onready var lod_toggle: CheckBox = get_node_or_null("VSplit/TopScroll/VBoxTop/RenderOptions/LODRow/LODToggle")
+@onready var point_size_slider: HSlider = get_node_or_null("VSplit/TopScroll/VBoxTop/RenderOptions/PointSizeRow/PointSizeSlider")
 
 # Boutons (optionnels via get_node_or_null pour éviter les crashs si la scène change)
-@onready var browse_button: Button = get_node_or_null("VBox/VideoSource/Browse")
-@onready var extract_button: Button = get_node_or_null("VBox/Pipeline/Extract")
-@onready var sfm_button: Button = get_node_or_null("VBox/Pipeline/SfM")
-@onready var train_button: Button = get_node_or_null("VBox/Pipeline/Train")
-@onready var preview_button: Button = get_node_or_null("VBox/Pipeline/Preview")
-@onready var run_button: Button = get_node_or_null("VBox/Pipeline/Run")
-@onready var auto_run_check: CheckBox = get_node_or_null("VBox/Pipeline/AutoRun")
-@onready var roi_button: Button = get_node_or_null("VBox/Settings/ROIRow/ROIButton")
-@onready var reset_button: Button = get_node_or_null("VBox/HeaderBox/Reset")
+@onready var browse_button: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/VideoSource/Browse")
+@onready var extract_button: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/Extract")
+@onready var sfm_button: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/Sfm")
+@onready var train_button: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/Train")
+@onready var preview_button: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/Preview")
+@onready var run_button: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/Run")
+@onready var auto_run_check: CheckBox = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/AutoRun")
+@onready var roi_button: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/ROIRow/ROIButton")
+@onready var save_button: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/HeaderBox/Save")
+@onready var load_button: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/HeaderBox/Load")
+@onready var reset_button: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/HeaderBox/Reset")
 
 # Nouveaux champs pour les chemins
-@onready var ffmpeg_path_edit: LineEdit = get_node_or_null("VBox/Settings/FFmpegRow/FFmpegPath")
-@onready var browse_ffmpeg_btn: Button = get_node_or_null("VBox/Settings/FFmpegRow/BrowseFFmpeg")
-@onready var colmap_path_edit: LineEdit = get_node_or_null("VBox/Settings/ColmapRow/ColmapPath")
-@onready var browse_colmap_btn: Button = get_node_or_null("VBox/Settings/ColmapRow/BrowseColmap")
-@onready var check_tools_btn: Button = get_node_or_null("VBox/Settings/CheckTools")
+@onready var ffmpeg_path_edit: LineEdit = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/FFmpegRow/FFmpegPath")
+@onready var browse_ffmpeg_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/FFmpegRow/BrowseFFmpeg")
+@onready var colmap_path_edit: LineEdit = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/ColmapRow/ColmapPath")
+@onready var browse_colmap_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/ColmapRow/BrowseColmap")
+@onready var check_tools_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/CheckTools")
+
+@onready var preview_rect: TextureRect = get_node_or_null("VSplit/TopScroll/VBoxTop/PreviewCenter/PreviewRect")
+
+var floaters_detector: FloatersDetector = null
+@onready var debug_mode_option: OptionButton = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/DebugRow/DebugMode")
+@onready var clean_floaters_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/CleanRow/CleanFloaters")
+
+@onready var reload_ply_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/ReloadPLY")
+@onready var export_ply_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/ExportPLY")
+@onready var toggle_renderer_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/ToggleRenderer")
+
+var current_renderer: _SplatRendererScript = null  # Référence au renderer 3D actuel
 
 func _ready() -> void:
+	floaters_detector = FloatersDetector.new()
+	add_child(floaters_detector)
+	
+	_safe_connect(floaters_detector.cleaning_started, _on_cleaning_started)
+	_safe_connect(floaters_detector.cleaning_progress_updated, _on_cleaning_progress)
+	_safe_connect(floaters_detector.cleaning_completed, _on_cleaning_completed)
+	_safe_connect(floaters_detector.cleaning_failed, _on_cleaning_failed)
 	# 1. Récupérer le manager (Autoload en jeu, Instance locale en éditeur)
 	manager = get_node_or_null("/root/ReconstructionManager")
 	
@@ -63,11 +97,43 @@ func _ready() -> void:
 	_safe_connect_btn(run_button, _on_run_pressed)
 	_safe_connect_btn(roi_button, _on_roi_pressed)
 	_safe_connect_btn(reset_button, _on_reset_pressed)
+	_safe_connect_btn(reload_ply_btn, _on_reload_ply_pressed)
+	_safe_connect_btn(export_ply_btn, _on_export_ply_pressed)
+	_safe_connect_btn(toggle_renderer_btn, _on_toggle_renderer_pressed)
 	
 	_safe_connect_btn(browse_ffmpeg_btn, _on_browse_ffmpeg_pressed)
 	_safe_connect_btn(browse_colmap_btn, _on_browse_colmap_pressed)
 	_safe_connect_btn(check_tools_btn, _on_check_tools_pressed)
+	_safe_connect_btn(clean_floaters_btn, _on_clean_floaters_pressed)
 	
+	if threshold_slider:
+		threshold_slider.value_changed.connect(_on_threshold_changed)
+	if mask_option:
+		mask_option.item_selected.connect(_on_mask_mode_changed)
+	if show_mask_toggle:
+		show_mask_toggle.toggled.connect(_on_show_mask_toggled)
+	if roi_toggle:
+		roi_toggle.toggled.connect(_on_show_roi_toggled)
+	if aniso_toggle:
+		aniso_toggle.toggled.connect(_on_aniso_toggled)
+	if lod_toggle:
+		lod_toggle.toggled.connect(_on_lod_toggled)
+	if point_size_slider:
+		point_size_slider.value_changed.connect(_on_point_size_changed)
+
+	_setup_preview_material()
+
+	# Tooltips pour contrôles avancés
+	if aniso_toggle:
+		aniso_toggle.tooltip_text = "Use separate X/Y scale for each splat (anisotropic ellipses). More realistic but slightly slower."
+	if lod_toggle:
+		lod_toggle.tooltip_text = "Level of Detail: enlarge distant splats to reduce perceived density."
+	if point_size_slider:
+		point_size_slider.tooltip_text = "Base size of splat quads. Increase for larger, softer splats."
+	if show_mask_toggle:
+		show_mask_toggle.tooltip_text = "Overlay red tint on background areas detected by the mask."
+	if roi_toggle:
+		roi_toggle.tooltip_text = "Show yellow border around the Region of Interest."
 	_log("StudioTo3D UI Initialized (Safe Mode).")
 	
 	# 4. Vérifier les outils au démarrage
@@ -94,7 +160,55 @@ func _on_reset_pressed() -> void:
 	if progress_bar: progress_bar.value = 0
 	if status_label: status_label.text = "Status: Idle"
 	if log_text: log_text.text = ""
+	if preview_rect: preview_rect.texture = null
+	if show_mask_toggle: show_mask_toggle.button_pressed = true
+	if roi_toggle: roi_toggle.button_pressed = false
+	_update_preview_params()
 	_log("Session Reset.")
+
+func _on_save_pressed() -> void:
+	_ensure_session()
+	if current_session:
+		# Update session from UI before saving
+		current_session.background_threshold = threshold_slider.value if threshold_slider else 0.95
+		current_session.session_name = session_name_edit.text if session_name_edit else "new_session"
+		
+		var err = manager.save_session(current_session)
+		if err == OK:
+			_log("Session saved successfully.")
+		else:
+			_log("Error saving session: " + str(err))
+
+func _on_load_pressed() -> void:
+	var dialog = FileDialog.new()
+	dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	dialog.access = FileDialog.ACCESS_RESOURCES
+	dialog.filters = PackedStringArray(["*.tres ; Reconstruction Session"])
+	dialog.file_selected.connect(func(path):
+		var session = manager.load_session(path)
+		if session:
+			current_session = session
+			_update_ui_from_session()
+			_log("Session loaded: " + session.session_name)
+		else:
+			_log("Error loading session from: " + path)
+	)
+	add_child(dialog)
+	dialog.popup_centered(Vector2i(800, 600))
+
+func _update_ui_from_session() -> void:
+	if current_session == null: return
+	if video_path_edit: video_path_edit.text = current_session.video_path
+	if session_name_edit: session_name_edit.text = current_session.session_name
+	if threshold_slider: threshold_slider.value = current_session.background_threshold
+	if status_label: status_label.text = "Status: " + current_session.status
+	_update_preview_params()
+
+	# Load preview if available
+	if not current_session.video_path.is_empty():
+		var img = await manager.processor.get_preview_frame(current_session.video_path)
+		if img:
+			_update_preview_image(img)
 
 func _on_roi_pressed() -> void:
 	if video_path_edit.text.is_empty():
@@ -240,6 +354,64 @@ func _on_video_selected(path: String) -> void:
 	var img = await manager.processor.get_preview_frame(path)
 	if img:
 		_log("Aperçu généré avec succès.")
+		_update_preview_image(img)
+
+func _setup_preview_material() -> void:
+	if preview_rect:
+		var mat = ShaderMaterial.new()
+		mat.shader = load("res://addons/foveacore/shaders/mask_preview.gdshader")
+		preview_rect.material = mat
+		_update_preview_params()
+
+func _update_preview_image(img: Image) -> void:
+	if preview_rect:
+		var tex = ImageTexture.create_from_image(img)
+		preview_rect.texture = tex
+		# Set proper size based on image aspect ratio
+		var max_width = 400.0
+		var aspect = float(img.get_height()) / float(img.get_width())
+		preview_rect.custom_minimum_size = Vector2(max_width, max_width * aspect)
+
+func _on_threshold_changed(_value: float) -> void:
+	_update_preview_params()
+
+func _on_mask_mode_changed(_index: int) -> void:
+	_update_preview_params()
+
+func _on_show_mask_toggled(checked: bool) -> void:
+	_update_preview_params()
+
+func _on_show_roi_toggled(checked: bool) -> void:
+	_update_preview_params()
+
+func _on_aniso_toggled(checked: bool) -> void:
+	if current_renderer:
+		current_renderer.enable_anisotropic = checked
+
+func _on_lod_toggled(checked: bool) -> void:
+	if current_renderer:
+		current_renderer.lod_enabled = checked
+
+func _on_point_size_changed(value: float) -> void:
+	if current_renderer:
+		current_renderer.point_size = value
+
+func _update_preview_params() -> void:
+	if preview_rect and preview_rect.material is ShaderMaterial:
+		var mat = preview_rect.material as ShaderMaterial
+		mat.set_shader_parameter("threshold", threshold_slider.value if threshold_slider else 0.95)
+		mat.set_shader_parameter("mask_mode", mask_option.selected if mask_option else 0)
+		mat.set_shader_parameter("show_mask_overlay", show_mask_toggle.button_pressed if show_mask_toggle else true)
+
+		# ROI parameters
+		var roi_pos_vec = Vector2.ZERO
+		var roi_size_vec = Vector2.ZERO
+		if current_session and current_session.roi_rect != Rect2i():
+			roi_pos_vec = Vector2(current_session.roi_rect.position.x, current_session.roi_rect.position.y)
+			roi_size_vec = Vector2(current_session.roi_rect.size.x, current_session.roi_rect.size.y)
+		mat.set_shader_parameter("roi_pos", roi_pos_vec)
+		mat.set_shader_parameter("roi_size", roi_size_vec)
+		mat.set_shader_parameter("show_roi", roi_toggle.button_pressed if roi_toggle else false)
 
 func _on_extract_pressed() -> void:
 	if video_path_edit.text.is_empty():
@@ -261,16 +433,59 @@ func _on_train_pressed() -> void:
 	_log("Phase 3: 3DGS Training...")
 	manager.run_training(current_session)
 
-func _on_preview_pressed() -> void:
-	if current_session == null or not current_session.is_processed:
-		_log("Error: No processed session.")
+func _on_reload_ply_pressed() -> void:
+	if current_session == null:
+		_log("Error: No session selected.")
 		return
-	_log("Spawning 3D Preview...")
-	var visualizer = _PCVisualizerScript.new()
-	visualizer.name = "Preview_" + current_session.session_name
-	get_tree().root.add_child(visualizer)
-	visualizer._setup_multimesh(5000)
-	visualizer._populate_points(null, {"vertex_count": 5000, "has_color": true})
+	# Ne nécessite pas que is_processed soit true, on tente de charger le PLY s'il existe
+	var ply_path = current_session.output_directory.path_join("output/point_cloud/iteration_7000/point_cloud.ply")
+	var global_ply = ProjectSettings.globalize_path(ply_path)
+
+	if not FileAccess.file_exists(global_ply):
+		_log("PLY not found at: " + global_ply + ". Searching...")
+		# Chercher n'importe quel .ply dans output
+		var out_dir = DirAccess.open(ProjectSettings.globalize_path(current_session.output_directory + "/output"))
+		if out_dir:
+			out_dir.list_dir_begin()
+			var file = out_dir.get_next()
+			while file != "":
+				if file.ends_with(".ply"):
+					global_ply = ProjectSettings.globalize_path(current_session.output_directory + "/output/" + file)
+					_log("Found PLY: " + file)
+					break
+				file = out_dir.get_next()
+
+	if not FileAccess.file_exists(global_ply):
+		_log("❌ No PLY file found.")
+		return
+
+	# Nettoyer l'ancien renderer si présent
+	if current_renderer:
+		current_renderer.queue_free()
+
+	# Charger et afficher
+	var gaussians = _PLYLoaderScript.load_gaussians_from_ply(global_ply)
+	if gaussians.is_empty():
+		_log("❌ Failed to load gaussians.")
+		return
+
+	var renderer = _SplatRendererScript.new()
+	renderer.name = "SplatPreview_" + current_session.session_name
+	get_tree().root.add_child(renderer)
+	renderer.load_splats(gaussians)
+
+	renderer.render_updated.connect(_on_render_updated)
+	renderer.sorting_completed.connect(_on_sorting_completed)
+	renderer.memory_usage_reported.connect(_on_memory_reported)
+
+	current_renderer = renderer
+
+	var stats = renderer.get_statistics()
+	if not stats.is_empty():
+		var center = stats.get("center", Vector3.ZERO)
+		_update_stats_label("Reloaded: %d splats" % gaussians.size())
+
+	_log("✅ Reloaded %d splats." % gaussians.size())
 
 func _ensure_session() -> void:
 	# Si le manager a disparu ou n'a pas été initialisé, on tente une récupération de secours
@@ -358,7 +573,23 @@ func _on_run_pressed() -> void:
 	_log("- Phase 2 (SfM) can take 2-15 mins. UI may appear frozen.")
 	_log("- Phase 3 (3DGS) can take 15-30 mins.")
 	
-	manager.run_reconstruction(current_session)
+	await manager.run_reconstruction(current_session)
+
+func _on_preview_pressed() -> void:
+	if current_session == null:
+		_log("Error: No session available. Create or load a session first.")
+		return
+	var path = current_session.video_path if current_session.video_path else (video_path_edit.text if video_path_edit else "")
+	if path.is_empty():
+		_log("Error: No video path set.")
+		return
+	_log("Generating preview frame...")
+	var img = await manager.processor.get_preview_frame(path)
+	if img:
+		_update_preview_image(img)
+		_log("Preview updated.")
+	else:
+		_log("Failed to generate preview.")
 
 func _on_progress_updated(progress: float) -> void:
 	if progress_bar: progress_bar.value = progress
@@ -381,4 +612,135 @@ func _on_reconstruction_failed(reason: String) -> void:
 func _log(message: String) -> void:
 	if log_text:
 		log_text.text += "[%s] %s\n" % [Time.get_time_string_from_system(), message]
-		log_text.scroll_vertical = INF
+		# Forcer le scroll vers le bas en déplaçant le curseur
+		log_text.set_caret_line(log_text.get_line_count())
+		log_text.scroll_vertical = log_text.get_line_count() * 20.0 # Approximation
+
+func _on_session_progress_updated(progress: float) -> void:
+	if progress_bar:
+		progress_bar.value = progress
+	if progress >= 33.0 and progress < 40.0:
+		_log("Phase 1 (Extraction & Masquage) terminée successfully.")
+	elif progress >= 55.0 and progress < 70.0:
+		_log("Phase 2 (Géométrie/SfM) terminée.")
+	elif progress >= 100.0:
+		_log("Pipeline complet terminé avec succès !")
+
+func _on_clean_floaters_pressed() -> void:
+	if current_session == null:
+		_log("Error: No session available. Run extraction first.")
+		return
+	
+	var workspace_path = ProjectSettings.globalize_path(current_session.output_directory)
+	_log("Analyzing workspace for floating artifacts: " + workspace_path)
+	
+	var result = floaters_detector.analyze_workspace(workspace_path)
+	if result.is_empty():
+		_log("Error: Could not analyze workspace.")
+		return
+	
+	_log("Floaters Report:")
+	_log(floaters_detector.get_floating_report())
+	
+	if result["floating_count"] > 0:
+		_log("Starting automatic cleanup...")
+		floaters_detector.remove_floating_splats(workspace_path)
+	else:
+		_log("No floaters detected. Model is clean!")
+
+func _on_cleaning_started(total: int) -> void:
+	_log("Cleaning started: %d floating splats will be removed" % total)
+
+func _on_cleaning_progress(current: int, total: int) -> void:
+	_log("Cleaning progress: %d/%d" % [current, total])
+
+func _on_cleaning_completed(removed: int) -> void:
+	_log("Cleaning completed: %d splats removed successfully!" % removed)
+
+func _on_cleaning_failed(reason: String) -> void:
+	_log("Cleaning failed: " + reason)
+
+func _on_debug_mode_changed(index: int) -> void:
+	_log("Debug mode set to: %d" % index)
+
+func _on_toggle_renderer_pressed() -> void:
+	if current_renderer:
+		current_renderer.visible = not current_renderer.visible
+		_log("Renderer visibility: %s" % ("shown" if current_renderer.visible else "hidden"))
+	else:
+		_log("No active renderer to toggle.")
+
+func _on_export_ply_pressed() -> void:
+	if current_renderer == null:
+		_log("Error: No renderer active. Load a PLY first.")
+		return
+
+	var dialog = FileDialog.new()
+	dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+	dialog.access = FileDialog.ACCESS_FILESYSTEM
+	dialog.filters = PackedStringArray(["*.ply ; Gaussian Splat PLY"])
+	dialog.title = "Export Splats to PLY"
+	dialog.file_selected.connect(func(path):
+		var err = current_renderer.export_to_ply(path)
+		if err == OK:
+			_log("✅ Exported splats to: %s" % path)
+		else:
+			_log("❌ Export failed: %s" % path)
+	)
+	add_child(dialog)
+	dialog.popup_centered(Vector2i(800, 600))
+
+# --- SplatRenderer Stats Handlers ---
+
+func _on_render_updated(instance_count: int) -> void:
+	_update_stats_label("Instances: %d" % instance_count)
+
+func _on_sorting_completed(elapsed_ms: float) -> void:
+	_update_stats_label("Sort: %d ms" % elapsed_ms)
+
+func _on_memory_reported(bytes: int) -> void:
+	var mb = bytes / (1024.0 * 1024.0)
+	_update_stats_label("Memory: %.1f MB" % mb)
+
+func _input(event: InputEvent) -> void:
+	# Raccourcis globaux (même sans focus)
+	if not is_inside_tree() or not visible:
+		return
+	# Ne pas interférer avec les contrôles de texte
+	if event is InputEventKey and event.pressed:
+		var focus_owner = get_viewport().gui_get_focus_owner()
+		if focus_owner is LineEdit or focus_owner is TextEdit:
+			return
+		match event.keycode:
+			KEY_R:
+				if reload_ply_btn and reload_ply_btn.visible and is_instance_valid(reload_ply_btn):
+					_on_reload_ply_pressed()
+			KEY_E:
+				if export_ply_btn and export_ply_btn.visible and is_instance_valid(export_ply_btn):
+					_on_export_ply_pressed()
+			KEY_T:
+				if toggle_renderer_btn and toggle_renderer_btn.visible and is_instance_valid(toggle_renderer_btn):
+					_on_toggle_renderer_pressed()
+
+func _update_stats_label(text: String) -> void:
+	if stats_label:
+		stats_label.text = "Stats: " + text
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not is_inside_tree() or not visible:
+		return
+	# Ne pas interférer avec les contrôles de texte
+	if event is InputEventKey and event.pressed:
+		var focus_owner = get_viewport().gui_get_focus_owner()
+		if focus_owner is LineEdit or focus_owner is TextEdit:
+			return
+		match event.keycode:
+			KEY_R:
+				if reload_ply_btn and reload_ply_btn.visible and is_instance_valid(reload_ply_btn):
+					_on_reload_ply_pressed()
+			KEY_E:
+				if export_ply_btn and export_ply_btn.visible and is_instance_valid(export_ply_btn):
+					_on_export_ply_pressed()
+			KEY_T:
+				if toggle_renderer_btn and toggle_renderer_btn.visible and is_instance_valid(toggle_renderer_btn):
+					_on_toggle_renderer_pressed()

@@ -3,6 +3,12 @@
 [ext_resource type="Script" uid="uid://b8vfypmnc5k1k" path="res://test_foveacore.gd" id="1_test"]
 [ext_resource type="Script" uid="uid://cnfwe7vihmm4h" path="res://addons/foveacore/scripts/fovea_splattable.gd" id="2_splattable"]
 
+[sub_resource type="Environment" id="Environment_iqicy"]
+
+[sub_resource type="CameraAttributesPractical" id="CameraAttributesPractical_6g08j"]
+
+[sub_resource type="Compositor" id="Compositor_gg5g2"]
+
 [sub_resource type="BoxMesh" id="BoxMesh_1"]
 
 [sub_resource type="SphereMesh" id="SphereMesh_1"]
@@ -13,6 +19,9 @@
 script = ExtResource("1_test")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1883790301]
+environment = SubResource("Environment_iqicy")
+camera_attributes = SubResource("CameraAttributesPractical_6g08j")
+compositor = SubResource("Compositor_gg5g2")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=2051180720]
 transform = Transform3D(1, 0, 0, 0, 0.707107, -0.707107, 0, 0.707107, 0.707107, 0, 5, 0)

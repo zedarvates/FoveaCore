@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://ca1goa8lnrchp"
+path="res://.godot/imported/gpu_culling_legacy.glsl-40e8e2030481ed341daf61ba2ee67cad.res"
+
+[deps]
+
+source_file="res://addons/foveacore/shaders/gpu_culling_legacy.glsl"
+dest_files=["res://.godot/imported/gpu_culling_legacy.glsl-40e8e2030481ed341daf61ba2ee67cad.res"]
+
+[params]
+

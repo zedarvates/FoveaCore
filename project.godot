@@ -21,6 +21,8 @@ xr/openxr/default_action_map="res://addons/foveacore/resources/xr_action_map.tre
 [autoload]
 
 EyeTrackingBridge="*uid://crimmsg4gc86h"
+ReconstructionManager="*uid://dscmlnk6l5jp3"
+FoveaCoreManager="*uid://b6v4mwv2ycp7h"
 
 [dotnet]
 
@@ -29,6 +31,11 @@ project/assembly_name="FoveaEngine"
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/foveacore/plugin.cfg")
+
+[fovea]
+
+tools/ffmpeg_path="C:\\Users\\redga/Documents/ffmpeg-8.0-win-x64/ffmpeg.exe"
+tools/colmap_path="C:\\Users\\redga/Documents/colmap-x64-windows-cuda/bin/colmap.exe"
 
 [physics]
 

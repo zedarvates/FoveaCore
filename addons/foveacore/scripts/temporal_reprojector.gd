@@ -153,7 +153,7 @@ func _generate_missing_splats(
 		
 		if not has_nearby:
 			# Générer un nouveau splat
-			var splat = GaussianSplat.from_triangle_point(
+			var splat = GaussianSplat.create_from_triangle(
 				center,
 				triangle.normals[0],
 				Color(0.7, 0.7, 0.7),

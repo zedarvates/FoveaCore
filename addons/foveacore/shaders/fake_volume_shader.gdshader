@@ -7,15 +7,15 @@ uniform float radius = 0.5; // radius in UV space (0‑1)
 uniform float falloff = 2.0; // exponent for Gaussian falloff
 
 // NEW: Style parameters for enrichment
-@export var outline_thickness: float = 0.0; // in UV units
-@export var outline_color: vec4 = vec4(0.0, 0.0, 0.0, 1.0); // black outline
-@export var grain_intensity: float = 0.0; // 0‑1
-@export var style_mode: int = 0; // 0 = none, 1 = outline, 2 = grain, 3 = both
+uniform float outline_thickness = 0.0; // in UV units
+uniform vec4 outline_color = vec4(0.0, 0.0, 0.0, 1.0); // black outline
+uniform float grain_intensity = 0.0; // 0‑1
+uniform int style_mode = 0; // 0 = none, 1 = outline, 2 = grain, 3 = both
 // NEW: Shadow projection parameters
-@export var shadow_strength: float = 0.3; // Strength of projected shadows (0‑1)
-@export var shadow_blur: float = 0.02;    // Blur radius for soft shadows
-@export var depth_bias: float = 0.001;    // Offset to prevent shadow acne
-@export var use_shadow_projection: bool = true; // Enable/disable shadow projection
+uniform float shadow_strength = 0.3; // Strength of projected shadows (0‑1)
+uniform float shadow_blur = 0.02;    // Blur radius for soft shadows
+uniform float depth_bias = 0.001;    // Offset to prevent shadow acne
+uniform bool use_shadow_projection = true; // Enable/disable shadow projection
 
 void fragment() {
     // UV centered at (0.5, 0.5)

@@ -2,13 +2,14 @@ extends Node
 ## FoveaCoreManager - Autoload principal pour le moteur VR
 ## Gère le rendu stéréo, le foveated rendering, et le Style Engine
 
-class_name FoveaCoreManager
+class_name FoveaCoreManagerScript
 
 ## Configuration VR
 @export_group("VR Settings")
 @export var vr_enabled := true
 @export var target_fps := 90
 @export var foveated_enabled := true
+@export var xr_shader_enabled := true
 
 ## Configuration Splatting
 @export_group("Splatting Settings")
@@ -123,12 +124,14 @@ func _setup_vr():
 			if not xr_interface.is_initialized():
 				if xr_interface.initialize():
 					get_viewport().use_xr = true
-					print("FoveaCore: OpenXR interface initialized.")
+					ProjectSettings.set_setting("xr/shaders/enabled", xr_shader_enabled)
+					print("FoveaCore: OpenXR interface initialized. XR Shader: ", xr_shader_enabled)
 				else:
 					push_warning("FoveaCore: Failed to initialize OpenXR.")
 			else:
 				get_viewport().use_xr = true
-				print("FoveaCore: OpenXR already active.")
+				ProjectSettings.set_setting("xr/shaders/enabled", xr_shader_enabled)
+				print("FoveaCore: OpenXR already active. XR Shader: ", xr_shader_enabled)
 		else:
 			push_warning("FoveaCore: No OpenXR interface found.")
 
@@ -158,23 +161,29 @@ func _update_foveated_zones():
 
 func _perform_culling():
 	if _visibility_manager and foveated_enabled:
-		var visibility_result: VisibilityManager.FrameVisibilityResult = _visibility_manager.extract_visible_surfaces()
+		var visibility_result = _visibility_manager.extract_visible_surfaces()
 
 		var camera = get_viewport().get_camera_3d()
 		var camera_pos: Vector3 = _get_main_camera_position()
 		
+		# --- Hybrid Renderer Integration ---
+		# Setup hybrid renderer for each visible node if in hybrid mode
+		if hybrid_mode_enabled and _hybrid_renderer:
+			for node in visibility_result.per_node_results:
+				if node is MeshInstance3D:
+					_hybrid_renderer.setup_for_node(node, _splat_renderer)
+		
 		# --- Hi-Z Occlusion Culling ---
 		if _occlusion_culler and camera:
-			# In a real engine, we'd grab the actual depth buffer from the renderer.
-			# For this implementation, we rely on the visibility manager's results.
-			# Future: _occlusion_culler.build_hi_z_pyramid(renderer.get_depth_texture())
+			# Note: L'occlusion culling est actif, mais attend un depth buffer réel
+			# pour être 100% efficace. Pour l'instant on garde le hook prêt.
 			pass
-
+		
 		# --- Splat Generation & Filtering ---
 		if _temporal_reprojector:
 			_current_splats = []
 			for node in visibility_result.per_node_results:
-				var extraction: SurfaceExtractor.ExtractionResult = visibility_result.per_node_results[node] as SurfaceExtractor.ExtractionResult
+				var extraction = visibility_result.per_node_results[node]
 				
 				# Filter visible triangles through occlusion culler
 				var filtered_triangles = []
@@ -210,7 +219,7 @@ func _perform_culling():
 			var gaze_point: Vector3 = _foveated_controller.get_gaze_point()
 			var foveated_splats: Array[GaussianSplat] = []
 
-			for splat: GaussianSplat in _current_splats:
+			for splat in _current_splats:
 				var weight: float = _foveated_controller.get_foveal_weight(splat.position)
 				var density: float = _foveated_controller.get_density_multiplier(splat.position)
 
