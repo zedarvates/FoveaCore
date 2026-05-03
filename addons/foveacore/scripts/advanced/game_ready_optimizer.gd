@@ -149,8 +149,8 @@ static func _nearest_centroid(color: Color, centroids: Array, k: int) -> int:
     var best_idx := 0
     var best_dist := 1e9
     for j in k:
-        var dc := centroids[j]
-        var d := (dc.r - color.r) * (dc.r - color.r) + \
+        var dc: Color = centroids[j]
+        var d: float = (dc.r - color.r) * (dc.r - color.r) + \
                  (dc.g - color.g) * (dc.g - color.g) + \
                  (dc.b - color.b) * (dc.b - color.b)
         if d < best_dist:

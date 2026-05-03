@@ -12,7 +12,7 @@ class PixelData:
 	var color: Color
 	var x: int
 	var y: int
-	var error: Color = Color.ZERO
+	var error: Color = Color(0, 0, 0, 0)
 	
 	func _init(c: Color, px: int, py: int):
 		color = c
@@ -104,7 +104,7 @@ static func kmeans_quantize(colors: Array[Color], max_clusters: int = 256) -> Qu
 		counts.resize(k)
 		
 		for i in range(k):
-			sums[i] = Color.ZERO
+			sums[i] = Color(0, 0, 0, 0)
 			counts[i] = 0
 		
 		for i in range(colors.size()):
@@ -315,7 +315,7 @@ class ColorBox:
 	func split() -> Array:
 		var extent = get_largest_extent()
 		if extent < 0.01:
-			return null
+			return []
 		
 		# Déterminer l'axe de coupe
 		var axis = 0  # 0=R, 1=G, 2=B
@@ -334,7 +334,7 @@ class ColorBox:
 		# Diviser au milieu
 		var median_idx = colors.size() / 2
 		if median_idx == 0:
-			return null
+			return []
 		
 		var box1 = ColorBox.new()
 		var box2 = ColorBox.new()
@@ -351,9 +351,9 @@ class ColorBox:
 	
 	func get_average_color() -> Color:
 		if colors.size() == 0:
-			return Color.BLACK
+			return Color(0, 0, 0, 1)
 		
-		var sum = Color.ZERO
+		var sum = Color(0, 0, 0, 0)
 		for color in colors:
 			sum += color
 		

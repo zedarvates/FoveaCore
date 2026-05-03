@@ -293,12 +293,12 @@ static func _compute_glass_color(
 	var ndotl := max(normal.dot(light_dir), 0.0)
 
 	# Fresnel: edges are more reflective (higher opacity)
-	var fresnel := 1.0 - ndotv
+	var fresnel: float = 1.0 - ndotv
 	fresnel = fresnel * fresnel * fresnel * fresnel  # Schlick quartic approx
 	var glass_alpha := clamp(0.15 + fresnel * 0.85, 0.1, 1.0)
 
 	# Specular highlight (Phong-like)
-	var reflect_dir := (2.0 * normal * ndotl - light_dir).normalized()
+	var reflect_dir: Vector3 = (2.0 * normal * ndotl - light_dir).normalized()
 	var spec := pow(max(reflect_dir.dot(view_dir), 0.0), 32.0) * config.specular_strength
 
 	# Base color: transparent tint + specular
@@ -306,7 +306,7 @@ static func _compute_glass_color(
 	color.a = glass_alpha * config.grain
 
 	# Edge darkening + inner glow
-	var edge_glow := 1.0 - fresnel * 0.6
+	var edge_glow: float = 1.0 - fresnel * 0.6
 	color = Color(color.r * edge_glow, color.g * edge_glow, color.b * edge_glow, glass_alpha)
 
 	return color.clamp(Color(0, 0, 0, 0), Color(1, 1, 1, 1))
