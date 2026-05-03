@@ -25,12 +25,12 @@ func check_all_tools() -> void:
 	var worldmirror_ok = results["ffmpeg"] and results["python"] and results["worldmirror2"]
 
 	if worldmirror_ok:
-		print("FoveaEngine [StudioTo3D] : ✅ WorldMirror 2.0 prêt (reconstruction rapide ~10s).")
+		print("FoveaEngine [StudioTo3D] : [OK] WorldMirror 2.0 pret (reconstruction rapide ~10s).")
 	elif legacy_ok:
-		print("FoveaEngine [StudioTo3D] : ✅ Toutes les dépendances legacy sont installées.")
-		print("FoveaEngine [StudioTo3D] : 💡 WorldMirror 2.0 non disponible. Reconstruction rapide désactivée (COLMAP uniquement).")
+		print("FoveaEngine [StudioTo3D] : [OK] Toutes les dependances legacy sont installees.")
+		print("FoveaEngine [StudioTo3D] : (i) WorldMirror 2.0 non disponible. Reconstruction rapide desactivee (COLMAP uniquement).")
 	else:
-		printerr("FoveaEngine [StudioTo3D] : ❌ Dépendances manquantes !")
+		printerr("FoveaEngine [StudioTo3D] : [FAIL] Dependances manquantes !")
 		if not results["ffmpeg"]: printerr(" -> FFmpeg est introuvable dans le PATH.")
 		if not results["colmap"]: printerr(" -> COLMAP est introuvable dans le PATH.")
 		if not results["python"]: printerr(" -> Python est introuvable dans le PATH.")
@@ -58,15 +58,15 @@ static func is_worldmirror2_ready() -> bool:
 ## Retourne un texte formaté pour l'interface utilisateur
 func get_diagnostic_text(results: Dictionary) -> String:
 	var text = "Diagnostic Système :\n"
-	text += "FFmpeg (Extraction vidéo)        : " + ("✅ OK" if results["ffmpeg"] else "❌ MANQUANT") + "\n"
-	text += "COLMAP (Structure from Motion)   : " + ("✅ OK" if results["colmap"] else "❌ MANQUANT") + "\n"
-	text += "Python (3DGS Training)           : " + ("✅ OK" if results["python"] else "❌ MANQUANT") + "\n"
-	text += "WorldMirror 2.0 (Reconstruction) : " + ("✅ OK (reco rapide ~10s)" if results["worldmirror2"] else "⚠ Non installé (COLMAP uniquement)") + "\n"
+	text += "FFmpeg (Extraction video)        : " + ("[OK]" if results["ffmpeg"] else "[MISSING]") + "\n"
+	text += "COLMAP (Structure from Motion)   : " + ("[OK]" if results["colmap"] else "[MISSING]") + "\n"
+	text += "Python (3DGS Training)           : " + ("[OK]" if results["python"] else "[MISSING]") + "\n"
+	text += "WorldMirror 2.0 (Reconstruction) : " + ("[OK] (reco rapide ~10s)" if results["worldmirror2"] else "[ ] Non installe (COLMAP uniquement)") + "\n"
 
 	if not (results["ffmpeg"] and results["python"]):
 		text += "\nVeuillez installer les outils manquants et les ajouter à votre variable d'environnement PATH système."
 	elif not results["worldmirror2"]:
-		text += "\n💡 Installez WorldMirror 2.0 pour une reconstruction 100x plus rapide :"
+		text += "\n[INFO] Installez WorldMirror 2.0 pour une reconstruction 100x plus rapide :"
 		text += "\n   pip install torch torchvision && git clone https://github.com/Tencent-Hunyuan/HY-World-2.0"
 
 	return text
