@@ -56,6 +56,12 @@ var floaters_detector: FloatersDetector = null
 @onready var debug_mode_option: OptionButton = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/DebugRow/DebugMode")
 @onready var clean_floaters_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/CleanRow/CleanFloaters")
 
+# WorldMirror 2.0 controls
+@onready var wm2_mode_check: CheckBox = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/WM2Row/WM2ModeCheck")
+@onready var wm2_target_slider: HSlider = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/WM2Row/WM2TargetSlider")
+@onready var wm2_target_label: Label = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/WM2Row/WM2TargetLabel")
+@onready var wm2_status: Label = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/WM2Row/WM2Status")
+
 @onready var reload_ply_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/ReloadPLY")
 @onready var export_ply_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/ExportPLY")
 @onready var toggle_renderer_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/ToggleRenderer")
@@ -105,6 +111,11 @@ func _ready() -> void:
 	_safe_connect_btn(browse_colmap_btn, _on_browse_colmap_pressed)
 	_safe_connect_btn(check_tools_btn, _on_check_tools_pressed)
 	_safe_connect_btn(clean_floaters_btn, _on_clean_floaters_pressed)
+
+	if wm2_mode_check:
+		wm2_mode_check.toggled.connect(_on_wm2_mode_changed)
+	if wm2_target_slider:
+		wm2_target_slider.value_changed.connect(_on_wm2_target_changed)
 	
 	if threshold_slider:
 		threshold_slider.value_changed.connect(_on_threshold_changed)
@@ -446,19 +457,34 @@ func _on_reload_ply_pressed() -> void:
 		_log("Error: No session selected.")
 		return
 	# Ne nécessite pas que is_processed soit true, on tente de charger le PLY s'il existe
-	var ply_path = current_session.output_directory.path_join("output/point_cloud/iteration_7000/point_cloud.ply")
-	var global_ply = ProjectSettings.globalize_path(ply_path)
+	var global_ply = ""
+	var out_base = ProjectSettings.globalize_path(current_session.output_directory)
+
+	# 1. Check WorldMirror 2.0 output: gaussians.ply at workspace root
+	var wm2_ply = current_session.output_directory.path_join("gaussians.ply")
+	if FileAccess.file_exists(ProjectSettings.globalize_path(wm2_ply)):
+		global_ply = ProjectSettings.globalize_path(wm2_ply)
+		_log("Found WorldMirror 2.0 PLY: gaussians.ply")
+
+	# 2. Check COLMAP+3DGS output
+	if global_ply.is_empty():
+		var ply_path = current_session.output_directory.path_join("output/point_cloud/iteration_7000/point_cloud.ply")
+		global_ply = ProjectSettings.globalize_path(ply_path)
 
 	if not FileAccess.file_exists(global_ply):
-		_log("PLY not found at: " + global_ply + ". Searching...")
+		_log("PLY not found at standard paths. Searching output/...")
 		# Chercher n'importe quel .ply dans output
-		var out_dir = DirAccess.open(ProjectSettings.globalize_path(current_session.output_directory + "/output"))
+		var out_dir = DirAccess.open(out_base + "/output")
+		if not out_dir:
+			out_dir = DirAccess.open(out_base)
 		if out_dir:
 			out_dir.list_dir_begin()
 			var file = out_dir.get_next()
 			while file != "":
 				if file.ends_with(".ply"):
-					global_ply = ProjectSettings.globalize_path(current_session.output_directory + "/output/" + file)
+					global_ply = out_base + "/output/" + file
+					if not FileAccess.file_exists(global_ply):
+						global_ply = out_base + "/" + file
 					_log("Found PLY: " + file)
 					break
 				file = out_dir.get_next()
@@ -524,6 +550,12 @@ func _ensure_session() -> void:
 		if not colmap_path_edit.text_changed.is_connected(_on_colmap_path_changed):
 			colmap_path_edit.text_changed.connect(_on_colmap_path_changed)
 
+	# Sync WM2 settings
+	if current_session:
+		if wm2_mode_check: wm2_mode_check.button_pressed = current_session.use_worldmirror
+		if wm2_target_slider: wm2_target_slider.value = float(current_session.target_size)
+		_on_wm2_mode_changed(current_session.use_worldmirror)
+
 	_log("StudioTo3D Session Verified.")
 
 func _on_browse_ffmpeg_pressed() -> void:
@@ -570,6 +602,42 @@ func _on_ffmpeg_path_changed(new_text: String) -> void:
 func _on_colmap_path_changed(new_text: String) -> void:
 	manager.colmap_path = new_text
 
+func _on_wm2_mode_changed(checked: bool) -> void:
+	_ensure_session()
+	if current_session:
+		current_session.use_worldmirror = checked
+		if checked:
+			_log("🔄 Mode: WorldMirror 2.0 (reconstruction rapide ~10s)")
+			# Désactiver les boutons COLMAP inutiles en mode WM2
+			if sfm_button: sfm_button.disabled = true
+			if train_button: train_button.disabled = true
+		else:
+			_log("🔄 Mode: COLMAP + 3DGS (complet, 30-90 min)")
+			if sfm_button: sfm_button.disabled = false
+			if train_button: train_button.disabled = false
+	_update_wm2_status()
+
+func _on_wm2_target_changed(value: float) -> void:
+	_ensure_session()
+	if current_session:
+		current_session.target_size = int(value)
+		if wm2_target_label:
+			wm2_target_label.text = "Target: %dpx" % int(value)
+
+func _update_wm2_status() -> void:
+	if not wm2_status:
+		return
+	var checker = StudioDependencyChecker.new()
+	if checker.is_worldmirror2_ready():
+		wm2_status.text = "✅ WorldMirror 2.0 ready"
+		wm2_status.modulate = Color.GREEN
+	else:
+		wm2_status.text = "⚠ WorldMirror 2.0 not installed"
+		wm2_status.modulate = Color.ORANGE
+		if wm2_mode_check and wm2_mode_check.button_pressed:
+			wm2_mode_check.button_pressed = false
+			_log("WorldMirror 2.0 not available. Fallback to COLMAP.")
+
 func _on_run_pressed() -> void:
 	if video_path_edit and video_path_edit.text.is_empty():
 		_log("Error: No video selected.")
@@ -577,9 +645,15 @@ func _on_run_pressed() -> void:
 	_ensure_session()
 	
 	_log("Starting All: " + current_session.session_name)
-	_log("⚠️ PERFORMANCE NOTE: Reconstruction is very GPU intensive.")
-	_log("- Phase 2 (SfM) can take 2-15 mins. UI may appear frozen.")
-	_log("- Phase 3 (3DGS) can take 15-30 mins.")
+
+	if current_session.use_worldmirror:
+		_log("🚀 WorldMirror 2.0: Single-pass reconstruction (~2-10s)")
+		_log("  Phase 1: Extract frames + mask (ffmpeg)")
+		_log("  Phase 2: Feed-forward 3DGS inference (WorldMirror 2.0)")
+	else:
+		_log("⚠️ PERFORMANCE NOTE: Reconstruction is very GPU intensive.")
+		_log("- Phase 2 (SfM) can take 2-15 mins.")
+		_log("- Phase 3 (3DGS) can take 15-30 mins.")
 	
 	await manager.run_reconstruction(current_session)
 
