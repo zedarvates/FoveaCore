@@ -17,6 +17,12 @@ Welcome to **FoveaEngine**, a cutting-edge reconstruction and rendering pipeline
 
 ---
 
+## 📸 Preview
+
+![FoveaEngine Screenshot](ScreenShot/Screenshot%202026-05-03%20163554.png)
+
+---
+
 ## 🚀 Current Status & Features
 
 ### ✅ Production-Ready
