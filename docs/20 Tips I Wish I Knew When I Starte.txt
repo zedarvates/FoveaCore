@@ -1,0 +1,25 @@
+20 Tips I Wish I Knew When I Started
+===
+
+1. Always use a separate session for each reconstruction
+2. Keep videos at 30fps maximum for best results
+3. Use proper lighting: soft diffused light is best
+4. Clean your sensor before recording
+5. Move slowly around the object (30-60 seconds full rotation)
+6. Avoid reflective surfaces
+7. Keep your subject in frame at all times
+8. Record in 1080p at minimum, 4K recommended
+9. Don't zoom during recording
+10. Avoid motion blur
+11. Use manual exposure if possible
+12. Keep consistent distance from subject
+13. Check camera calibration first
+14. Use mask preview before running full pipeline
+15. Set threshold between 0.92 and 0.97 for most cases
+16. Clean floaters before export
+17. Enable anisotropic rendering for final results
+18. Export after iteration 7000 for best balance
+19. Save your session before closing
+20. GPU memory is your bottleneck, not CPU
+
+Full guide coming soon.

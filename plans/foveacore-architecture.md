@@ -12,7 +12,7 @@
 
 ### 1.1 Vue d'ensemble
 
-FoveaCore est un plugin Godot GDExtension (C++) qui remplace le pipeline de rendu standard par un pipeline hybride low-poly + Gaussian Splatting avec foveated rendering et style procédural.
+FoveaCore est un plugin Godot GDExtension (Rust 🦀) qui remplace le pipeline de rendu standard par un pipeline hybride low-poly + Gaussian Splatting avec foveated rendering et style procédural. Le choix de Rust garantit la sécurité mémoire lors du chargement de scènes massives.
 
 ### 1.2 Diagramme des 4 Modules Principaux
 

@@ -1,0 +1,346 @@
+{
+    "engine": "FoveaCore STAR-Lite (Simulated)",
+    "num_frames": 24,
+    "resolution": [
+        832,
+        480
+    ],
+    "frames": [
+        {
+            "idx": 0,
+            "depth_file": "sim_depth_0000.png",
+            "camera_pos": [
+                0.0,
+                0,
+                5.0
+            ],
+            "camera_rot": [
+                0,
+                0.0,
+                0
+            ]
+        },
+        {
+            "idx": 1,
+            "depth_file": "sim_depth_0001.png",
+            "camera_pos": [
+                1.29345422026901,
+                0,
+                4.829800842691993
+            ],
+            "camera_rot": [
+                0,
+                15.0,
+                0
+            ]
+        },
+        {
+            "idx": 2,
+            "depth_file": "sim_depth_0002.png",
+            "camera_pos": [
+                2.498850513215512,
+                0,
+                4.330790472027315
+            ],
+            "camera_rot": [
+                0,
+                30.0,
+                0
+            ]
+        },
+        {
+            "idx": 3,
+            "depth_file": "sim_depth_0003.png",
+            "camera_pos": [
+                3.53412590552683,
+                0,
+                3.5369413458359986
+            ],
+            "camera_rot": [
+                0,
+                45.0,
+                0
+            ]
+        },
+        {
+            "idx": 4,
+            "depth_file": "sim_depth_0004.png",
+            "camera_pos": [
+                4.328799197461722,
+                0,
+                2.502298445041029
+            ],
+            "camera_rot": [
+                0,
+                60.0,
+                0
+            ]
+        },
+        {
+            "idx": 5,
+            "depth_file": "sim_depth_0005.png",
+            "camera_pos": [
+                4.82876929917119,
+                0,
+                1.2972999095744115
+            ],
+            "camera_rot": [
+                0,
+                75.0,
+                0
+            ]
+        },
+        {
+            "idx": 6,
+            "depth_file": "sim_depth_0006.png",
+            "camera_pos": [
+                4.999998414659173,
+                0,
+                0.003981633553666317
+            ],
+            "camera_rot": [
+                0,
+                90.0,
+                0
+            ]
+        },
+        {
+            "idx": 7,
+            "depth_file": "sim_depth_0007.png",
+            "camera_pos": [
+                4.830829323460612,
+                0,
+                -1.289607710737296
+            ],
+            "camera_rot": [
+                0,
+                105.0,
+                0
+            ]
+        },
+        {
+            "idx": 8,
+            "depth_file": "sim_depth_0008.png",
+            "camera_pos": [
+                4.332779000281329,
+                0,
+                -2.4954009967780992
+            ],
+            "camera_rot": [
+                0,
+                120.0,
+                0
+            ]
+        },
+        {
+            "idx": 9,
+            "depth_file": "sim_depth_0009.png",
+            "camera_pos": [
+                3.5397545432421613,
+                0,
+                -3.5313082241000258
+            ],
+            "camera_rot": [
+                0,
+                135.0,
+                0
+            ]
+        },
+        {
+            "idx": 10,
+            "depth_file": "sim_depth_0010.png",
+            "camera_pos": [
+                2.5057447900681913,
+                0,
+                -4.326805177847289
+            ],
+            "camera_rot": [
+                0,
+                150.0,
+                0
+            ]
+        },
+        {
+            "idx": 11,
+            "depth_file": "sim_depth_0011.png",
+            "camera_pos": [
+                1.3011447762148078,
+                0,
+                -4.827734693552341
+            ],
+            "camera_rot": [
+                0,
+                165.0,
+                0
+            ]
+        },
+        {
+            "idx": 12,
+            "depth_file": "sim_depth_0012.png",
+            "camera_pos": [
+                0.00796326458243414,
+                0,
+                -4.999993658637697
+            ],
+            "camera_rot": [
+                0,
+                180.0,
+                0
+            ]
+        },
+        {
+            "idx": 13,
+            "depth_file": "sim_depth_0013.png",
+            "camera_pos": [
+                -1.2857603834184776,
+                0,
+                -4.831854740824849
+            ],
+            "camera_rot": [
+                0,
+                195.0,
+                0
+            ]
+        },
+        {
+            "idx": 14,
+            "depth_file": "sim_depth_0014.png",
+            "camera_pos": [
+                -2.491949897916256,
+                0,
+                -4.3347647809627645
+            ],
+            "camera_rot": [
+                0,
+                210.0,
+                0
+            ]
+        },
+        {
+            "idx": 15,
+            "depth_file": "sim_depth_0015.png",
+            "camera_pos": [
+                -3.5284883033423835,
+                0,
+                -3.542565495961364
+            ],
+            "camera_rot": [
+                0,
+                225.0,
+                0
+            ]
+        },
+        {
+            "idx": 16,
+            "depth_file": "sim_depth_0016.png",
+            "camera_pos": [
+                -4.324808414448497,
+                0,
+                -2.5091895461115477
+            ],
+            "camera_rot": [
+                0,
+                240.0,
+                0
+            ]
+        },
+        {
+            "idx": 17,
+            "depth_file": "sim_depth_0017.png",
+            "camera_pos": [
+                -4.826697026491528,
+                0,
+                -1.3049888177520268
+            ],
+            "camera_rot": [
+                0,
+                255.0,
+                0
+            ]
+        },
+        {
+            "idx": 18,
+            "depth_file": "sim_depth_0018.png",
+            "camera_pos": [
+                -4.99998573193859,
+                0,
+                -0.011944890561407693
+            ],
+            "camera_rot": [
+                0,
+                270.0,
+                0
+            ]
+        },
+        {
+            "idx": 19,
+            "depth_file": "sim_depth_0019.png",
+            "camera_pos": [
+                -4.832877094134449,
+                0,
+                1.281912240752291
+            ],
+            "camera_rot": [
+                0,
+                285.0,
+                0
+            ]
+        },
+        {
+            "idx": 20,
+            "depth_file": "sim_depth_0020.png",
+            "camera_pos": [
+                -4.336747812812368,
+                0,
+                2.488497218818446
+            ],
+            "camera_rot": [
+                0,
+                300.0,
+                0
+            ]
+        },
+        {
+            "idx": 21,
+            "depth_file": "sim_depth_0021.png",
+            "camera_pos": [
+                -3.5453742022110832,
+                0,
+                3.525666145042114
+            ],
+            "camera_rot": [
+                0,
+                315.0,
+                0
+            ]
+        },
+        {
+            "idx": 22,
+            "depth_file": "sim_depth_0022.png",
+            "camera_pos": [
+                -2.51263271098665,
+                0,
+                4.322808908531567
+            ],
+            "camera_rot": [
+                0,
+                330.0,
+                0
+            ]
+        },
+        {
+            "idx": 23,
+            "depth_file": "sim_depth_0023.png",
+            "camera_pos": [
+                -1.308832031748432,
+                0,
+                4.825656298646773
+            ],
+            "camera_rot": [
+                0,
+                345.0,
+                0
+            ]
+        }
+    ]
+}

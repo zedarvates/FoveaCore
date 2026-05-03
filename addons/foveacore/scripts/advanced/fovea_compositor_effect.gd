@@ -31,7 +31,9 @@ func _render_callback(effect_callback_type: int, render_data: RenderData):
         fovea_asset_path, 
         target_camera, 
         depth_texture_rid, 
-        0.0
+        0.0,
+        Vector3(-5, -5, -5),
+        Vector3(5, 5, 5)
     )
     
     # Note : Dans une architecture 100% GPU, c'est ici que l'on déclencherait 

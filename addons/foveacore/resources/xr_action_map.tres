@@ -1,5 +1,106 @@
-[gd_resource type="OpenXRActionMap" load_steps=1 format=3]
+[gd_resource type="OpenXRActionMap" load_steps=13 format=3]
+
+[sub_resource type="OpenXRActionSet" id="OpenXRActionSet_fovea"]
+resource_name = "fovea"
+localized_name = "Fovea Engine Action Set"
+actions = []
+
+[sub_resource type="OpenXRAction" id="OpenXRAction_grip_left"]
+resource_name = "grip_press_left"
+localized_name = "Grip Press Left"
+action_type = "binary"
+paths = []
+
+[sub_resource type="OpenXRAction" id="OpenXRAction_grip_right"]
+resource_name = "grip_press_right"
+localized_name = "Grip Press Right"
+action_type = "binary"
+paths = []
+
+[sub_resource type="OpenXRAction" id="OpenXRAction_trigger_left"]
+resource_name = "trigger_press_left"
+localized_name = "Trigger Press Left"
+action_type = "binary"
+paths = []
+
+[sub_resource type="OpenXRAction" id="OpenXRAction_trigger_right"]
+resource_name = "trigger_press_right"
+localized_name = "Trigger Press Right"
+action_type = "binary"
+paths = []
+
+[sub_resource type="OpenXRAction" id="OpenXRAction_trigger_val_left"]
+resource_name = "trigger_value_left"
+localized_name = "Trigger Value Left"
+action_type = "analog"
+paths = []
+
+[sub_resource type="OpenXRAction" id="OpenXRAction_trigger_val_right"]
+resource_name = "trigger_value_right"
+localized_name = "Trigger Value Right"
+action_type = "analog"
+paths = []
+
+[sub_resource type="OpenXRAction" id="OpenXRAction_thumb_l"]
+resource_name = "thumbstick_axis_left"
+localized_name = "Thumbstick Left"
+action_type = "analog"
+paths = []
+
+[sub_resource type="OpenXRAction" id="OpenXRAction_thumb_r"]
+resource_name = "thumbstick_axis_right"
+localized_name = "Thumbstick Right"
+action_type = "analog"
+paths = []
+
+[sub_resource type="OpenXRAction" id="OpenXRAction_menu_l"]
+resource_name = "menu_press_left"
+localized_name = "Menu Left"
+action_type = "binary"
+paths = []
+
+[sub_resource type="OpenXRAction" id="OpenXRAction_menu_r"]
+resource_name = "menu_press_right"
+localized_name = "Menu Right"
+action_type = "binary"
+paths = []
+
+[sub_resource type="OpenXRInteractionProfile" id="OpenXRProfile_khr"]
+resource_name = "/interaction_profiles/khr_simple_controller"
+localized_name = "KHR Simple Controller"
+action_sets = {
+	SubResource("OpenXRActionSet_fovea"): {
+		SubResource("OpenXRAction_grip_left"): "grip_pose",
+		SubResource("OpenXRAction_grip_right"): "grip_pose",
+		SubResource("OpenXRAction_trigger_left"): "trigger",
+		SubResource("OpenXRAction_trigger_right"): "trigger",
+		SubResource("OpenXRAction_trigger_val_left"): "trigger",
+		SubResource("OpenXRAction_trigger_val_right"): "trigger",
+		SubResource("OpenXRAction_thumb_l"): "joystick",
+		SubResource("OpenXRAction_thumb_r"): "joystick",
+		SubResource("OpenXRAction_menu_l"): "menu",
+		SubResource("OpenXRAction_menu_r"): "menu"
+	}
+}
+
+[sub_resource type="OpenXRInteractionProfile" id="OpenXRProfile_oculus"]
+resource_name = "/interaction_profiles/oculus_touch"
+localized_name = "Oculus Touch"
+action_sets = {
+	SubResource("OpenXRActionSet_fovea"): {
+		SubResource("OpenXRAction_grip_left"): "squeeze",
+		SubResource("OpenXRAction_grip_right"): "squeeze",
+		SubResource("OpenXRAction_trigger_left"): "trigger",
+		SubResource("OpenXRAction_trigger_right"): "trigger",
+		SubResource("OpenXRAction_trigger_val_left"): "trigger",
+		SubResource("OpenXRAction_trigger_val_right"): "trigger",
+		SubResource("OpenXRAction_thumb_l"): "thumbstick",
+		SubResource("OpenXRAction_thumb_r"): "thumbstick",
+		SubResource("OpenXRAction_menu_l"): "x_button",
+		SubResource("OpenXRAction_menu_r"): "a_button"
+	}
+}
 
 [resource]
-action_sets = []
+action_sets = [SubResource("OpenXRActionSet_fovea")]
 interaction_profiles = []

@@ -14,7 +14,7 @@ func check_all_tools() -> void:
     
     var results = {
         "ffmpeg": _is_command_available("ffmpeg", ["-version"]),
-        "colmap": _is_command_available("colmap", ["help"]),
+        "colmap": _is_command_available("colmap", ["--help"]),
         "python": _is_command_available("python", ["--version"])
     }
     
@@ -33,14 +33,8 @@ func check_all_tools() -> void:
 ## Tente d'exécuter une commande et vérifie son code de retour
 func _is_command_available(cmd: String, args: PackedStringArray) -> bool:
     var output = []
-    # OS.execute bloque le thread, mais pour un simple -version, c'est quasi instantané (< 10ms)
     var exit_code = OS.execute(cmd, args, output, true, true)
-    
-    # Certains outils retournent 1 pour 'help', on accepte 0 ou 1 si la commande a été trouvée
-    if exit_code == 0 or exit_code == 1:
-        return true
-        
-    return false
+    return exit_code == 0
 
 ## Retourne un texte formaté pour l'interface utilisateur
 func get_diagnostic_text(results: Dictionary) -> String:

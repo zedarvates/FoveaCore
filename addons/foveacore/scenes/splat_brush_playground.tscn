@@ -1,7 +1,7 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene format=3 uid="uid://ddkyewj146ggk"]
 
 [ext_resource type="PackedScene" path="res://addons/foveacore/scenes/fovea_vr_rig.tscn" id="1_rig"]
-[ext_resource type="Script" path="res://addons/foveacore/scripts/fovea_splattable.gd" id="2_splattable"]
+[ext_resource type="Script" uid="uid://cnfwe7vihmm4h" path="res://addons/foveacore/scripts/fovea_splattable.gd" id="2_splattable"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.196078, 0.447059, 0.611765, 1)
@@ -22,24 +22,24 @@ glow_enabled = true
 radius = 1.0
 height = 2.0
 
-[node name="SplatBrushPlayground" type="Node3D"]
+[node name="SplatBrushPlayground" type="Node3D" unique_id=1945316077]
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=723846827]
 environment = SubResource("Environment_1")
 
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=482888836]
 transform = Transform3D(0.866025, -0.433013, 0.25, 0, 0.5, 0.866025, -0.5, -0.75, 0.433013, 0, 5, 0)
 shadow_enabled = true
 
-[node name="FoveaVRRig" parent="." instance=ExtResource("1_rig")]
+[node name="FoveaVRRig" parent="." unique_id=1518190357 instance=ExtResource("1_rig")]
 
-[node name="InteractiveSplatSphere" type="MeshInstance3D" parent="."]
+[node name="InteractiveSplatSphere" type="MeshInstance3D" parent="." unique_id=962286904]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, -2)
 mesh = SubResource("SphereMesh_1")
 script = ExtResource("2_splattable")
 splat_density = 2.0
 
-[node name="Floor" type="CSGBox3D" parent="."]
+[node name="Floor" type="CSGBox3D" parent="." unique_id=1987249574]
 use_collision = true
 size = Vector3(10, 0.1, 10)
 material = SubResource("ProceduralSkyMaterial_1")

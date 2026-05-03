@@ -53,6 +53,8 @@ static func compute_color(
 			return _compute_skin_color(position, normal, base, config, light_direction)
 		MaterialType.FABRIC:
 			return _compute_fabric_color(position, normal, base, config, light_direction)
+		MaterialType.GLASS:
+			return _compute_glass_color(position, normal, base, config, light_direction)
 		_:
 			return _compute_custom_color(position, normal, base, config, light_direction)
 
@@ -72,6 +74,8 @@ static func compute_roughness(
 			return 0.2 + _fbm(position * config.noise_scale * 0.2, 2) * 0.2
 		MaterialType.SKIN:
 			return 0.4 + _fbm(position * config.noise_scale * 0.5, 2) * 0.2
+		MaterialType.GLASS:
+			return 0.05  # Glass is perfectly smooth
 		_:
 			return 0.5
 
@@ -279,6 +283,33 @@ static func _compute_custom_color(
 	color = color * lerpf(config.micro_shadow, 1.0, ndotl)
 
 	return color.clamp(Color(0, 0, 0), Color(1, 1, 1))
+
+static func _compute_glass_color(
+	position: Vector3, normal: Vector3, base: Color,
+	config: MaterialStyleConfig, light_dir: Vector3
+) -> Color:
+	var view_dir := Vector3(0, 0, 1)  # Approx: camera looks along +Z
+	var ndotv := abs(normal.dot(view_dir))
+	var ndotl := max(normal.dot(light_dir), 0.0)
+
+	# Fresnel: edges are more reflective (higher opacity)
+	var fresnel := 1.0 - ndotv
+	fresnel = fresnel * fresnel * fresnel * fresnel  # Schlick quartic approx
+	var glass_alpha := clamp(0.15 + fresnel * 0.85, 0.1, 1.0)
+
+	# Specular highlight (Phong-like)
+	var reflect_dir := (2.0 * normal * ndotl - light_dir).normalized()
+	var spec := pow(max(reflect_dir.dot(view_dir), 0.0), 32.0) * config.specular_strength
+
+	# Base color: transparent tint + specular
+	var color := base * (0.2 + spec * 1.5)
+	color.a = glass_alpha * config.grain
+
+	# Edge darkening + inner glow
+	var edge_glow := 1.0 - fresnel * 0.6
+	color = Color(color.r * edge_glow, color.g * edge_glow, color.b * edge_glow, glass_alpha)
+
+	return color.clamp(Color(0, 0, 0, 0), Color(1, 1, 1, 1))
 
 # ============================================================================
 # FONCTIONS DE NOISE

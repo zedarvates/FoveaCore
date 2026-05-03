@@ -146,7 +146,7 @@ static func generate_all_splats(
 		return all_splats
 
 	for node in visibility_result.per_node_results:
-		var extraction: SurfaceExtractor.ExtractionResult = visibility_result.per_node_results[node] as SurfaceExtractor.ExtractionResult
+		var extraction = visibility_result.per_node_results[node]
 
 		# Obtenir la densité locale du nœud
 		var local_density: float = global_density

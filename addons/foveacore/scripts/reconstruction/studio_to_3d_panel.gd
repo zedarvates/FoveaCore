@@ -206,9 +206,10 @@ func _update_ui_from_session() -> void:
 
 	# Load preview if available
 	if not current_session.video_path.is_empty():
-		var img = await manager.processor.get_preview_frame(current_session.video_path)
-		if img:
-			_update_preview_image(img)
+		if manager and manager.processor:
+			var img = await manager.processor.get_preview_frame(current_session.video_path)
+			if img:
+				_update_preview_image(img)
 
 func _on_roi_pressed() -> void:
 	if video_path_edit.text.is_empty():
@@ -216,6 +217,10 @@ func _on_roi_pressed() -> void:
 		return
 		
 	_log("Opening ROI Selector...")
+	_ensure_session()
+	if manager == null or manager.processor == null:
+		_log("Error: Processor not ready.")
+		return
 	var img = manager.processor.get_preview_frame(video_path_edit.text)
 	if img == null:
 		_log("Error: Could not extract preview frame (check FFmpeg).")
@@ -350,7 +355,10 @@ func _on_video_selected(path: String) -> void:
 		session_name_edit.text = path.get_file().get_basename()
 	
 	_log("Vidéo sélectionnée. Génération automatique de l'aperçu...")
-	# Chargement automatique de l'aperçu pour la ROI
+	_ensure_session()
+	if manager == null or manager.processor == null:
+		_log("Error: Processor not ready. Please check tool configuration.")
+		return
 	var img = await manager.processor.get_preview_frame(path)
 	if img:
 		_log("Aperçu généré avec succès.")
@@ -585,6 +593,9 @@ func _on_preview_pressed() -> void:
 	if path.is_empty():
 		_log("Error: No video path set.")
 		return
+	if manager == null or manager.processor == null:
+		_log("Error: Processor not ready.")
+		return
 	_log("Generating preview frame...")
 	var img = await manager.processor.get_preview_frame(path)
 	if img:
@@ -727,22 +738,3 @@ func _input(event: InputEvent) -> void:
 func _update_stats_label(text: String) -> void:
 	if stats_label:
 		stats_label.text = "Stats: " + text
-
-func _unhandled_input(event: InputEvent) -> void:
-	if not is_inside_tree() or not visible:
-		return
-	# Ne pas interférer avec les contrôles de texte
-	if event is InputEventKey and event.pressed:
-		var focus_owner = get_viewport().gui_get_focus_owner()
-		if focus_owner is LineEdit or focus_owner is TextEdit:
-			return
-		match event.keycode:
-			KEY_R:
-				if reload_ply_btn and reload_ply_btn.visible and is_instance_valid(reload_ply_btn):
-					_on_reload_ply_pressed()
-			KEY_E:
-				if export_ply_btn and export_ply_btn.visible and is_instance_valid(export_ply_btn):
-					_on_export_ply_pressed()
-			KEY_T:
-				if toggle_renderer_btn and toggle_renderer_btn.visible and is_instance_valid(toggle_renderer_btn):
-					_on_toggle_renderer_pressed()
