@@ -64,6 +64,9 @@ var hybrid_mode_enabled: bool = false
 ## Occlusion culler for Hi-Z buffer occlusion testing
 var _occlusion_culler: OcclusionCuller = null
 
+# GPU-accelerated splat sorter (used for non-.fovea generated splats)
+var _splat_sorter: SplatSorter = null
+
 var _frame_count: int = 0
 
 var _foveated_params_dirty := true
@@ -114,7 +117,11 @@ func _initialize_renderer():
 	_hybrid_renderer = HybridRenderer.new()
 	add_child(_hybrid_renderer)
 
-	# Occlusion culler for Hi-Z buffer occlusion testing
+	# GPU splat sorter (for non-.fovea path)
+	_splat_sorter = SplatSorter.new()
+	add_child(_splat_sorter)
+
+	# Occlusion culler (CPU fallback for non-.fovea path)
 	_occlusion_culler = OcclusionCuller.new()
 	add_child(_occlusion_culler)
 
@@ -216,7 +223,7 @@ func _do_generate_and_filter(visibility_result, camera: Camera3D, camera_pos: Ve
 			global_splat_density
 		)
 
-	_current_splats = SplatSorter.sort_by_depth(_current_splats, camera_pos)
+	_current_splats = _sort_splats_gpu_aware(_current_splats, camera, camera_pos)
 
 
 func _filter_triangles_via_occlusion(triangles: Array, camera: Camera3D) -> Array:
@@ -228,6 +235,17 @@ func _filter_triangles_via_occlusion(triangles: Array, camera: Camera3D) -> Arra
 				filtered.append(tri)
 		return filtered
 	return triangles
+
+func _sort_splats_gpu_aware(splats: Array[GaussianSplat], camera: Camera3D, camera_pos: Vector3) -> Array[GaussianSplat]:
+	if _splat_sorter and _splat_sorter.is_gpu_available() and splats.size() <= _splat_sorter.get_max_supported_splats():
+		var indices = _splat_sorter.sort_splats_back_to_front(splats, camera)
+		if indices and not indices.is_empty():
+			var sorted: Array[GaussianSplat] = []
+			for idx in indices:
+				if idx < splats.size():
+					sorted.append(splats[idx])
+			return sorted
+	return SplatSorter.sort_by_depth(splats, camera_pos)
 
 
 func _do_foveated_pass(camera_pos: Vector3):
