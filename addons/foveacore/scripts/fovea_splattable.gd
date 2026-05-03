@@ -4,8 +4,8 @@ extends Node3D
 
 class_name FoveaSplattable
 
-## Référence statique au PlyLoader via preload (évite le problème de scope class_name)
-const _PlyLoaderScript = preload("res://addons/foveacore/scripts/ply_loader.gd")
+## Référence statique au PLYLoader via preload
+const _PlyLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/ply_loader.gd")
 
 ## Densité locale des splats (1.0 = densité globale)
 @export var splat_density := 1.0
@@ -91,16 +91,13 @@ func _capture_mesh_reference() -> void:
 ## Charger les splats depuis le fichier PLY configuré
 func _load_splats_from_ply() -> void:
 	print("FoveaSplattable: Chargement PLY depuis '", ply_file_path, "'...")
-	var load_result = _PlyLoaderScript.load_ply(ply_file_path)
-	if load_result == null:
-		push_error("FoveaSplattable: PlyLoader a retourné null")
+	var gaussians = _PlyLoaderScript.load_gaussians_from_ply(ply_file_path)
+	if gaussians == null or gaussians.is_empty():
+		push_error("FoveaSplattable: PLYLoader returned empty")
 		return
-	if load_result.success:
-		loaded_splats = load_result.splats
-		has_ply_splats = true
-		print("FoveaSplattable: %d splats chargés depuis PLY" % loaded_splats.size())
-	else:
-		push_error("FoveaSplattable: Échec chargement PLY — " + load_result.error_message)
+	loaded_splats = gaussians
+	has_ply_splats = true
+	print("FoveaSplattable: %d splats loaded from PLY" % loaded_splats.size())
 
 
 func set_density(density: float) -> void:
