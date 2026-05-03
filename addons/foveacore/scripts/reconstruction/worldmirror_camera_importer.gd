@@ -115,7 +115,7 @@ static func _opencv_to_godot_c2w(c2w_cv: Array) -> Transform3D:
 	if c2w_cv.size() < 4:
 		return Transform3D.IDENTITY
 
-	var m := _Matrix4(c2w_cv)
+	var m := _Matrix4.new(c2w_cv)
 
 	var basis := Basis(
 		Vector3(m.m00, m.m01, m.m02),

@@ -150,9 +150,9 @@ func generate_splats_from_mesh(
 		style_config.base_color = config.base_color
 		splat.color = StyleEngine.compute_color(pos, normal, config.material_type, style_config)
 		splat.radius = 0.05
-				splat.opacity = 1.0
+		splat.opacity = 1.0
 
-				splats.append(splat)
+		splats.append(splat)
 
 	return splats
 
