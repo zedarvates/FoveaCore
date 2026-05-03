@@ -36,6 +36,9 @@ enabled=PackedStringArray("res://addons/foveacore/plugin.cfg")
 
 tools/ffmpeg_path="C:\\Users\\redga/Documents/ffmpeg-8.0-win-x64/ffmpeg.exe"
 tools/colmap_path="C:\\Users\\redga/Documents/colmap-x64-windows-cuda/bin/colmap.exe"
+tools/python_path="python"
+tools/gaussian_train_script="train.py"
+tools/star_bridge_script="star_bridge.py"
 
 [physics]
 

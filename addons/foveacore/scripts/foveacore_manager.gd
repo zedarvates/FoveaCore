@@ -119,7 +119,6 @@ func _initialize_renderer():
 
 	# GPU splat sorter (for non-.fovea path)
 	_splat_sorter = SplatSorter.new()
-	add_child(_splat_sorter)
 
 	# Occlusion culler (CPU fallback for non-.fovea path)
 	_occlusion_culler = OcclusionCuller.new()
