@@ -141,6 +141,10 @@ func _ready() -> void:
 		show_mask_toggle.tooltip_text = "Overlay red tint on background areas detected by the mask."
 	if roi_toggle:
 		roi_toggle.tooltip_text = "Show yellow border around the Region of Interest."
+	
+	# Defer WM2 status check to avoid blocking _ready() on synchronous OS.execute()
+	call_deferred("_update_wm2_status")
+	
 	_log("StudioTo3D UI Initialized (Safe Mode).")
 	
 	# 4. Vérifier les outils au démarrage
@@ -420,11 +424,10 @@ func _ensure_session() -> void:
 		if not colmap_path_edit.text_changed.is_connected(_on_colmap_path_changed):
 			colmap_path_edit.text_changed.connect(_on_colmap_path_changed)
 
-	# Sync WM2 settings
+	# Sync WM2 settings (no blocking check during init)
 	if current_session:
 		if wm2_mode_check: wm2_mode_check.button_pressed = current_session.use_worldmirror
 		if wm2_target_slider: wm2_target_slider.value = float(current_session.target_size)
-		_on_wm2_mode_changed(current_session.use_worldmirror)
 
 	_log("StudioTo3D Session Verified.")
 
