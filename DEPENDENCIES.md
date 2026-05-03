@@ -48,3 +48,35 @@ Une fois installé, vous pouvez configurer les chemins dans le panel **StudioTo3
 
 ### Astuce : Ajout au PATH
 Si vous ajoutez ces dossiers à votre variable d'environnement `PATH` de Windows, vous n'aurez pas besoin de renseigner les chemins complets dans Godot. Le moteur détectera automatiquement `ffmpeg` et `colmap`.
+
+---
+
+## 🌍 4. WorldMirror 2.0 (Reconstruction rapide)
+
+Remplace COLMAP + 3DGS par un modèle feed-forward SOTA (Tencent Hunyuan).
+Reconstruction vidéo → 3DGS + depth + caméras en ~10 secondes.
+
+### Pré-requis :
+- Python 3.10+
+- CUDA 12.4 (recommandé) ou CPU fallback (lent)
+- GPU NVIDIA 8GB+ VRAM recommandé
+- ~5 GB d'espace disque pour le modèle
+
+### Installation rapide (Windows) :
+```
+scripts\setup_worldmirror.bat
+```
+
+### Installation rapide (Linux/macOS) :
+```
+bash scripts/setup_worldmirror.sh
+```
+
+### Installation manuelle :
+```bash
+pip install torch==2.4.0 torchvision==0.19.0 --index-url https://download.pytorch.org/whl/cu124
+git clone https://github.com/Tencent-Hunyuan/HY-World-2.0
+cd HY-World-2.0 && pip install -r requirements.txt
+```
+
+Le modèle (~5 GB) est téléchargé automatiquement depuis HuggingFace à la première utilisation.

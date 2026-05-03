@@ -191,9 +191,76 @@ placeholder_text = "colmap (or full path to colmap.exe)"
 layout_mode = 2
 text = "..."
 
+[node name="WM2Row" type="VBoxContainer" parent="VSplit/TopScroll/VBoxTop/Settings"]
+layout_mode = 2
+
+[node name="WM2Header" type="Label" parent="VSplit/TopScroll/VBoxTop/Settings/WM2Row"]
+layout_mode = 2
+text = "WorldMirror 2.0 (Fast Reconstruction):"
+
+[node name="WM2ModeCheck" type="CheckBox" parent="VSplit/TopScroll/VBoxTop/Settings/WM2Row"]
+layout_mode = 2
+text = "Use WorldMirror 2.0 (single-pass, ~10s)"
+button_pressed = false
+
+[node name="WM2TargetRow" type="HBoxContainer" parent="VSplit/TopScroll/VBoxTop/Settings/WM2Row"]
+layout_mode = 2
+
+[node name="WM2TargetLabel" type="Label" parent="VSplit/TopScroll/VBoxTop/Settings/WM2Row/WM2TargetRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "Target px: 952"
+
+[node name="WM2TargetSlider" type="HSlider" parent="VSplit/TopScroll/VBoxTop/Settings/WM2Row/WM2TargetRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 518
+max_value = 1904
+step = 64
+value = 952
+
+[node name="WM2Status" type="Label" parent="VSplit/TopScroll/VBoxTop/Settings/WM2Row"]
+layout_mode = 2
+text = "Check tools to verify WM2 status"
+
 [node name="CheckTools" type="Button" parent="VSplit/TopScroll/VBoxTop/Settings"]
 layout_mode = 2
 text = "Check & Re-detect Tools"
+
+[node name="DebugRow" type="HBoxContainer" parent="VSplit/TopScroll/VBoxTop/Settings"]
+layout_mode = 2
+
+[node name="DebugLabel" type="Label" parent="VSplit/TopScroll/VBoxTop/Settings/DebugRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "Debug Mode:"
+
+[node name="DebugMode" type="OptionButton" parent="VSplit/TopScroll/VBoxTop/Settings/DebugRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+item_count = 4
+selected = 0
+popup/item_0/text = "None"
+popup/item_0/id = 0
+popup/item_1/text = "Show Depth"
+popup/item_1/id = 1
+popup/item_2/text = "Show Normals"
+popup/item_2/id = 2
+popup/item_3/text = "Show Segments"
+popup/item_3/id = 3
+
+[node name="CleanRow" type="HBoxContainer" parent="VSplit/TopScroll/VBoxTop/Settings"]
+layout_mode = 2
+
+[node name="CleanLabel" type="Label" parent="VSplit/TopScroll/VBoxTop/Settings/CleanRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "Cleanup:"
+
+[node name="CleanFloaters" type="Button" parent="VSplit/TopScroll/VBoxTop/Settings/CleanRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Detect & Clean Floaters"
 
 [node name="PreviewLabel" type="Label" parent="VSplit/TopScroll/VBoxTop"]
 layout_mode = 2
@@ -290,6 +357,16 @@ layout_mode = 2
 size_flags_horizontal = 3
 text = "3. Train 3DGS"
 
+[node name="Run" type="Button" parent="VSplit/TopScroll/VBoxTop/Pipeline"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "▶ Run Full Pipeline"
+
+[node name="AutoRun" type="CheckBox" parent="VSplit/TopScroll/VBoxTop/Pipeline"]
+layout_mode = 2
+text = "Auto-run steps"
+button_pressed = false
+
 [node name="Preview" type="Button" parent="VSplit/TopScroll/VBoxTop/Pipeline"]
 layout_mode = 2
 size_flags_horizontal = 3
@@ -356,4 +433,7 @@ scroll_past_end_of_file = true
 [connection signal="pressed" from="VBox/Pipeline/Extract" to="." method="_on_extract_pressed"]
 [connection signal="pressed" from="VBox/Pipeline/Sfm" to="." method="_on_sfm_pressed"]
 [connection signal="pressed" from="VBox/Pipeline/Train" to="." method="_on_train_pressed"]
+[connection signal="pressed" from="VBox/Pipeline/Run" to="." method="_on_run_pressed"]
 [connection signal="pressed" from="VBox/Pipeline/Preview" to="." method="_on_preview_pressed"]
+[connection signal="toggled" from="VSplit/TopScroll/VBoxTop/Settings/WM2Row/WM2ModeCheck" to="." method="_on_wm2_mode_changed"]
+[connection signal="value_changed" from="VSplit/TopScroll/VBoxTop/Settings/WM2Row/WM2TargetRow/WM2TargetSlider" to="." method="_on_wm2_target_changed"]

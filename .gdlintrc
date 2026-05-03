@@ -1,0 +1,12 @@
+[rules]
+# Disable rules that are too strict for the current codebase
+class_name=enable
+class_name_order=enable
+extends_order=enable
+private_method_naming=disable
+signal_naming=disable
+unused_argument=disable
+comparison-with-itself=disable
+forbidden-variable-name=disable
+expression-not-assigned=disable
+redundant-await=disable

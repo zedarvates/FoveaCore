@@ -185,10 +185,9 @@ func _detect_chunk(thread_id: int, start: int, end: int, splats_data: Array, min
 			local_floating.append(i)
 			continue
 
-		# Check neighbors (needs KD-Tree, done sequentially for now)
-		# TODO: Move KD-Tree query outside or use spatial hash
-		# For now, skip neighbor check in parallel mode to avoid race conditions
-		# We'll do a second pass sequentially if needed
+	# Neighbor isolation check skipped in parallel mode (thread-safety).
+	# For sparse floaters, use _validate_against_spatial_hash() after parallel pass
+	# which leverages the existing SpatialHashGrid for O(1) neighbor queries.
 
 	# Append to shared results array atomically
 	mutex.lock()
