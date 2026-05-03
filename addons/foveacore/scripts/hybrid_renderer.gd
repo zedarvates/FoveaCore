@@ -143,16 +143,16 @@ func generate_splats_from_mesh(
 
 				# Créer le splat
 				var splat = GaussianSplat.new()
-				splat.position = pos + normal * config.splat_offset  # Décalage pour éviter z-fighting
-		splat.normal = normal
-		# StyleEngine: compute procedural color from position + normal
-		var style_config = StyleEngine.MaterialStyleConfig.new()
-		style_config.base_color = config.base_color
-		splat.color = StyleEngine.compute_color(pos, normal, config.material_type, style_config)
-		splat.radius = 0.05
-		splat.opacity = 1.0
+				splat.position = pos + normal * config.splat_offset
+				splat.normal = normal
+				# StyleEngine: compute procedural color from position + normal
+				var style_config = StyleEngine.MaterialStyleConfig.new()
+				style_config.base_color = config.base_color
+				splat.color = StyleEngine.compute_color(pos, normal, config.material_type, style_config)
+				splat.radius = 0.05
+				splat.opacity = 1.0
 
-		splats.append(splat)
+				splats.append(splat)
 
 	return splats
 

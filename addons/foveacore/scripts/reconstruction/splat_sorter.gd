@@ -248,7 +248,7 @@ static func sort_by_depth(splats: Array[GaussianSplat], camera_pos: Vector3) -> 
 
 static func minimize_overdraw(splats: Array[GaussianSplat]) -> Array[GaussianSplat]:
 	var optimized: Array[GaussianSplat] = []
-	var last_pos: Vector3 = Vector3.INF
+	var last_pos: Vector3 = Vector3(INF, INF, INF)
 
 	for splat in splats:
 		if splat.position.distance_to(last_pos) > 0.005:

@@ -165,8 +165,8 @@ func get_statistics() -> Dictionary:
 	if _points_data.is_empty():
 		return {}
 	
-	var min_pos = Vector3.INF
-	var max_pos = -Vector3.INF
+	var min_pos = Vector3(INF, INF, INF)
+	var max_pos = Vector3(-INF, -INF, -INF)
 	var center = Vector3.ZERO
 	var avg_color = Vector3.ZERO
 	
