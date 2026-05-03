@@ -228,7 +228,7 @@ func _on_roi_pressed() -> void:
 	if manager == null or manager.processor == null:
 		_log("Error: Processor not ready.")
 		return
-	var img = manager.processor.get_preview_frame(video_path_edit.text)
+	var img = await manager.processor.get_preview_frame(video_path_edit.text)
 	if img == null:
 		_log("Error: Could not extract preview frame (check FFmpeg).")
 		return
