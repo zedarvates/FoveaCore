@@ -6,12 +6,14 @@ class_name HybridRenderer
 
 ## Configuration du rendu hybride
 class HybridConfig:
-	var mesh_enabled: bool = true           # Activer le rendu mesh
-	var splat_enabled: bool = true          # Activer le rendu splat
-	var splat_offset: float = 0.01          # Décalage des splats au-dessus du mesh (éviter z-fighting)
-	var mesh_opacity: float = 0.3           # Opacité du mesh (laissant voir les splats)
-	var splat_density_override: float = 1.0 # Multiplicateur de densité pour le mode hybride
-	var use_mesh_normals: bool = true       # Utiliser les normales du mesh pour orienter les splats
+	var mesh_enabled: bool = true
+	var splat_enabled: bool = true
+	var splat_offset: float = 0.01
+	var mesh_opacity: float = 0.3
+	var splat_density_override: float = 1.0
+	var use_mesh_normals: bool = true
+	var base_color: Color = Color(0.6, 0.55, 0.45)
+	var material_type: int = StyleEngine.MaterialType.STONE
 
 ## Mode de rendu
 enum RenderMode {
@@ -142,9 +144,12 @@ func generate_splats_from_mesh(
 				# Créer le splat
 				var splat = GaussianSplat.new()
 				splat.position = pos + normal * config.splat_offset  # Décalage pour éviter z-fighting
-				splat.normal = normal
-				splat.color = Color(0.7, 0.7, 0.7)  # Couleur par défaut, sera remplacée par StyleEngine
-				splat.radius = 0.05
+		splat.normal = normal
+		# StyleEngine: compute procedural color from position + normal
+		var style_config = StyleEngine.MaterialStyleConfig.new()
+		style_config.base_color = config.base_color
+		splat.color = StyleEngine.compute_color(pos, normal, config.material_type, style_config)
+		splat.radius = 0.05
 				splat.opacity = 1.0
 
 				splats.append(splat)

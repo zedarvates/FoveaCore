@@ -1,67 +1,66 @@
-# 🗺️ FoveaEngine Roadmap : Future Vision
+# 🗺️ FoveaEngine Roadmap: Future Vision
 
-Ce document trace la route pour transformer FoveaCore en un moteur de rendu hybride (Mesh/3DGS) de classe mondiale, optimisé pour la VR.
-
----
-
-## 🟢 Phase 1 : UX & Workflow (En cours)
-*Objectif : Rendre le pipeline StudioTo3D accessible et robuste.*
-
-- [x] **Smart Studio Masking** : Gestion intelligente des fonds blancs et noirs.
-- [x] **ROI (Region of Interest)** : Système de Lasso pour isoler l'objet.
-- [x] **Visual ROI Tool** : Interface de dessin direct (Pinceau/Gomme) sur l'aperçu.
-- [x] **STAR Integration** : Pipeline rapide (DA3 Depth) inspiré d'InSpatio-World.
-- [x] **WorldMirror 2.0 Integration** : Backend feed-forward SOTA remplaçant STAR simulé + COLMAP lent. [Plan détaillé →](plans/integration_worldmirror2.md)
-  - [x] **Bridge Python WorldMirror** : `worldmirror_bridge.py` (~60 lignes) avec API diffusers-like
-  - [x] **Backend GDScript** : Nouvelle méthode `_run_worldmirror_path()` dans le backend
-  - [x] **Format compatibility** : Vérification sorties PLY/depth/cameras → pipeline FoveaEngine
-  - [ ] **Installation script** : Script setup + dependency checker CUDA 12.4
-  - [ ] **UI Mode sélecteur** : Radio COLMAP vs WorldMirror 2.0 dans le panel
-- [ ] **Real-time Mask Preview** : Feedback instantané des réglages de détourage.
-- [ ] **Reset & Session Management** : Facilitation des tests itératifs.
-
-## 🟠 Phase 2 : Performance & Native Power (Le saut RUST 🦀)
-*Objectif : Atteindre 90 FPS stables en VR avec des millions de points.*
-
-- [x] **Rust GDExtension** : Pipeline Fast-Path implémenté (chargement ultra-rapide sans parsing CPU).
-- [x] **GPU Bitonic Sorting** : Tri des profondeurs déporté vers un Compute Shader in-place.
-- [ ] **Multithreading** : Paralléliser l'extraction des surfaces sur tous les cœurs CPU.
-- [x] **Optimization Hi-Z** : Branchement natif de l'Occlusion Culler via `CompositorEffect`.
-
-## 🔵 Phase 3 : Fidélité Visuelle & Stylisation
-*Objectif : Créer une esthétique unique "Digital Painting".*
-
-- [ ] **Anisotropic Splats** : Passer des cercles aux ellipses pour une fidélité photographique.
-- [x] **Parallax Proxy Rendering** : (Prototype STAR implémenté) Simulation de profondeur sur surfaces simplifiées.
-- [ ] **Vectorized Splat Dispatcher** : Traitement par lots (Batching SIMD) pour une saturation maximale du GPU.
-- [ ] **Spatial Chunking & Streaming** : Division des modèles en chunks spatiaux pour un chargement progressif (Priorité à la "première ligne" devant la caméra).
-- [ ] **Splat Pattern Compression (Vector Quantization)** : Utilisation de Codebooks (K-means) pour regrouper les couleurs, rotations et échelles redondantes en patterns indexés.
-- [ ] **Spatial Quantization (Fixed-Point Math)** : Mappage des positions XYZ sur une grille 16-bits locale pour réduire drastiquement la bande passante mémoire.
-- [ ] **Coplanar Splat Merging & Quad Simplification** : Fusion algorithmique des splats partageant la même profondeur/surface pour générer des quads unifiés et éliminer l'overdraw GPU.
-- [ ] **Spherical Harmonics (SH) Baking** : Cuisson des reflets view-dependent complexes en couleurs diffuses pour les matériaux mats (réduction de 80% du poids des couleurs).
-- [x] **Splat Backface Culling** : Compute Shader implémenté (`gpu_culling_compute.glsl`) pour éliminer instantanément les splats de dos.
-- [ ] **Temporal & Interleaved Sorting** : Tri asynchrone des splats lointains étalé sur plusieurs frames pour garantir un temps d'exécution GPU strict de 11ms en VR.
-- [ ] **Tile-Based Rasterization** : Division de l'écran en tuiles (16x16) dans le Compute Shader pour limiter le tri et le blending aux splats purement locaux (approche standard 3DGS).
-- [x] **Two-Pass Hi-Z Occlusion Culling** : Lecture de la Depth Texture de Godot injectée dans le shader de culling pour éliminer les splats cachés.
-- [ ] **FP16 Compute Pipeline** : Migration des buffers de calcul de float32 vers float16 pour doubler la bande passante VRAM et saturer les ALUs modernes.
-- [ ] **Global Splat Instancing (Mega-Buffer)** : Rendu de milliers de copies du même asset (ex: forêts, foules) avec une seule copie en VRAM, via un Compute Shader multi-transform.
-- [ ] **Delta-Splat Variants (Morphs & Overrides)** : Création de variantes légères d'objets instanciés (teintes de couleur, déformations locales) en ne stockant et calculant que la "différence" (Delta).
-- [ ] **GPU-Driven Indirect Draw** : Élimination des synchronisations CPU-GPU (`rd.sync`) en laissant le Compute Shader écrire ses propres commandes de rendu (Draw indirect buffer).
-- [ ] **Out-of-Core VRAM Streaming** : Chargement des chunks spatiaux directement du SSD vers la VRAM (DirectStorage style) pour des mondes ouverts infinis sans saturer la RAM.
-- [ ] **Motion-Adaptive Splatting (Kinematic LOD)** : Étirement directionnel et réduction de densité des splats lors des mouvements rapides (flou de mouvement natif) pour économiser du fillrate.
-- [ ] **Artistic Shaders** : Effets de peinture à l'huile, aquarelle et hachures sur les splats.
-- [ ] **MIP-Splatting & HLOD** : Système de LOD dynamique (Mesh à distance, Macro-splats à mi-distance, Micro-splats de près).
-- [x] **Fast-Path Binary Asset Format (`.fovea`)** : Container natif prêt pour le GPU (Direct Memory Upload) sans parsing CPU, implémenté en Rust.
-- [ ] **Dynamic Lighting** : Ombres portées dynamiques qui s'adaptent aux lumières Godot.
-- [ ] **Static vs Dynamic Splat Separation** : Traitement différencié (Baking/Octree pour le décor statique, Compute Skinning & Déformation pour les entités mobiles).
-
-## 🟣 Phase 4 : Intelligence Artificielle & Cloud
-*Objectif : Automatiser la création d'assets.*
-
-- [ ] **ComfyUI Bridge** : Connexion directe via API pour générer des sources depuis Godot.
-- [ ] **Auto-ROI** : Détection automatique de l'objet principal par IA.
-- [ ] **Gaussian Compression** : Format de fichier ultra-léger pour le streaming VR.
+This document outlines the roadmap to transform FoveaCore into a world-class hybrid (Mesh/3DGS) rendering engine, optimized for VR.
 
 ---
 
-*"Le futur du rendu ne consiste pas seulement à afficher des triangles, mais à peindre avec des volumes de lumière."*
+## 🟢 Phase 1: UX & Workflow (In Progress)
+*Objective: Make the StudioTo3D pipeline accessible and robust.*
+
+- [x] **Smart Studio Masking**: Intelligent white/black background handling.
+- [x] **ROI (Region of Interest)**: Lasso system to isolate the object.
+- [x] **Visual ROI Tool**: Direct drawing interface (Brush/Eraser) on preview.
+- [x] **STAR Integration**: Fast pipeline (DA3 Depth) inspired by InSpatio-World.
+- [x] **WorldMirror 2.0 Integration**: SOTA feed-forward backend replacing simulated STAR + slow COLMAP. [Detailed plan →](plans/integration_worldmirror2.md)
+  - [x] **Python WorldMirror Bridge**: `worldmirror_bridge.py` (~60 lines) with diffusers-like API
+  - [x] **GDScript Backend**: New `_run_worldmirror_path()` method in backend
+  - [x] **Format Compatibility**: Verification of PLY/depth/cameras outputs → FoveaEngine pipeline
+  - [ ] **Installation Script**: Setup script + CUDA 12.4 dependency checker
+  - [ ] **UI Mode Selector**: COLMAP vs WorldMirror 2.0 radio in panel
+- [ ] **Real-time Mask Preview**: Instant feedback of cutout settings.
+- [ ] **Reset & Session Management**: Facilitate iterative testing.
+
+## 🟠 Phase 2: Performance & Native Power (The RUST 🦀 Leap)
+*Objective: Achieve stable 90 FPS in VR with millions of points.*
+
+- [x] **Rust GDExtension**: Fast-Path pipeline implemented (ultra-fast loading without CPU parsing).
+- [x] **GPU Bitonic Sorting**: Depth sorting offloaded to compute shader.
+- [ ] **Multithreading**: Parallelize surface extraction across all CPU cores.
+- [x] **Hi-Z Optimization**: Native Occlusion Culler branching via `CompositorEffect`.
+
+## 🔵 Phase 3: Visual Fidelity & Stylization
+*Objective: Create a unique "Digital Painting" aesthetic.*
+
+- [ ] **Anisotropic Splats**: Move from circles to ellipses for photographic fidelity.
+- [x] **Parallax Proxy Rendering**: (STAR prototype implemented) Depth simulation on simplified surfaces.
+- [ ] **Vectorized Splat Dispatcher**: Batch processing (SIMD) for maximum GPU saturation.
+- [ ] **Spatial Chunking & Streaming**: Divide models into spatial chunks for progressive loading (Priority to "first line" in front of camera).
+- [ ] **Splat Pattern Compression (Vector Quantization)**: Use codebooks (K-means) to group redundant colors, rotations, and scales into indexed patterns.
+- [ ] **Spatial Quantization (Fixed-Point Math)**: Map XYZ positions to local 16-bit grid to drastically reduce memory bandwidth.
+- [ ] **Coplanar Splat Merging & Quad Simplification**: Algorithmic fusion of splats sharing same depth/surface to generate unified quads and eliminate GPU overdraw.
+- [ ] **Spherical Harmonics (SH) Baking**: Bake view-dependent complex reflections into diffuse colors for matte materials (80% color weight reduction).
+- [x] **Splat Backface Culling**: Compute Shader implemented (`gpu_culling_compute.glsl`) to instantly eliminate back-facing splats.
+- [ ] **Temporal & Interleaved Sorting**: Asynchronous sorting of distant splats spread over multiple frames to guarantee strict 11ms GPU execution time in VR.
+- [ ] **Tile-Based Rasterization**: Divide screen into tiles (16x16) in compute shader to limit sorting and blending to purely local splats (standard 3DGS approach).
+- [ ] **FP16 Compute Pipeline**: Migrate compute buffers from float32 to float16 to double VRAM bandwidth and saturate modern ALUs.
+- [ ] **Global Splat Instancing (Mega-Buffer)**: Render thousands of copies of same asset (e.g., forests, crowds) with single VRAM copy, via multi-transform compute shader.
+- [ ] **Delta-Splat Variants (Morphs & Overrides)**: Create lightweight variants of instanced objects (color tints, local deformations) by storing and computing only the "difference" (Delta).
+- [ ] **GPU-Driven Indirect Draw**: Eliminate CPU-GPU synchronizations (`rd.sync`) by letting compute shader write its own render commands (Draw indirect buffer).
+- [ ] **Out-of-Core VRAM Streaming**: Load spatial chunks directly from SSD to VRAM (DirectStorage style) for infinite open worlds without saturating RAM.
+- [ ] **Motion-Adaptive Splatting (Kinematic LOD)**: Directional stretching and density reduction of splats during fast motion (native motion blur) to save fillrate.
+- [ ] **Artistic Shaders**: Oil painting, watercolor, and hatching effects on splats.
+- [ ] **MIP-Splatting & HLOD**: Dynamic LOD system (Mesh at distance, Macro-splats at mid-distance, Micro-splats up close).
+- [x] **Fast-Path Binary Asset Format (`.fovea`)**: Native container ready for GPU (Direct Memory Upload) without CPU parsing, implemented in Rust.
+- [ ] **Dynamic Lighting**: Dynamic shadows adapting to Godot light sources.
+- [ ] **Static vs Dynamic Splat Separation**: Differential processing (Baking/Octree for static decor, Compute Skinning & Deformation for mobile entities).
+
+## 🟣 Phase 4: Artificial Intelligence & Cloud
+*Objective: Automate asset creation.*
+
+- [ ] **ComfyUI Bridge**: Direct API connection for generating sources from Godot.
+- [ ] **Auto-ROI**: Automatic main object detection by AI.
+- [ ] **Gaussian Compression**: Ultra-light file format for VR streaming.
+
+---
+
+*"The future of rendering is not just about displaying triangles, but about painting with volumes of light."*
