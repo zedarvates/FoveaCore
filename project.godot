@@ -39,6 +39,7 @@ tools/colmap_path="C:\\Users\\redga/Documents/colmap-x64-windows-cuda/bin/colmap
 tools/python_path="python"
 tools/gaussian_train_script="train.py"
 tools/star_bridge_script="star_bridge.py"
+tools/worldmirror_bridge_script="worldmirror_bridge.py"
 
 [physics]
 

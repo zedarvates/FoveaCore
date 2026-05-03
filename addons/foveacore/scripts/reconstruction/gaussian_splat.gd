@@ -8,7 +8,14 @@ enum LayerType {
 	BASE = 0,
 	SATURATION = 1,
 	LIGHT = 2,
-	SHADOW = 3
+	SHADOW = 3,
+	LIQUID = 4
+}
+
+enum BrushType {
+	STONE = 0,
+	SPONGE = 1,
+	GAUSSIAN = 2
 }
 
 var position: Vector3 = Vector3.ZERO
@@ -20,6 +27,7 @@ var color: Color = Color.WHITE
 var depth: float = 0.0
 var normal: Vector3 = Vector3.UP
 var layer_type: LayerType = LayerType.BASE
+var brush_type: BrushType = BrushType.GAUSSIAN
 
 # Données de quantification (pour rendu optimisé)
 var palette_index: int = 0  # Index dans la palette 8-bit (0-255)

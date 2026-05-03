@@ -7,7 +7,7 @@ func _enter_tree():
 	add_autoload_singleton("ReconstructionManager", "res://addons/foveacore/scripts/reconstruction/reconstruction_manager.gd")
 	add_autoload_singleton("EyeTrackingBridge", "res://addons/foveacore/scripts/advanced/gaze_tracker_linker.gd")
 	add_autoload_singleton("StyleEngine", "res://addons/foveacore/scripts/materials/style_engine.gd")
-	add_autoload_singleton("SplatGenerator", "res://addons/foveacore/scripts/splat_generator.gd")
+	add_autoload_singleton("SplatGen", "res://addons/foveacore/scripts/splat_generator.gd")
 	
 	# Custom nodes
 	add_custom_type("FoveaSplattable", "Node3D", preload("res://addons/foveacore/scripts/fovea_splattable.gd"), preload("res://addons/foveacore/icons/fovea_splattable.svg"))
@@ -42,7 +42,7 @@ func _exit_tree():
 	remove_autoload_singleton("ReconstructionManager")
 	remove_autoload_singleton("EyeTrackingBridge")
 	remove_autoload_singleton("StyleEngine")
-	remove_autoload_singleton("SplatGenerator")
+	remove_autoload_singleton("SplatGen")
 	remove_custom_type("FoveaSplattable")
 	remove_custom_type("SplatBrush")
 	remove_custom_type("PhysicsProxy")
