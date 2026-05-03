@@ -112,11 +112,6 @@ func _ready() -> void:
 	_safe_connect_btn(browse_colmap_btn, _on_browse_colmap_pressed)
 	_safe_connect_btn(check_tools_btn, _on_check_tools_pressed)
 	_safe_connect_btn(clean_floaters_btn, _on_clean_floaters_pressed)
-
-	if wm2_mode_check:
-		wm2_mode_check.toggled.connect(_on_wm2_mode_changed)
-	if wm2_target_slider:
-		wm2_target_slider.value_changed.connect(_on_wm2_target_changed)
 	
 	if threshold_slider:
 		threshold_slider.value_changed.connect(_on_threshold_changed)

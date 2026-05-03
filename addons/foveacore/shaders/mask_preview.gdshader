@@ -40,7 +40,7 @@ void fragment() {
 
 	// Show ROI border
 	if (show_roi && roi_size.x > 0.0 && roi_size.y > 0.0) {
-		vec2 p = UV * textureSize(TEXTURE, 0);
+		vec2 p = UV * vec2(textureSize(TEXTURE, 0));
 		vec2 roi_min = roi_pos;
 		vec2 roi_max = roi_pos + roi_size;
 		float border_width = 3.0;
