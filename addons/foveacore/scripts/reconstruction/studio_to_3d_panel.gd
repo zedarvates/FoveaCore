@@ -497,8 +497,7 @@ func _on_wm2_target_changed(value: float) -> void:
 func _update_wm2_status() -> void:
 	if not wm2_status:
 		return
-	var checker = StudioDependencyChecker.new()
-	if checker.is_worldmirror2_ready():
+	if StudioDependencyChecker.is_worldmirror2_ready():
 		wm2_status.text = "✅ WorldMirror 2.0 ready"
 		wm2_status.modulate = Color.GREEN
 	else:
