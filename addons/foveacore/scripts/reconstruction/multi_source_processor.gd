@@ -64,7 +64,7 @@ func merge_all_sources(session: ReconstructionSession) -> bool:
 		var temp_dir = OS.get_user_data_dir() + "/fovea_temp_merge_%d" % src_idx
 		
 		if DirAccess.dir_exists_absolute(temp_dir):
-			DirAccess.remove_recursive(temp_dir)
+			DirAccess.remove_absolute(temp_dir)
 		DirAccess.make_dir_recursive_absolute(temp_dir)
 		
 		var args = [
@@ -95,7 +95,7 @@ func merge_all_sources(session: ReconstructionSession) -> bool:
 		total_frames += source_frames
 		
 		if DirAccess.dir_exists_absolute(temp_dir):
-			DirAccess.remove_recursive(temp_dir)
+			DirAccess.remove_absolute(temp_dir)
 	
 	session.frame_count = total_frames
 	session.output_directory = session.output_directory.replace("/input", "/merged_input")

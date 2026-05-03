@@ -88,20 +88,20 @@ func _get_video_info(path: String) -> Dictionary:
 	
 	var output = " ".join(out)
 	
-	var res_match = Regex.new()
+	var res_match = RegEx.new()
 	res_match.compile("(\\d{2,5})x(\\d{2,5})")
 	var match_result = res_match.search(output)
 	if match_result:
 		info["width"] = int(match_result.get_string(1))
 		info["height"] = int(match_result.get_string(2))
 	
-	var fps_match = Regex.new()
+	var fps_match = RegEx.new()
 	fps_match.compile("(\\d+(?:\\.\\d+)?)\\s*fps")
 	match_result = fps_match.search(output)
 	if match_result:
 		info["fps"] = float(match_result.get_string(1))
 	
-	var duration_match = Regex.new()
+	var duration_match = RegEx.new()
 	duration_match.compile("Duration:\\s*(\\d+):(\\d+):(\\d+)\\.")
 	match_result = duration_match.search(output)
 	if match_result:
@@ -110,7 +110,7 @@ func _get_video_info(path: String) -> Dictionary:
 		var s = int(match_result.get_string(3))
 		info["duration_seconds"] = h * 3600 + m * 60 + s
 	
-	var codec_match = Regex.new()
+	var codec_match = RegEx.new()
 	codec_match.compile("Video:\\s*(\\w+)")
 	match_result = codec_match.search(output)
 	if match_result:
@@ -165,7 +165,7 @@ func _extract_sample_frames(path: String, count: int) -> Array[Image]:
 	var temp_dir = OS.get_user_data_dir() + "/fovea_validate_temp"
 	
 	if DirAccess.dir_exists_absolute(temp_dir):
-		DirAccess.remove_recursive(temp_dir)
+		DirAccess.remove_absolute(temp_dir)
 	DirAccess.make_dir_recursive_absolute(temp_dir)
 	
 	var duration = _get_video_info(path).get("duration_seconds", 10)
@@ -192,7 +192,7 @@ func _extract_sample_frames(path: String, count: int) -> Array[Image]:
 				frames.append(img)
 	
 	if DirAccess.dir_exists_absolute(temp_dir):
-		DirAccess.remove_recursive(temp_dir)
+		DirAccess.remove_absolute(temp_dir)
 	
 	return frames
 

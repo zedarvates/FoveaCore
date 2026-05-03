@@ -214,8 +214,8 @@ func get_statistics() -> Dictionary:
 
 	# Comput bounding box
 	if not _splats.is_empty():
-		var min_pos = Vector3.INF
-		var max_pos = -Vector3.INF
+		var min_pos = Vector3(INF, INF, INF)
+		var max_pos = Vector3(-INF, -INF, -INF)
 		var avg_scale = 0.0
 
 		for splat in _splats:
