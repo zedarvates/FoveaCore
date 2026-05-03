@@ -23,7 +23,6 @@ xr/openxr/default_action_map="res://addons/foveacore/resources/xr_action_map.tre
 EyeTrackingBridge="*uid://crimmsg4gc86h"
 ReconstructionManager="*uid://dscmlnk6l5jp3"
 FoveaCoreManager="*uid://b6v4mwv2ycp7h"
-SplatGen="*uid://e46fty463hn0"
 
 [dotnet]
 
