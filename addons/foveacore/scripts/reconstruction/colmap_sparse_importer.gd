@@ -169,7 +169,9 @@ func convert_to_ply_format(points: Array[SparsePoint]) -> String:
 func get_camera_positions(images: Array[SparseImage]) -> Array[Vector3]:
 	var positions: Array[Vector3] = []
 	for img in images:
-		positions.append(-(img.rotation.inverse()) * img.translation)
+		# COLMAP: camera_center = -R^T * t. Compute as Vector negation, not Basis unary minus.
+		var rt: Vector3 = img.rotation.inverse() * img.translation
+		positions.append(-rt)
 	return positions
 
 func export_to_star_workspace(colmap_dir: String, output_dir: String) -> bool:
