@@ -1,88 +1,88 @@
-# 🔗 Plan d'Intégration — WorldMirror 2.0 → FoveaEngine
+# 🔗 WorldMirror 2.0 Integration Plan — FoveaEngine
 
-> **Date :** 2026-05-03 | **Auteur :** FoveaEngine Team
+> **Date:** 2026-05-03 | **Author:** FoveaEngine Team
 >
-> Remplacer les backends de reconstruction simulés/placeholder par WorldMirror 2.0 (Tencent Hunyuan), un modèle feed-forward SOTA qui reconstruit depth, normals, caméras, point clouds et 3DGS en un seul forward pass.
+> Replace simulated/placeholder reconstruction backends with WorldMirror 2.0 (Tencent Hunyuan), a SOTA feed-forward model that reconstructs depth, normals, camera poses, point clouds, and 3DGS in a single forward pass.
 
 ---
 
-## 1. CONTEXTE : ÉTAT ACTUEL DE LA RECONSTRUCTION
+## 1. CONTEXT: CURRENT RECONSTRUCTION STATE
 
-### Pipeline actuel (fichiers concernés)
+### Current Pipeline (files involved)
 
 ```
-reconstruction_manager.gd  ── orchestre 3 phases
-  ├── studio_processor.gd        Phase 1: extraction frames (ffmpeg réel ✅) + masquage GPU (réel ✅)
-  ├── reconstruction_backend.gd  Phase 2: COLMAP SfM (réel ✅) OU star_bridge.py (SIMULÉ ❌)
-  └── reconstruction_backend.gd  Phase 3: 3DGS training (réel ✅) → PLY → SplatRenderer ✅
+reconstruction_manager.gd  ── orchestrates 3 phases
+  ├── studio_processor.gd        Phase 1: frame extraction (real ffmpeg ✅) + GPU masking (real ✅)
+  ├── reconstruction_backend.gd  Phase 2: COLMAP SfM (real ✅) OR star_bridge.py (SIMULATED ❌)
+  └── reconstruction_backend.gd  Phase 3: 3DGS training (real ✅) → PLY → SplatRenderer ✅
 ```
 
-### Problèmes identifiés
+### Identified Issues
 
-| Composant | Problème |
+| Component | Issue |
 |---|---|
-| `star_bridge.py:34-35` | DA3 model instancié mais **poids non chargés** — fallback heuristique (luminance inversée + Sobel) |
-| `star_bridge.py:72` | Extrinsics = matrice identité, intrinsics = `[w, h, w/2, h/2]` hardcodés — **pas de pose estimation réelle** |
-| `star_simulator.py` | Génère des données synthétiques (OK pour tests, PAS pour production) |
-| `ply_loader.gd / studio_to_3d_panel.gd` | Mismatch d'API : appelle `load_ply()` sur `PLYLoader` qui expose `load_gaussians_from_ply()` |
-| Pipeline COLMAP | Lent (30+ min pour vidéo 10s), nécessite GPU NVIDIA, paramétrage manuel |
+| `star_bridge.py:34-35` | DA3 model instantiated but **weights not loaded** — fallback heuristic (inverted luminance + Sobel) |
+| `star_bridge.py:72` | Extrinsics = identity matrix, intrinsics = `[w, h, w/2, h/2]` hardcoded — **no real pose estimation** |
+| `star_simulator.py` | Generates synthetic data (OK for tests, NOT for production) |
+| `ply_loader.gd / studio_to_3d_panel.gd` | API mismatch: calls `load_ply()` on `PLYLoader` which exposes `load_gaussians_from_ply()` |
+| COLMAP pipeline | Slow (30+ min for 10s video), requires NVIDIA GPU, manual configuration |
 
-### Ce qui est déjà solide
+### What's Already Solid
 
-- FFmpeg frame extraction et masquage GPU ✅
+- FFmpeg frame extraction and GPU masking ✅
 - PLY parsing → GaussianSplat → MultiMeshInstance3D rendering ✅
 - GPU bitonic depth sort + Hi-Z occlusion culling ✅
 - Foveated rendering 3 zones (base/saturation/light/shadow) ✅
-- Format `.fovea` compressé (VQ 1024 codebook, 16B/splat) ✅
-- Gestion OOM, timeout, hang detection dans le backend ✅
+- `.fovea` compressed format (VQ 1024 codebook, 16B/splat) ✅
+- OOM, timeout, hang detection in backend ✅
 
 ---
 
-## 2. WORLD MIRROR 2.0 — CE QU'IL APPORTE
+## 2. WORLD MIRROR 2.0 — WHAT IT BRINGS
 
-### Comparaison technique
+### Technical Comparison
 
-| Critère | COLMAP + 3DGS (actuel) | WorldMirror 2.0 |
+| Criterion | COLMAP + 3DGS (current) | WorldMirror 2.0 |
 |---|---|---|
-| **Temps de reconstruction** | 30-90 minutes | ~2-10 secondes (single forward pass) |
-| **Type** | Optimization itérative | Feed-forward (réseau de neurones) |
-| **Input** | Images multi-vues | Vidéo OU images multi-vues (1-32 frames) |
+| **Reconstruction Time** | 30-90 minutes | ~2-10 seconds (single forward pass) |
+| **Type** | Iterative optimization | Feed-forward (neural network) |
+| **Input** | Multi-view images | Video OR multi-view images (1-32 frames) |
 | **Outputs** | Sparse point cloud + 3DGS PLY | Depth maps, normals, camera poses (c2w+intrinsics), point cloud 3D, 3DGS attributes (means/scales/quats/opacities/SH) |
-| **Caméra estimation** | COLMAP SfM (parfois instable) | Prédite directement par le réseau |
-| **Modèle** | classique (SIFT + BA + densification) | Neural (~1.2B params, ViT backbone) |
-| **GPU requis** | NVIDIA CUDA | CUDA 12.4 (ou CPU, lent) |
-| **VRAM** | 6-12 GB (3DGS training) | ~8-16 GB (selon résolution et nombre de frames) |
-| **API** | CLI (scripts Python) | CLI + diffusers-like Python API + Gradio app |
-| **Multi-GPU** | Non | Oui (FSDP + Sequence Parallel + BF16) |
-| **Modèle** | Propriétaire (3DGS) + COLMAP (BSD) | Open-source (Apache/MIT-like) |
-| **Maturité** | Production-proven | Avril 2026 release, partial open-source |
+| **Camera Estimation** | COLMAP SfM (sometimes unstable) | Directly predicted by network |
+| **Model** | Classical (SIFT + BA + densification) | Neural (~1.2B params, ViT backbone) |
+| **GPU Required** | NVIDIA CUDA | CUDA 12.4 (or CPU, slow) |
+| **VRAM** | 6-12 GB (3DGS training) | ~8-16 GB (depending on resolution and frame count) |
+| **API** | CLI (Python scripts) | CLI + diffusers-like Python API + Gradio app |
+| **Multi-GPU** | No | Yes (FSDP + Sequence Parallel + BF16) |
+| **Model** | Proprietary (3DGS) + COLMAP (BSD) | Open-source (Apache/MIT-like) |
+| **Maturity** | Production-proven | April 2026 release, partially open-source |
 
-### Mapping des formats de sortie
+### Output Format Mapping
 
 ```
 WM2 Output                    → FoveaEngine Equivalent
-─────────────────────────────────────────────────────────
+────────────────────────────────────────────────────────
 gaussians.ply (standard PLY)  → PLYLoader.load_gaussians_from_ply() ✅ compatible
 points.ply                    → EnhancedPointCloudViewer ✅ compatible
-depth/*.npy                   → star_loader.gd (déjà conçu pour ça) ✅
-normal/*.png                  → StyleEngine / lighting ✅ ajout mineur
-camera_params.json            → ReconstructionSession (poses 4×4) ✅ compatible
-sparse/0/cameras.bin          → ColmapSparseImporter ✅ déjà implémenté
+depth/*.npy                   → star_loader.gd (already designed for this) ✅
+normal/*.png                  → StyleEngine / lighting ✅ minor addition
+camera_params.json            → ReconstructionSession (4×4 poses) ✅ compatible
+sparse/0/cameras.bin          → ColmapSparseImporter ✅ already implemented
 ```
 
 ---
 
-## 3. PLAN D'INTÉGRATION — 4 PHASES
+## 3. INTEGRATION PLAN — 4 PHASES
 
-### Phase A : WorldMirror 2.0 Backend Bridge (semaine 1-2) 🔴 Priorité maximale
+### Phase A: WorldMirror 2.0 Backend Bridge (week 1-2) 🔴 Highest Priority
 
-**Objectif :** Remplacer `star_bridge.py` par un bridge WorldMirror 2.0 fonctionnel.
+**Objective:** Replace `star_bridge.py` with a functional WorldMirror 2.0 bridge.
 
-#### Tâche A1 : Nouveau bridge Python `worldmirror_bridge.py`
+#### Task A1: New Python Bridge `worldmirror_bridge.py`
 
 ```python
-# Remplace addons/foveacore/scripts/reconstruction/star_bridge.py
-# Nouveau fichier : addons/foveacore/scripts/reconstruction/worldmirror_bridge.py
+# Replaces addons/foveacore/scripts/reconstruction/star_bridge.py
+# New file: addons/foveacore/scripts/reconstruction/worldmirror_bridge.py
 
 """
 WorldMirror 2.0 bridge for FoveaEngine.
@@ -126,13 +126,13 @@ if __name__ == "__main__":
     main()
 ```
 
-**Spécifications :**
-- CLI compatible avec l'appel actuel du backend GDScript : `python worldmirror_bridge.py --input <frames_dir> --output <workspace>`
-- Sorties placées directement dans `workspace/` (pas de sous-dossiers timestamp)
+**Specifications:**
+- CLI compatible with current GDScript backend call: `python worldmirror_bridge.py --input <frames_dir> --output <workspace>`
+- Outputs placed directly in `workspace/` (no timestamp subdirectories)
 
-#### Tâche A2 : Modifier `reconstruction_backend.gd`
+#### Task A2: Modify `reconstruction_backend.gd`
 
-Ajouter une nouvelle méthode `_run_worldmirror_path()` :
+Add new method `_run_worldmirror_path()`:
 
 ```gdscript
 func _run_worldmirror_path(session: ReconstructionSession) -> void:
@@ -141,235 +141,235 @@ func _run_worldmirror_path(session: ReconstructionSession) -> void:
         "--input", session.output_directory + "/input",
         "--output", session.output_directory,
         "--device", "cuda",
-        "--target_size", str(_target_size),      # nouveau @export
+        "--target_size", str(_target_size),      # new @export
         "--fps", str(session.extraction_fps)
     ])
     var pid := OS.create_process(python_path, args)
-    await _watch_process(pid, session)  # réutilise la boucle async existante
+    await _watch_process(pid, session)  # reuse existing async loop
 ```
 
-#### Tâche A3 : Modifier `reconstruction_manager.gd`
+#### Task A3: Modify `reconstruction_manager.gd`
 
-- Remplacer la branche `use_fast_sync` par `use_worldmirror` (nouveau flag)
-- La branche COLMAP+3DGS reste en fallback pour compatibilité
-- Le pipeline complet devient : `extract → worldmirror → done` (1 étape au lieu de 3)
+- Replace `use_fast_sync` branch with `use_worldmirror` (new flag)
+- Keep COLMAP+3DGS branch as fallback for compatibility
+- Full pipeline becomes: `extract → worldmirror → done` (1 step instead of 3)
 
-#### Tâche A4 : Install script & dependency checker
+#### Task A4: Install Script & Dependency Checker
 
 ```bash
-# Nouveau script : scripts/setup_worldmirror.sh (et .bat pour Windows)
+# New script: scripts/setup_worldmirror.sh (and .bat for Windows)
 pip install torch==2.4.0 torchvision==0.19.0 --index-url https://download.pytorch.org/whl/cu124
 pip install -r requirements_worldmirror.txt
-# Optionnel : FlashAttention pour perf
+# Optional: FlashAttention for performance
 ```
 
 ---
 
-### Phase B : Format Bridge & Conversion (semaine 2-3) 🟠 Priorité haute
+### Phase B: Format Bridge & Conversion (week 2-3) 🟠 High Priority
 
-**Objectif :** Assurer que les sorties WM2 sont consommables par toute la chaîne FoveaEngine.
+**Objective:** Ensure WM2 outputs are consumable by the entire FoveaEngine chain.
 
-#### Tâche B1 : Fixer le mismatch d'API `PLYLoader`
+#### Task B1: Fix `PLYLoader` API Mismatch
 
-Actuellement `studio_to_3d_panel.gd:475` appelle `_PLYLoaderScript.load_ply()` qui n'existe pas. Deux options :
-- **Option 1 (simple) :** Ajouter un wrapper `static func load_ply(path) -> Dictionary` dans `PLYLoader` qui appelle `load_gaussians_from_ply()` et retourne un dict compatible
-- **Option 2 (propre) :** Refactorer le panel pour utiliser directement `load_gaussians_from_ply()`
+Currently `studio_to_3d_panel.gd:475` calls `_PLYLoaderScript.load_ply()` which doesn't exist. Two options:
+- **Option 1 (simple):** Add wrapper `static func load_ply(path) -> Dictionary` in `PLYLoader` that calls `load_gaussians_from_ply()` and returns compatible dict
+- **Option 2 (clean):** Refactor panel to use `load_gaussians_from_ply()` directly
 
-Recommandé : Option 1 pour rétrocompatibilité, Option 2 en follow-up.
+Recommended: Option 1 for backward compatibility, Option 2 as follow-up.
 
-#### Tâche B2 : Importer les caméras WM2 → Godot
+#### Task B2: Import WM2 Cameras → Godot
 
-Créer `worldmirror_camera_importer.gd` :
+Create `worldmirror_camera_importer.gd`:
 
 ```gdscript
 class_name WorldMirrorCameraImporter
 extends Node
 
 static func import_cameras(json_path: String) -> Array[Camera3D]:
-    # Lit camera_params.json (format WM2)
-    # Crée des Camera3D avec extrinsics 4×4 + intrinsics
-    # Convention : OpenCV → Godot (Y-up → -Y)
+    # Read camera_params.json (WM2 format)
+    # Create Camera3D nodes with extrinsics 4×4 + intrinsics
+    # Convention: OpenCV → Godot (Y-up → -Y)
 ```
 
-#### Tâche B3 : Charger les depth maps WM2 dans le pipeline
+#### Task B3: Load WM2 Depth Maps into Pipeline
 
-Modifier `star_loader.gd` (ou créer un équivalent) pour charger les `.npy` depth maps de WM2 :
-- WM2 format : `float32 [H, W]`, valeurs Z-depth
-- Appliquer au shader `star_proxy.gdshader` (parallax mapping déjà existant)
+Modify `star_loader.gd` (or create equivalent) to load WM2 `.npy` depth maps:
+- WM2 format: `float32 [H, W]`, Z-depth values
+- Apply to `star_proxy.gdshader` (parallax mapping already exists)
 
-#### Tâche B4 : Mapping des attributs 3DGS
+#### Task B4: Map 3DGS Attributes
 
-Vérifier la compatibilité du format PLY WM2 avec `PLYLoader.load_gaussians_from_ply()` :
-- WM2 produit `gaussians.ply` en format standard (x, y, z, opacity, scale_0/1/2, rot_0/1/2/3, f_dc_0/1/2)
-- `PLYLoader` parse exactement ces propriétés → **compatible à 100%**
-- Seule vérification nécessaire : ordre des propriétés dans le header PLY
+Verify WM2 PLY format compatibility with `PLYLoader.load_gaussians_from_ply()`:
+- WM2 produces `gaussians.ply` in standard format (x, y, z, opacity, scale_0/1/2, rot_0/1/2/3, f_dc_0/1/2)
+- `PLYLoader` parses exactly these properties → **100% compatible**
+- Only check needed: property order in PLY header
 
 ---
 
-### Phase C : UI & UX (semaine 3-4) 🟡 Priorité moyenne
+### Phase C: UI & UX (week 3-4) 🟡 Medium Priority
 
-#### Tâche C1 : Nouvelle option "WorldMirror 2.0 (Fast)" dans l'UI
+#### Task C1: New "WorldMirror 2.0 (Fast)" Option in UI
 
-Dans `studio_to_3d_panel.gd`, ajouter un radio button ou dropdown :
-- `Mode COLMAP + 3DGS` (fallback, lent, pas de modèle requis)
-- `Mode WorldMirror 2.0` (recommandé, ~10s, nécessite CUDA 12.4 + modèle HF)
+In `studio_to_3d_panel.gd`, add radio button or dropdown:
+- `Mode COLMAP + 3DGS` (fallback, slow, no model required)
+- `Mode WorldMirror 2.0` (recommended, ~10s, requires CUDA 12.4 + HF model)
 
-#### Tâche C2 : Preview 3D en temps réel
+#### Task C2: Real-time 3D Preview
 
-Inspiré de la Gradio app WM2, ajouter une preview 3D interactive dans Godot :
-- Depth map visualization (fausse couleur)
-- Point cloud preview avant import complet
+Inspired by WM2 Gradio app, add interactive 3D preview in Godot:
+- Depth map visualization (false color)
+- Point cloud preview before full import
 - Normal map overlay
 
-#### Tâche C3 : Barre de progression adaptée WM2
+#### Task C3: WM2-Adapted Progress Bar
 
-Le pipeline WM2 n'a pas de "pourcentage progressif" comme COLMAP (c'est un forward pass). Afficher :
-- "Downloading model..." (première utilisation, depuis HuggingFace)
+WM2 pipeline has no "percentage" like COLMAP (it's a single forward pass). Display:
+- "Downloading model..." (first use, from HuggingFace)
 - "Running WorldMirror 2.0..." (forward pass, ~2-10s)
-- "Post-processing..." (conversion formats, ~1s)
+- "Post-processing..." (format conversion, ~1s)
 
 ---
 
-### Phase D : Avancé (semaine 5+) 🟢 Long terme
+### Phase D: Advanced (week 5+) 🟢 Long Term
 
-#### Tâche D1 : Panorama Generation (HY-Pano 2.0)
+#### Task D1: Panorama Generation (HY-Pano 2.0)
 
-Quand HY-Pano 2.0 sera open-source, l'intégrer pour :
-- Génération de skyboxes 360° pour les scènes VR
-- Text-to-panorama → input pour WorldStereo 2.0 → monde 3D complet
+When HY-Pano 2.0 opens, integrate for:
+- 360° skybox generation for VR scenes
+- Text-to-panorama → WorldStereo 2.0 → complete 3D world
 
-#### Tâche D2 : Multi-GPU optimisé
+#### Task D2: Multi-GPU Optimized
 
-Activer FSDP + BF16 pour les scènes lourdes (>32 frames, >500k pixels) :
+Enable FSDP + BF16 for heavy scenes (>32 frames, >500k pixels):
 ```python
 torchrun --nproc_per_node=2 -m hyworld2.worldrecon.pipeline \
     --input_path frames/ --use_fsdp --enable_bf16
 ```
 
-#### Tâche D3 : Prior Injection pour qualité maximale
+#### Task D3: Prior Injection for Max Quality
 
-Permettre à l'utilisateur d'injecter :
-- Caméra intrinsics connues (ex : depuis calibration VR headset)
-- Depth map LiDAR ou COLMAP (fusion avec WM2)
-- Via `--prior_cam_path` et `--prior_depth_path`
+Allow user to inject:
+- Known camera intrinsics (e.g., from VR headset calibration)
+- LiDAR or COLMAP depth map (fusion with WM2)
+- Via `--prior_cam_path` and `--prior_depth_path`
 
-#### Tâche D4 : Bridge ComfyUI (Phase 4 existante du ROADMAP.md)
+#### Task D4: ComfyUI Bridge (Phase 4 from ROADMAP.md)
 
-Quand World Generation sera open-source (WorldNav + WorldStereo 2.0 + WorldMirror 2.0) :
-- Connexion ComfyUI → WorldMirror 2.0 pour génération procédurale
-- Text/Image → 3D World complet, directement dans Godot
+When World Generation opens (WorldNav + WorldStereo 2.0 + WorldMirror 2.0):
+- ComfyUI → WorldMirror 2.0 connection for procedural generation
+- Text/Image → complete 3D world, directly in Godot
 
-#### Tâche D5 : WM2 comme service local
+#### Task D5: WM2 as Local Service
 
-Wrapper HTTP autour de WM2 pour :
-- Exécution en arrière-plan (pas de blocage Godot)
-- Cache des modèles en RAM (VRAM persistante)
-- Queue de reconstruction (batch processing)
+HTTP wrapper around WM2 for:
+- Background execution (no Godot blocking)
+- Model cache in RAM (persistent VRAM)
+- Reconstruction queue (batch processing)
 
 ---
 
-## 4. IMPACT SUR LE CODE EXISTANT
+## 4. IMPACT ON EXISTING CODE
 
-### Fichiers modifiés
+### Modified Files
 
-| Fichier | Modification |
+| File | Modification |
 |---|---|
-| `reconstruction_backend.gd` | +30 lignes : nouvelle méthode `_run_worldmirror_path()` |
-| `reconstruction_manager.gd` | +20 lignes : flag `use_worldmirror`, appel backend |
-| `reconstruction_session.gd` | +2 champs : `use_worldmirror` (bool), `target_size` (int) |
-| `studio_to_3d_panel.gd` | +50 lignes : radio mode WM2, UI adaptée |
-| `studio_dependency_checker.gd` | +15 lignes : vérification CUDA 12.4 + modèle HF |
+| `reconstruction_backend.gd` | +30 lines: new `_run_worldmirror_path()` method |
+| `reconstruction_manager.gd` | +20 lines: `use_worldmirror` flag, backend call |
+| `reconstruction_session.gd` | +2 fields: `use_worldmirror` (bool), `target_size` (int) |
+| `studio_to_3d_panel.gd` | +50 lines: WM2 mode radio, adapted UI |
+| `studio_dependency_checker.gd` | +15 lines: CUDA 12.4 + HF model check |
 
-### Fichiers remplacés
+### Replaced Files
 
-| Ancien fichier | Nouveau fichier | Raison |
+| Old File | New File | Reason |
 |---|---|---|
-| `star_bridge.py` (108 lignes, simulé) | `worldmirror_bridge.py` (~60 lignes, réel) | Modèle fonctionnel vs placeholder |
-| `star_simulator.py` (53 lignes) | Conservé pour tests | Simulateur utile pour CI sans GPU |
+| `star_bridge.py` (108 lines, simulated) | `worldmirror_bridge.py` (~60 lines, real) | Functional model vs placeholder |
+| `star_simulator.py` (53 lines) | Kept for tests | Simulator useful for CI without GPU |
 
-### Fichiers conservés (compatibilité)
+### Kept Files (Compatibility)
 
-| Fichier | Rôle conservé |
+| File | Preserved Role |
 |---|---|
-| `studio_processor.gd` | Extraction frames + masquage (toujours nécessaire avant WM2) |
-| `dataset_exporter.gd` | Export frames/masks (toujours nécessaire) |
-| `reconstruction_backend.gd` | Backend process execution (réutilisé pour WM2) |
-| `ply_loader.gd` | Parsing PLY de sortie (WM2 produit du PLY standard) |
-| `splat_renderer.gd` | Rendu 3DGS dans Godot |
-| `splat_sorter.gd` | Tri GPU des splats |
-| `floaters_detector.gd` | Nettoyage post-reconstruction (WM2 peut générer des outliers) |
+| `studio_processor.gd` | Frame extraction + masking (still needed before WM2) |
+| `dataset_exporter.gd` | Export frames/masks (still needed) |
+| `reconstruction_backend.gd` | Backend process execution (reused for WM2) |
+| `ply_loader.gd` | PLY parsing from output (WM2 produces standard PLY) |
+| `splat_renderer.gd` | 3DGS rendering in Godot |
+| `splat_sorter.gd` | GPU splat sorting |
+| `floaters_detector.gd` | Post-reconstruction cleanup (WM2 can generate outliers) |
 
 ---
 
-## 5. DÉPENDANCES & PRÉREQUIS
+## 5. DEPENDENCIES & PREREQUISITES
 
-### Nouvelles dépendances Python
+### New Python Dependencies
 
 ```
 torch==2.4.0+cu124
 torchvision==0.19.0+cu124
-# hyworld2 s'installe depuis le repo GitHub cloné
-# requirements_worldmirror.txt fourni par le repo
+# hyworld2 installs from cloned GitHub repo
+# requirements_worldmirror.txt provided by repo
 ```
 
-### GPU requis
+### GPU Required
 
-| Configuration | VRAM min | Temps estimé |
+| Configuration | Min VRAM | Estimated Time |
 |---|---|---|
-| GPU NVIDIA (CUDA 12.4) | 8 GB | 2-5s (8 frames) |
-| GPU NVIDIA (CUDA 12.4) | 16 GB | 5-10s (32 frames, target_size=1904) |
-| CPU fallback | 16 GB RAM | 30-120s (déconseillé) |
+| NVIDIA GPU (CUDA 12.4) | 8 GB | 2-5s (8 frames) |
+| NVIDIA GPU (CUDA 12.4) | 16 GB | 5-10s (32 frames, target_size=1904) |
+| CPU fallback | 16 GB RAM | 30-120s (not recommended) |
 
-### Stockage modèle
+### Model Storage
 
-- Modèle WorldMirror 2.0 : ~5 GB (téléchargé automatiquement depuis HuggingFace)
-- Cache HF par défaut : `~/.cache/huggingface/hub/`
+- WorldMirror 2.0 model: ~5 GB (auto-downloaded from HuggingFace)
+- HF cache default: `~/.cache/huggingface/hub/`
 
 ---
 
-## 6. RISQUES & MITIGATIONS
+## 6. RISKS & MITIGATIONS
 
-| Risque | Probabilité | Impact | Mitigation |
+| Risk | Probability | Impact | Mitigation |
 |---|---|---|---|
-| WM2 ne tourne pas sur GPU AMD/Intel | Moyenne | Medium | Fallback CPU lent + conserver COLMAP |
-| Changements d'API WM2 (encore en dev) | Moyenne | Faible | Pinner version commit hash, pas `main` |
-| Modèle HF indisponible/trop lent à télécharger | Faible | Élevé | Mirror local + cache + fallback COLMAP |
-| Incompatibilité format PLY (propriétés non standard) | Faible | Faible | Adapter `ply_loader.gd` pour supporter variantes |
-| VRAM insuffisante pour target_size élevé | Moyenne | Medium | `disable_heads` pour économiser la VRAM |
-| Licence incompatible | Faible | Élevé | Vérifier la licence du modèle (Apache/MIT-like d'après le repo) |
+| WM2 doesn't run on AMD/Intel GPU | Medium | Medium | CPU fallback (slow) + keep COLMAP |
+| WM2 API changes (still in dev) | Medium | Low | Pin version commit hash, not `main` |
+| HF model unavailable/slow download | Low | High | Local mirror + cache + COLMAP fallback |
+| PLY format incompatibility (non-standard props) | Low | Low | Adapt `ply_loader.gd` for variants |
+| VRAM insufficient for high target_size | Medium | Medium | `disable_heads` to save VRAM |
+| License incompatibility | Low | High | Verify model license (Apache/MIT-like per repo) |
 
 ---
 
-## 7. KPI & SUCCÈS
+## 7. KPIs & SUCCESS METRICS
 
-### Métriques techniques
+### Technical Metrics
 
-| Métrique | Avant (COLMAP+3DGS) | Après (WM2) | Cible |
+| Metric | Before (COLMAP+3DGS) | After (WM2) | Target |
 |---|---|---|---|
-| Temps reconstruction (vidéo 10s) | 30-90 min | 2-10s | <15s |
-| Camera pose accuracy | Variable (SfM) | Prédite (SOTA) | ATE < 0.02 |
-| Point cloud completeness | Moyenne | Élevée (feed-forward) | F1 > 0.40 |
-| 3DGS quality | Bon (7000 iter) | Bon (direct) | PSNR > 28 dB |
-| VRAM pic | 6-12 GB | 8-16 GB | <16 GB |
-| Fallback dispo | Oui (COLMAP) | Oui (COLMAP conservé) | 100% |
+| Reconstruction time (10s video) | 30-90 min | 2-10s | <15s |
+| Camera pose accuracy | Variable (SfM) | Predicted (SOTA) | ATE < 0.02 |
+| Point cloud completeness | Medium | High (feed-forward) | F1 > 0.40 |
+| 3DGS quality | Good (7000 iter) | Good (direct) | PSNR > 28 dB |
+| VRAM peak | 6-12 GB | 8-16 GB | <16 GB |
+| Fallback available | Yes (COLMAP) | Yes (COLMAP kept) | 100% |
 
-### Métriques utilisateur
+### User Metrics
 
--  1 clic pour passer d'une vidéo à un modèle 3D visualisable
-- Preview 3D interactive avant import final
-- Pas de configuration manuelle (COLMAP params cachés)
-
----
-
-## 8. RÉFÉRENCES
-
-- **WorldMirror 2.0 repo :** https://github.com/Tencent-Hunyuan/HY-World-2.0
-- **WorldMirror 2.0 paper :** https://arxiv.org/abs/2604.14268
-- **HuggingFace model :** https://huggingface.co/tencent/HY-World-2.0
-- **WorldMirror 1.0 (legacy) :** https://github.com/Tencent-Hunyuan/HunyuanWorld-Mirror
-- **WorldStereo (background) :** https://github.com/FuchengSu/WorldStereo
-- **HY-World-2.0 product page :** https://3d.hunyuan.tencent.com/sceneTo3D
+-  1 click from video to viewable 3D model
+- Interactive 3D preview before final import
+- No manual configuration (COLMAP params hidden)
 
 ---
 
-*Plan rédigé le 2026-05-03 — Prêt pour implémentation.*
+## 8. REFERENCES
+
+- **WorldMirror 2.0 repo:** https://github.com/Tencent-Hunyuan/HY-World-2.0
+- **WorldMirror 2.0 paper:** https://arxiv.org/abs/2604.14268
+- **HuggingFace model:** https://huggingface.co/tencent/HY-World-2.0
+- **WorldMirror 1.0 (legacy):** https://github.com/Tencent-Hunyuan/HunyuanWorld-Mirror
+- **WorldStereo (background):** https://github.com/FuchengSu/WorldStereo
+- **HY-World-2.0 product page:** https://3d.hunyuan.tencent.com/sceneTo3D
+
+---
+
+*Plan written 2026-05-03 — Ready for implementation.*
