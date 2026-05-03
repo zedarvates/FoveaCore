@@ -101,7 +101,7 @@ func _select_mip_level(uv: Vector2) -> int:
 	var pixel_x := int(uv.x * level_0.get_width())
 	var pixel_y := int(uv.y * level_0.get_height())
 	var depth_val := level_0.get_pixel(clamp(pixel_x, 0, level_0.get_width() - 1), clamp(pixel_y, 0, level_0.get_height() - 1)).r
-	var depth_abs := abs(depth_val - 0.5) * 2.0
+	var depth_abs: float = abs(depth_val - 0.5) * 2.0
 	mip_idx = int(clamp(depth_abs * config.max_mip_levels, 0, config.max_mip_levels - 1))
 	return clamp(mip_idx, 0, _hi_z_buffer.size() - 1)
 

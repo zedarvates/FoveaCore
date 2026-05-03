@@ -30,7 +30,7 @@ func _build_ui() -> void:
 	size = Vector2i(1200, 850)
 	get_label().hide()
 
-	confirm_text = "Apply ROI"
+	ok_button_text = "Apply ROI"
 
 	var main_vbox = VBoxContainer.new()
 	main_vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 10)
