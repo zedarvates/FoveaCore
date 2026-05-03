@@ -472,12 +472,10 @@ func _on_reload_ply_pressed() -> void:
 		current_renderer.queue_free()
 
 	# Charger et afficher
-	var load_result = _PLYLoaderScript.load_ply(global_ply)
-	if not load_result.success:
-		_log("❌ Failed to load gaussians: " + load_result.error_message)
+	var gaussians = _PLYLoaderScript.load_gaussians_from_ply(global_ply)
+	if gaussians == null or gaussians.is_empty():
+		_log("❌ Failed to load gaussians from PLY")
 		return
-
-	var gaussians = load_result.splats
 
 	var renderer = _SplatRendererScript.new()
 	renderer.name = "SplatPreview_" + current_session.session_name

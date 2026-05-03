@@ -45,6 +45,12 @@ var star_bridge_script: String = "star_bridge.py":
 		_propagate_star_bridge_script()
 		_save_user_settings()
 
+var worldmirror_bridge_script: String = "worldmirror_bridge.py":
+	set(val):
+		worldmirror_bridge_script = val
+		_propagate_worldmirror_bridge_script()
+		_save_user_settings()
+
 func _propagate_ffmpeg_path() -> void:
 	if processor: processor.ffmpeg_path = ffmpeg_path
 	ProjectSettings.set_setting("fovea/tools/ffmpeg_path", ffmpeg_path)
@@ -64,6 +70,10 @@ func _propagate_gaussian_train_script() -> void:
 func _propagate_star_bridge_script() -> void:
 	if backend: backend.star_bridge_script = star_bridge_script
 	ProjectSettings.set_setting("fovea/tools/star_bridge_script", star_bridge_script)
+
+func _propagate_worldmirror_bridge_script() -> void:
+	if backend: backend.worldmirror_bridge_script = worldmirror_bridge_script
+	ProjectSettings.set_setting("fovea/tools/worldmirror_bridge_script", worldmirror_bridge_script)
 
 # Fichier de configuration utilisateur (hors projet)
 var _user_config_path: String = OS.get_user_data_dir() + "/fovea_engine_user_settings.cfg"
@@ -104,6 +114,7 @@ func _ready() -> void:
 		backend.python_path = python_path
 		backend.gaussiantrain_script = gaussian_train_script
 		backend.star_bridge_script = star_bridge_script
+		backend.worldmirror_bridge_script = worldmirror_bridge_script
 		backend.command_started.connect(_on_backend_started)
 		backend.command_progress.connect(_on_backend_progress)
 		backend.command_finished.connect(_on_backend_finished)
@@ -234,6 +245,7 @@ func _save_user_settings() -> void:
 	config.set_value("tools", "python_path", python_path)
 	config.set_value("tools", "gaussian_train_script", gaussian_train_script)
 	config.set_value("tools", "star_bridge_script", star_bridge_script)
+	config.set_value("tools", "worldmirror_bridge_script", worldmirror_bridge_script)
 
 	var err = config.save(_user_config_path)
 	if err != OK:
@@ -263,6 +275,8 @@ func _load_user_settings() -> void:
 		gaussian_train_script = config.get_value("tools", "gaussian_train_script")
 	if config.has_section_key("tools", "star_bridge_script"):
 		star_bridge_script = config.get_value("tools", "star_bridge_script")
+	if config.has_section_key("tools", "worldmirror_bridge_script"):
+		worldmirror_bridge_script = config.get_value("tools", "worldmirror_bridge_script")
 
 	print("FoveaManager: User settings loaded from ", _user_config_path)
 
@@ -361,7 +375,20 @@ func run_reconstruction(session: ReconstructionSession) -> void:
 		reconstruction_failed.emit("Échec Phase 1 : Extraction")
 		return
 
-	# Phase 2 : SfM (COLMAP) ou STAR (InSpatio)
+	# WorldMirror 2.0 path: single step replaces SfM + 3DGS training
+	if session.use_worldmirror:
+		session_progress_updated.emit(40.0)
+		print("Manager: Using WorldMirror 2.0 Feed-forward Path")
+		await run_worldmirror(session)
+		if session.status == "Erreur":
+			reconstruction_failed.emit("Échec WorldMirror 2.0")
+			return
+		session_progress_updated.emit(100.0)
+		session_completed.emit(session)
+		print("ReconstructionManager: WorldMirror 2.0 pipeline terminé !")
+		return
+
+	# Phase 2 : SfM (COLMAP) ou STAR (InSpatio) — legacy paths
 	print("Manager: Phase 1 Done. Starting Phase 2...")
 	session_progress_updated.emit(40.0)
 	
@@ -421,6 +448,44 @@ func run_star_sync(session: ReconstructionSession) -> void:
 		session.status = "Erreur"
 		reconstruction_failed.emit("Le STAR Workspace n'a pas été généré.")
 
+## Step 2 (WorldMirror 2.0): Feed-forward Reconstruction
+func run_worldmirror(session: ReconstructionSession) -> void:
+	session.status = "WorldMirror 2.0 Inference"
+	session.is_processed = false
+	print("ReconstructionManager: Phase 2 - WorldMirror 2.0 Feed-forward...")
+	backend.execute_reconstruction(session)
+
+	await backend.command_finished
+
+	# Vérifier le marqueur de complétion
+	var marker_path = ProjectSettings.globalize_path(session.output_directory) + "/.worldmirror_done"
+	if not FileAccess.file_exists(marker_path):
+		session.status = "Erreur"
+		reconstruction_failed.emit("WorldMirror 2.0: aucun marqueur de complétion trouvé.")
+		return
+
+	var marker = FileAccess.open(marker_path, FileAccess.READ)
+	if marker:
+		var content = marker.get_as_text()
+		print("ReconstructionManager: WorldMirror 2.0 results -> ", content)
+		marker.close()
+
+	# Charger le PLY directement (WorldMirror produit gaussians.ply à la racine du workspace)
+	var ply_path = session.output_directory.path_join("gaussians.ply")
+	var global_ply = ProjectSettings.globalize_path(ply_path)
+	if FileAccess.file_exists(global_ply):
+		print("ReconstructionManager: Loading WorldMirror PLY from ", global_ply)
+		var gaussians = PLYLoader.load_gaussians_from_ply(global_ply)
+		if gaussians and not gaussians.is_empty():
+			session.splat_data_path = ply_path
+			session.status = "Terminé (%d splats)" % gaussians.size()
+		else:
+			session.status = "Erreur Chargement PLY"
+			push_error("ReconstructionManager: PLY loaded but empty")
+	else:
+		session.status = "Erreur"
+		push_error("ReconstructionManager: gaussians.ply not found at " + global_ply)
+
 ## Step 3: Training (3DGS)
 func run_training(session: ReconstructionSession) -> void:
 	session.status = "Training Splats (Long)..."
@@ -445,14 +510,13 @@ func run_training(session: ReconstructionSession) -> void:
 		var global_ply = ProjectSettings.globalize_path(ply_path)
 		if FileAccess.file_exists(global_ply):
 			print("ReconstructionManager: Loading result PLY from ", global_ply)
-			var load_result = PlyLoader.load_ply(global_ply)
-			if load_result.success:
-				var gaussians = load_result.splats
-				# Here we would inject them into the renderer
+			var gaussians = PLYLoader.load_gaussians_from_ply(global_ply)
+			if gaussians and not gaussians.is_empty():
+				session.splat_data_path = ply_path
 				session.status = "Terminé (%d splats)" % gaussians.size()
 			else:
 				session.status = "Erreur Chargement PLY"
-				push_error("ReconstructionManager: " + load_result.error_message)
+				push_error("ReconstructionManager: PLY loaded but empty or PLYLoader unavailable")
 		else:
 			session.status = "Terminé (PLY non trouvé)"
 
