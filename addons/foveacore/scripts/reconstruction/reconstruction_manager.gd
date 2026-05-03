@@ -324,7 +324,8 @@ func run_extraction(session: ReconstructionSession, mask_mode: String = "Studio 
 		var mask = processor.mask_background(img, mask_mode, session.background_threshold, session.roi_rect)
 		exporter.export_frame(session, idx, img, mask)
 		var coverage = _calculate_mask_coverage(mask)
-		metrics.add_frame_metrics(idx, 1.0, coverage)
+		var blur = processor.calculate_blur_score(img)
+		metrics.add_frame_metrics(idx, blur, coverage)
 		# Update progress bar incrementally (0 to 33%)
 		if session.frame_count > 0:
 			session_progress_updated.emit((float(idx) / float(session.frame_count)) * 33.0)

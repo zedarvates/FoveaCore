@@ -276,6 +276,52 @@ func mask_by_normal(normal_image: Image, top_facing_threshold: float = 0.7) -> I
 	
 	return mask
 
+func calculate_blur_score(image: Image) -> float:
+	"""Variance of Laplacian — standard blur detection.
+	Returns [0, 1]: 1.0 = perfectly sharp, <0.2 = blurry/unusable.
+	"""
+	var w := image.get_width()
+	var h := image.get_height()
+	if w < 3 or h < 3:
+		return 0.0
+
+	# Laplacian kernel: [[0, 1, 0], [1, -4, 1], [0, 1, 0]]
+	var laplacian_values := PackedFloat32Array()
+	laplacian_values.resize(w * h)
+
+	var lap_max := 0.0
+	for y in range(1, h - 1):
+		for x in range(1, w - 1):
+			var lum := func(px: int, py: int) -> float:
+				var c := image.get_pixel(px, py)
+				return 0.299 * c.r + 0.587 * c.g + 0.114 * c.b
+			var val := abs(lum.call(x-1, y) + lum.call(x+1, y) +
+							lum.call(x, y-1) + lum.call(x, y+1) -
+							4.0 * lum.call(x, y))
+			laplacian_values[y * w + x] = val
+			if val > lap_max:
+				lap_max = val
+
+	if lap_max == 0.0:
+		return 0.0  # totally flat image -> max blur
+
+	# Variance (compute_pass)
+	var mean := 0.0
+	var n := float((w - 2) * (h - 2))
+	for v in laplacian_values:
+		mean += v
+	mean /= n
+
+	var variance := 0.0
+	for v in laplacian_values:
+		var d := v - mean
+		variance += d * d
+	variance /= n
+
+	# Normalize to [0, 1]. Empirical threshold: variance > 0.002 = sharp
+	var score := clamp(variance / 0.005, 0.0, 1.0)
+	return score
+
 func detect_surface_features(image: Image) -> Dictionary:
 	var result = {
 		"top_facing_areas": 0,
