@@ -11,6 +11,7 @@ const _GaussianSplatScript = preload("res://addons/foveacore/scripts/reconstruct
 
 var manager: FoveaReconstructionManager = null
 var current_session: ReconstructionSession = null
+var _preview_manager: StudioPreviewManager = null
 
 @onready var video_path_edit: LineEdit = get_node_or_null("VSplit/TopScroll/VBoxTop/VideoSource/PathEdit")
 @onready var session_name_edit: LineEdit = get_node_or_null("VSplit/TopScroll/VBoxTop/SessionName/NameEdit")
@@ -55,6 +56,12 @@ var current_session: ReconstructionSession = null
 var floaters_detector: FloatersDetector = null
 @onready var debug_mode_option: OptionButton = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/DebugRow/DebugMode")
 @onready var clean_floaters_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/CleanRow/CleanFloaters")
+
+# WorldMirror 2.0 controls
+@onready var wm2_mode_check: CheckBox = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/WM2Row/WM2ModeCheck")
+@onready var wm2_target_slider: HSlider = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/WM2Row/WM2TargetSlider")
+@onready var wm2_target_label: Label = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/WM2Row/WM2TargetLabel")
+@onready var wm2_status: Label = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/WM2Row/WM2Status")
 
 @onready var reload_ply_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/ReloadPLY")
 @onready var export_ply_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/ExportPLY")
@@ -105,6 +112,11 @@ func _ready() -> void:
 	_safe_connect_btn(browse_colmap_btn, _on_browse_colmap_pressed)
 	_safe_connect_btn(check_tools_btn, _on_check_tools_pressed)
 	_safe_connect_btn(clean_floaters_btn, _on_clean_floaters_pressed)
+
+	if wm2_mode_check:
+		wm2_mode_check.toggled.connect(_on_wm2_mode_changed)
+	if wm2_target_slider:
+		wm2_target_slider.value_changed.connect(_on_wm2_target_changed)
 	
 	if threshold_slider:
 		threshold_slider.value_changed.connect(_on_threshold_changed)
@@ -121,7 +133,7 @@ func _ready() -> void:
 	if point_size_slider:
 		point_size_slider.value_changed.connect(_on_point_size_changed)
 
-	_setup_preview_material()
+	_setup_preview_manager()
 
 	# Tooltips pour contrôles avancés
 	if aniso_toggle:
@@ -163,7 +175,7 @@ func _on_reset_pressed() -> void:
 	if preview_rect: preview_rect.texture = null
 	if show_mask_toggle: show_mask_toggle.button_pressed = true
 	if roi_toggle: roi_toggle.button_pressed = false
-	_update_preview_params()
+	if _preview_manager: _preview_manager.on_threshold_changed(0)
 	_log("Session Reset.")
 
 func _on_save_pressed() -> void:
@@ -202,14 +214,14 @@ func _update_ui_from_session() -> void:
 	if session_name_edit: session_name_edit.text = current_session.session_name
 	if threshold_slider: threshold_slider.value = current_session.background_threshold
 	if status_label: status_label.text = "Status: " + current_session.status
-	_update_preview_params()
+	if _preview_manager: _preview_manager.on_threshold_changed(0)
 
 	# Load preview if available
 	if not current_session.video_path.is_empty():
 		if manager and manager.processor:
 			var img = await manager.processor.get_preview_frame(current_session.video_path)
 			if img:
-				_update_preview_image(img)
+				_preview_manager.set_preview_image(img)
 
 func _on_roi_pressed() -> void:
 	if video_path_edit.text.is_empty():
@@ -225,120 +237,15 @@ func _on_roi_pressed() -> void:
 	if img == null:
 		_log("Error: Could not extract preview frame (check FFmpeg).")
 		return
-		
-	_show_roi_dialog(img)
 
-func _show_roi_dialog(img: Image) -> void:
-	var popup = AcceptDialog.new()
-	popup.title = "Paint Region of Interest (ROI)"
-	popup.size = Vector2i(1200, 850)
-	popup.get_label().hide()
-	
-	var main_vbox = VBoxContainer.new()
-	main_vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT, Control.PRESET_MODE_MINSIZE, 10)
-	popup.add_child(main_vbox)
-	
-	# --- Toolbar ---
-	var toolbar = HBoxContainer.new()
-	main_vbox.add_child(toolbar)
-	
-	var mode_btn = OptionButton.new()
-	mode_btn.add_item("🖌️ Paint (Add)", 0)
-	mode_btn.add_item("🧽 Eraser (Remove)", 1)
-	toolbar.add_child(mode_btn)
-	
-	toolbar.add_child(VSeparator.new())
-	var size_label = Label.new()
-	size_label.text = "Brush Size: "
-	toolbar.add_child(size_label)
-	var size_slider = HSlider.new()
-	size_slider.min_value = 5
-	size_slider.max_value = 100
-	size_slider.value = 30
-	size_slider.custom_minimum_size = Vector2(150, 0)
-	toolbar.add_child(size_slider)
-	
-	var reset_btn = Button.new()
-	reset_btn.text = "🗑️ Clear All"
-	toolbar.add_child(reset_btn)
-	
-	# --- Drawing Area ---
-	var scroll = ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	main_vbox.add_child(scroll)
-	
-	var container = Control.new()
-	container.custom_minimum_size = Vector2(img.get_width(), img.get_height())
-	scroll.add_child(container)
-	
-	# Background Image
-	var tex = ImageTexture.create_from_image(img)
-	var rect_display = TextureRect.new()
-	rect_display.texture = tex
-	rect_display.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	rect_display.mouse_filter = Control.MOUSE_FILTER_STOP
-	container.add_child(rect_display)
-	
-	# Mask Overlay (The "Paint" Layer)
-	var mask_img = Image.create(img.get_width(), img.get_height(), false, Image.FORMAT_RGBA8)
-	mask_img.fill(Color(0, 0, 0, 0)) # Start empty
-	var mask_tex = ImageTexture.create_from_image(mask_img)
-	
-	var mask_display = TextureRect.new()
-	mask_display.texture = mask_tex
-	mask_display.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	mask_display.modulate = Color(0, 1, 0, 0.5) # Semi-transparent green
-	mask_display.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	container.add_child(mask_display)
-	
-	# --- Painting Logic ---
-	var is_drawing = false
-	var last_pos = Vector2.ZERO
-	
-	var draw_brush = func(pos: Vector2, erase: bool):
-		var center = Vector2i(pos)
-		var r = int(size_slider.value)
-		var color = Color(0, 0, 0, 0) if erase else Color(1, 1, 1, 1)
-		
-		# Software brush on Image
-		for y in range(-r, r):
-			for x in range(-r, r):
-				if x*x + y*y <= r*r:
-					var px = center.x + x
-					var py = center.y + y
-					if px >= 0 and px < mask_img.get_width() and py >= 0 and py < mask_img.get_height():
-						mask_img.set_pixel(px, py, color)
-		mask_tex.update(mask_img)
-	
-	rect_display.gui_input.connect(func(event):
-		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-			is_drawing = event.pressed
-			if is_drawing:
-				draw_brush.call(event.position, mode_btn.selected == 1)
-		elif event is InputEventMouseMotion and is_drawing:
-			draw_brush.call(event.position, mode_btn.selected == 1)
+	var painter = StudioRoiPainter.create(img)
+	painter.roi_confirmed.connect(func(rect: Rect2i):
+		if current_session:
+			current_session.roi_rect = rect
+			_log("ROI set: " + str(rect))
 	)
-	
-	reset_btn.pressed.connect(func():
-		mask_img.fill(Color(0,0,0,0))
-		mask_tex.update(mask_img)
-	)
-	
-	popup.confirmed.connect(func():
-		_ensure_session()
-		# Find the bounding box of the painted area
-		var used_rect = mask_img.get_used_rect()
-		if used_rect.size.x < 10:
-			current_session.roi_rect = Rect2i(0, 0, img.get_width(), img.get_height())
-			_log("ROI Reset: No area painted.")
-		else:
-			current_session.roi_rect = used_rect
-			_log("ROI Painted Area set: " + str(used_rect))
-		popup.queue_free()
-	)
-	
-	add_child(popup)
-	popup.popup_centered()
+	add_child(painter)
+	painter.popup_centered()
 
 func _on_browse_pressed() -> void:
 	var dialog = FileDialog.new()
@@ -362,35 +269,31 @@ func _on_video_selected(path: String) -> void:
 	var img = await manager.processor.get_preview_frame(path)
 	if img:
 		_log("Aperçu généré avec succès.")
-		_update_preview_image(img)
+		_preview_manager.set_preview_image(img)
 
-func _setup_preview_material() -> void:
-	if preview_rect:
-		var mat = ShaderMaterial.new()
-		mat.shader = load("res://addons/foveacore/shaders/mask_preview.gdshader")
-		preview_rect.material = mat
-		_update_preview_params()
-
-func _update_preview_image(img: Image) -> void:
-	if preview_rect:
-		var tex = ImageTexture.create_from_image(img)
-		preview_rect.texture = tex
-		# Set proper size based on image aspect ratio
-		var max_width = 400.0
-		var aspect = float(img.get_height()) / float(img.get_width())
-		preview_rect.custom_minimum_size = Vector2(max_width, max_width * aspect)
+func _setup_preview_manager() -> void:
+	_preview_manager = StudioPreviewManager.new()
+	add_child(_preview_manager)
+	_preview_manager.preview_rect = preview_rect
+	_preview_manager.threshold_slider = threshold_slider
+	_preview_manager.mask_option = mask_option
+	_preview_manager.show_mask_toggle = show_mask_toggle
+	_preview_manager.roi_toggle = roi_toggle
+	if current_session:
+		_preview_manager.session = current_session
+	_preview_manager.setup(preview_rect, current_session)
 
 func _on_threshold_changed(_value: float) -> void:
-	_update_preview_params()
+	if _preview_manager: _preview_manager.on_threshold_changed(_value)
 
 func _on_mask_mode_changed(_index: int) -> void:
-	_update_preview_params()
+	if _preview_manager: _preview_manager.on_mask_mode_changed(_index)
 
 func _on_show_mask_toggled(checked: bool) -> void:
-	_update_preview_params()
+	if _preview_manager: _preview_manager.on_show_mask_toggled(checked)
 
 func _on_show_roi_toggled(checked: bool) -> void:
-	_update_preview_params()
+	if _preview_manager: _preview_manager.on_show_roi_toggled(checked)
 
 func _on_aniso_toggled(checked: bool) -> void:
 	if current_renderer:
@@ -403,23 +306,6 @@ func _on_lod_toggled(checked: bool) -> void:
 func _on_point_size_changed(value: float) -> void:
 	if current_renderer:
 		current_renderer.point_size = value
-
-func _update_preview_params() -> void:
-	if preview_rect and preview_rect.material is ShaderMaterial:
-		var mat = preview_rect.material as ShaderMaterial
-		mat.set_shader_parameter("threshold", threshold_slider.value if threshold_slider else 0.95)
-		mat.set_shader_parameter("mask_mode", mask_option.selected if mask_option else 0)
-		mat.set_shader_parameter("show_mask_overlay", show_mask_toggle.button_pressed if show_mask_toggle else true)
-
-		# ROI parameters
-		var roi_pos_vec = Vector2.ZERO
-		var roi_size_vec = Vector2.ZERO
-		if current_session and current_session.roi_rect != Rect2i():
-			roi_pos_vec = Vector2(current_session.roi_rect.position.x, current_session.roi_rect.position.y)
-			roi_size_vec = Vector2(current_session.roi_rect.size.x, current_session.roi_rect.size.y)
-		mat.set_shader_parameter("roi_pos", roi_pos_vec)
-		mat.set_shader_parameter("roi_size", roi_size_vec)
-		mat.set_shader_parameter("show_roi", roi_toggle.button_pressed if roi_toggle else false)
 
 func _on_extract_pressed() -> void:
 	if video_path_edit.text.is_empty():
@@ -446,19 +332,34 @@ func _on_reload_ply_pressed() -> void:
 		_log("Error: No session selected.")
 		return
 	# Ne nécessite pas que is_processed soit true, on tente de charger le PLY s'il existe
-	var ply_path = current_session.output_directory.path_join("output/point_cloud/iteration_7000/point_cloud.ply")
-	var global_ply = ProjectSettings.globalize_path(ply_path)
+	var global_ply = ""
+	var out_base = ProjectSettings.globalize_path(current_session.output_directory)
+
+	# 1. Check WorldMirror 2.0 output: gaussians.ply at workspace root
+	var wm2_ply = current_session.output_directory.path_join("gaussians.ply")
+	if FileAccess.file_exists(ProjectSettings.globalize_path(wm2_ply)):
+		global_ply = ProjectSettings.globalize_path(wm2_ply)
+		_log("Found WorldMirror 2.0 PLY: gaussians.ply")
+
+	# 2. Check COLMAP+3DGS output
+	if global_ply.is_empty():
+		var ply_path = current_session.output_directory.path_join("output/point_cloud/iteration_7000/point_cloud.ply")
+		global_ply = ProjectSettings.globalize_path(ply_path)
 
 	if not FileAccess.file_exists(global_ply):
-		_log("PLY not found at: " + global_ply + ". Searching...")
+		_log("PLY not found at standard paths. Searching output/...")
 		# Chercher n'importe quel .ply dans output
-		var out_dir = DirAccess.open(ProjectSettings.globalize_path(current_session.output_directory + "/output"))
+		var out_dir = DirAccess.open(out_base + "/output")
+		if not out_dir:
+			out_dir = DirAccess.open(out_base)
 		if out_dir:
 			out_dir.list_dir_begin()
 			var file = out_dir.get_next()
 			while file != "":
 				if file.ends_with(".ply"):
-					global_ply = ProjectSettings.globalize_path(current_session.output_directory + "/output/" + file)
+					global_ply = out_base + "/output/" + file
+					if not FileAccess.file_exists(global_ply):
+						global_ply = out_base + "/" + file
 					_log("Found PLY: " + file)
 					break
 				file = out_dir.get_next()
@@ -472,12 +373,10 @@ func _on_reload_ply_pressed() -> void:
 		current_renderer.queue_free()
 
 	# Charger et afficher
-	var load_result = _PLYLoaderScript.load_ply(global_ply)
-	if not load_result.success:
-		_log("❌ Failed to load gaussians: " + load_result.error_message)
+	var gaussians = _PLYLoaderScript.load_gaussians_from_ply(global_ply)
+	if gaussians == null or gaussians.is_empty():
+		_log("❌ Failed to load gaussians from PLY")
 		return
-
-	var gaussians = load_result.splats
 
 	var renderer = _SplatRendererScript.new()
 	renderer.name = "SplatPreview_" + current_session.session_name
@@ -526,6 +425,12 @@ func _ensure_session() -> void:
 		if not colmap_path_edit.text_changed.is_connected(_on_colmap_path_changed):
 			colmap_path_edit.text_changed.connect(_on_colmap_path_changed)
 
+	# Sync WM2 settings
+	if current_session:
+		if wm2_mode_check: wm2_mode_check.button_pressed = current_session.use_worldmirror
+		if wm2_target_slider: wm2_target_slider.value = float(current_session.target_size)
+		_on_wm2_mode_changed(current_session.use_worldmirror)
+
 	_log("StudioTo3D Session Verified.")
 
 func _on_browse_ffmpeg_pressed() -> void:
@@ -572,6 +477,42 @@ func _on_ffmpeg_path_changed(new_text: String) -> void:
 func _on_colmap_path_changed(new_text: String) -> void:
 	manager.colmap_path = new_text
 
+func _on_wm2_mode_changed(checked: bool) -> void:
+	_ensure_session()
+	if current_session:
+		current_session.use_worldmirror = checked
+		if checked:
+			_log("🔄 Mode: WorldMirror 2.0 (reconstruction rapide ~10s)")
+			# Désactiver les boutons COLMAP inutiles en mode WM2
+			if sfm_button: sfm_button.disabled = true
+			if train_button: train_button.disabled = true
+		else:
+			_log("🔄 Mode: COLMAP + 3DGS (complet, 30-90 min)")
+			if sfm_button: sfm_button.disabled = false
+			if train_button: train_button.disabled = false
+	_update_wm2_status()
+
+func _on_wm2_target_changed(value: float) -> void:
+	_ensure_session()
+	if current_session:
+		current_session.target_size = int(value)
+		if wm2_target_label:
+			wm2_target_label.text = "Target: %dpx" % int(value)
+
+func _update_wm2_status() -> void:
+	if not wm2_status:
+		return
+	var checker = StudioDependencyChecker.new()
+	if checker.is_worldmirror2_ready():
+		wm2_status.text = "✅ WorldMirror 2.0 ready"
+		wm2_status.modulate = Color.GREEN
+	else:
+		wm2_status.text = "⚠ WorldMirror 2.0 not installed"
+		wm2_status.modulate = Color.ORANGE
+		if wm2_mode_check and wm2_mode_check.button_pressed:
+			wm2_mode_check.button_pressed = false
+			_log("WorldMirror 2.0 not available. Fallback to COLMAP.")
+
 func _on_run_pressed() -> void:
 	if video_path_edit and video_path_edit.text.is_empty():
 		_log("Error: No video selected.")
@@ -579,9 +520,15 @@ func _on_run_pressed() -> void:
 	_ensure_session()
 	
 	_log("Starting All: " + current_session.session_name)
-	_log("⚠️ PERFORMANCE NOTE: Reconstruction is very GPU intensive.")
-	_log("- Phase 2 (SfM) can take 2-15 mins. UI may appear frozen.")
-	_log("- Phase 3 (3DGS) can take 15-30 mins.")
+
+	if current_session.use_worldmirror:
+		_log("🚀 WorldMirror 2.0: Single-pass reconstruction (~2-10s)")
+		_log("  Phase 1: Extract frames + mask (ffmpeg)")
+		_log("  Phase 2: Feed-forward 3DGS inference (WorldMirror 2.0)")
+	else:
+		_log("⚠️ PERFORMANCE NOTE: Reconstruction is very GPU intensive.")
+		_log("- Phase 2 (SfM) can take 2-15 mins.")
+		_log("- Phase 3 (3DGS) can take 15-30 mins.")
 	
 	await manager.run_reconstruction(current_session)
 
@@ -599,7 +546,7 @@ func _on_preview_pressed() -> void:
 	_log("Generating preview frame...")
 	var img = await manager.processor.get_preview_frame(path)
 	if img:
-		_update_preview_image(img)
+		_preview_manager.set_preview_image(img)
 		_log("Preview updated.")
 	else:
 		_log("Failed to generate preview.")

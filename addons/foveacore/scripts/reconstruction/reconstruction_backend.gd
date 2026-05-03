@@ -15,15 +15,18 @@ signal oom_detected(command: String, details: String)
 @export var python_path: String = "python"
 @export var gaussiantrain_script: String = "train.py"
 @export var star_bridge_script: String = "star_bridge.py"
+@export var worldmirror_bridge_script: String = "worldmirror_bridge.py"
 
 ## Timeout maximum en secondes pour chaque commande externe (0 = pas de timeout)
 @export var command_timeout_seconds: float = 1800.0  # 30 min par defaut
 
 ## Run the full reconstruction pipeline using external calls
 func execute_reconstruction(session: ReconstructionSession) -> void:
-	# Choix entre chemin complet (COLMAP) et chemin rapide (STAR)
+	# Choix entre WorldMirror 2.0, STAR (legacy) et COLMAP complet
 	if not session.is_processed:
-		if session.use_fast_sync: # Nouveau flag pour STAR
+		if session.use_worldmirror:
+			_run_worldmirror_path(session)
+		elif session.use_fast_sync:
 			_run_star_monocular_path(session)
 		else:
 			_run_colmap_features(session)
@@ -60,6 +63,18 @@ func _run_gaussian_training(session: ReconstructionSession) -> void:
 		"--iterations", "7000"
 	]
 	_execute_command(python_path, args, "3DGS: Training Splats")
+
+func _run_worldmirror_path(session: ReconstructionSession) -> void:
+	var abs_path: String = ProjectSettings.globalize_path(session.output_directory)
+	var args = [
+		worldmirror_bridge_script,
+		"--input", abs_path + "/input",
+		"--output", abs_path,
+		"--device", "cuda",
+		"--target_size", str(session.target_size),
+		"--fps", str(session.extraction_fps)
+	]
+	_execute_command(python_path, args, "WorldMirror 2.0: Feed-forward Reconstruction")
 
 func _run_star_monocular_path(session: ReconstructionSession) -> void:
 	var abs_path: String = ProjectSettings.globalize_path(session.output_directory)
@@ -249,5 +264,15 @@ func _parse_progress_percent(line: String, task_name: String) -> float:
 		return 50.0  # placeholder if no number found
 	if lower.contains("saving"):
 		return 95.0
+
+	# WorldMirror 2.0 phase keywords
+	if lower.contains("model loaded"):
+		return 30.0
+	if lower.contains("running inference"):
+		return 40.0
+	if lower.contains("worldmirror 2.0 bridge: done"):
+		return 95.0
+	if lower.contains("completion marker"):
+		return 100.0
 
 	return -1.0

@@ -1,0 +1,55 @@
+name: FoveaEngine CI
+
+on:
+  push:
+    branches: [main, feat/*]
+  pull_request:
+    branches: [main]
+
+jobs:
+  gdscript-lint:
+    name: GDScript Lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install gdtoolkit
+        run: pip install gdtoolkit
+      - name: Lint GDScript files
+        run: |
+          find addons -name "*.gd" -exec gdlint {} \; 2>&1 | tee lint_output.txt
+          if grep -q "error\|Error\|violat" lint_output.txt; then
+            echo "Linting errors found."
+            cat lint_output.txt
+            exit 1
+          fi
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-24.04
+    container:
+      image: barichello/godot-ci:4.6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Godot headless tests
+        run: |
+          godot --headless --quit-after 100 --script res://addons/foveacore/test/test_style_engine.gd 2>&1 | tee test_output.txt
+          if grep -q "✗\|failed" test_output.txt; then
+            echo "Tests failed"
+            exit 1
+          fi
+
+  py-validate:
+    name: Python Bridge Validation
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Validate Python syntax
+        run: |
+          python -m py_compile addons/foveacore/scripts/reconstruction/worldmirror_bridge.py
+          echo "Python bridge syntax OK."

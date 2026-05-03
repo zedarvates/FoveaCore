@@ -11,6 +11,12 @@ Ce document trace la route pour transformer FoveaCore en un moteur de rendu hybr
 - [x] **ROI (Region of Interest)** : Système de Lasso pour isoler l'objet.
 - [x] **Visual ROI Tool** : Interface de dessin direct (Pinceau/Gomme) sur l'aperçu.
 - [x] **STAR Integration** : Pipeline rapide (DA3 Depth) inspiré d'InSpatio-World.
+- [x] **WorldMirror 2.0 Integration** : Backend feed-forward SOTA remplaçant STAR simulé + COLMAP lent. [Plan détaillé →](plans/integration_worldmirror2.md)
+  - [x] **Bridge Python WorldMirror** : `worldmirror_bridge.py` (~60 lignes) avec API diffusers-like
+  - [x] **Backend GDScript** : Nouvelle méthode `_run_worldmirror_path()` dans le backend
+  - [x] **Format compatibility** : Vérification sorties PLY/depth/cameras → pipeline FoveaEngine
+  - [ ] **Installation script** : Script setup + dependency checker CUDA 12.4
+  - [ ] **UI Mode sélecteur** : Radio COLMAP vs WorldMirror 2.0 dans le panel
 - [ ] **Real-time Mask Preview** : Feedback instantané des réglages de détourage.
 - [ ] **Reset & Session Management** : Facilitation des tests itératifs.
 

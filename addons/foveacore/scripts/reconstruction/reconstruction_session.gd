@@ -12,7 +12,9 @@ class_name ReconstructionSession
 @export var background_threshold: float = 0.95
 @export var blur_threshold: float = 0.5
 @export var roi_rect: Rect2i = Rect2i(0, 0, 0, 0) # (0,0,0,0) means full image
-@export var use_fast_sync: bool = false # Enable InSpatio-World STAR monocular path
+@export var use_fast_sync: bool = false # Enable InSpatio-World STAR monocular path (legacy)
+@export var use_worldmirror: bool = false # Enable WorldMirror 2.0 feed-forward reconstruction
+@export var target_size: int = 952 # Max inference resolution for WorldMirror 2.0
 
 @export_group("Reconstruction State")
 @export var is_processed: bool = false
