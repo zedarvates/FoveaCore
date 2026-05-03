@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="my%20icone/Earthandcheck.png" alt="FoveaEngine Icon" width="128">
-</p>
-
 # 👁️ FoveaEngine — Advanced 3DGS & Neural Reconstruction Engine
 
 Welcome to **FoveaEngine**, a cutting-edge reconstruction and rendering pipeline for Godot 4.6+, specifically designed for high-fidelity VR experiences and artistic "Digital Painting" aesthetics.
@@ -84,11 +80,9 @@ Voir **[ROADMAP.md](./ROADMAP.md)** pour le plan complet. Points clés à venir 
 
 ## 🤝 Remerciements
 
-<p align="center">🤍</p>
-
 Ce projet est profondément redevable aux équipes dont les travaux open-source ont permis de débloquer des problèmes critiques de notre pipeline :
 
-### Tencent Hunyuan — HY-World-2.0
+### ![heart](my%20icone/Earthandcheck.png) Tencent Hunyuan — HY-World-2.0
 L'équipe **[Tencent Hunyuan](https://github.com/Tencent-Hunyuan/HY-World-2.0)** a développé **WorldMirror 2.0**, un modèle feed-forward révolutionnaire qui remplace l'intégralité du pipeline COLMAP + 3DGS par une seule inférence neuronale. Leur travail open-source a été la clé de voûte qui nous a permis de passer d'un pipeline simulé (placeholder DA3) à une reconstruction réelle en ~10 secondes. Leur approche diffusers-like, leur documentation exemplaire et leur choix de licence permissive ont rendu cette intégration possible.
 
 - **Repo**: https://github.com/Tencent-Hunyuan/HY-World-2.0
