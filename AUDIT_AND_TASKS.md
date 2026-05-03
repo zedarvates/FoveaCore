@@ -1,462 +1,462 @@
-# 🔍 FoveaEngine — Audit Complet & 100 Tâches Prioritaires
+# 🔍 FoveaEngine — Complete Audit & 100 Priority Tasks
 
-> Mis à jour le 2026-04-20 | Basé sur l'analyse exhaustive de `addons/foveacore/`
+> Updated 2026-04-20 | Based on exhaustive analysis of `addons/foveacore/`
 
 ---
 
-## 📊 RÉSUMÉ DE L'AUDIT
+## 📊 AUDIT SUMMARY
 
-### Architecture Générale
+### General Architecture
 
-| Composant | Statut | Note |
+| Component | Status | Note |
 |---|---|---|
-| `FoveaCoreManager` (autoload) | ✅ Solide | Pipeline bien structuré |
-| `SplatRenderer` | ⚠️ Proto | ImmediateMesh → pas scalable pour 100k+ splats |
-| `SplatGenerator` | ✅ Complet | Barycentric sampling propre |
-| `StyleEngine` | ✅ Excellent | FBM + Worley + 5 matériaux |
-| `SurfaceExtractor` | ✅ Bon | Backface culling + triangle extraction |
-| `TemporalReprojector` | ✅ Bon | Cohérence temporelle OK |
-| `HybridRenderer` | ⚠️ Proto | Setup OK, pas encore branché à FoveaCoreManager |
-| `EyeCuller` | ✅ | Existe, référencé |
-| `OcclusionCuller` | ⚠️ Stub | Le bloc Hi-Z est un `pass` — rien n'est fait |
-| `SplatSorter` | ⚠️ CPU | Tri CPU sur `_current_splats` → bottleneck à 90 FPS |
-| `GazeTrackerLinker` | ⚠️ Proto | Lit l'XR tracker API — mais jamais testé sur hardware |
-| `FoveaXRInitializer` | ✅ Bon | Initialisation OpenXR propre |
-| `ProxyFaceRenderer` | ⚠️ Partiel | Camera cherchée par nom "Camera" — fragile |
-| `StudioTo3D Panel` | ⚠️ Proto | ROI = hardcodé Rect2i(100,100,800,800) |
-| `ReconstructionBackend` | ❌ Simulé | `_simulate_command_execution` avec `await 3.0` |
-| `StudioProcessor` | ❌ Simulé | `_simulate_extraction` avec `await 1.0` |
-| `GDExtension (C++)` | ⚠️ Vide | `fovea_renderer.cpp` = shell vide, DLL compilée mais pas fonctionnelle |
-| PLY Loader | ❌ ABSENT | Aucun fichier pour charger des `.ply` 3DGS |
-| `.fovea` Asset Format | ❌ ABSENT | Container binaire non implémenté |
-| GPU Compute Culling | ⚠️ Shader existant mais non branché | `gpu_culling.gdshader` existe mais pas de RenderingDevice code |
-| `xr_action_map.tres` | ❌ Vide | Fichier de 114 bytes — actions non configurées |
+| `FoveaCoreManager` (autoload) | ✅ Solid | Well-structured pipeline |
+| `SplatRenderer` | ⚠️ Prototype | ImmediateMesh → not scalable for 100k+ splats |
+| `SplatGenerator` | ✅ Complete | Clean barycentric sampling |
+| `StyleEngine` | ✅ Excellent | FBM + Worley + 5 materials |
+| `SurfaceExtractor` | ✅ Good | Backface culling + triangle extraction |
+| `TemporalReprojector` | ✅ Good | Temporal coherence OK |
+| `HybridRenderer` | ⚠️ Prototype | Setup OK, not yet connected to FoveaCoreManager |
+| `EyeCuller` | ✅ | Exists, referenced |
+| `OcclusionCuller` | ⚠️ Stub | Hi-Z block is a `pass` — nothing done |
+| `SplatSorter` | ⚠️ CPU | CPU sort on `_current_splats` → bottleneck at 90 FPS |
+| `GazeTrackerLinker` | ⚠️ Prototype | Reads XR tracker API — never tested on hardware |
+| `FoveaXRInitializer` | ✅ Good | Clean OpenXR initialization |
+| `ProxyFaceRenderer` | ⚠️ Partial | Looks for child named "Camera" — fragile |
+| `StudioTo3D Panel` | ⚠️ Prototype | ROI = hardcoded `Rect2i(100,100,800,800)` |
+| `ReconstructionBackend` | ❌ Simulated | `_simulate_command_execution` with `await 3.0` |
+| `StudioProcessor` | ❌ Simulated | `_simulate_extraction` with `await 1.0` |
+| `GDExtension (C++)` | ⚠️ Empty | `fovea_renderer.cpp` = empty shell, DLL compiled but not functional |
+| PLY Loader | ❌ ABSENT | No file to load `.ply` 3DGS |
+| `.fovea` Asset Format | ❌ ABSENT | Binary container not implemented |
+| GPU Compute Culling | ⚠️ Shader exists but not connected | `gpu_culling.gdshader` exists but no RenderingDevice code |
+| `xr_action_map.tres` | ❌ Empty | 114 bytes file — actions not configured |
 
 ---
 
-### 🔴 Problèmes Critiques (Bloquants)
+### 🔴 Critical Issues (Blockers)
 
-1. **~~Aucun chargeur PLY~~** — Remplacé par le chargeur binaire Fast-Path Rust (`.fovea`).
-2. **Backend de reconstruction simulé** — Toutes les phases (FFmpeg, COLMAP, 3DGS) s'exécutent avec `await timer(3.0)`. Rien ne s'exécute réellement.
-3. **~~GDExtension vide~~** — L'extension Rust est maintenant implémentée (`FoveaAssetLoader` + Culling pipeline).
-4. **~~OcclusionCuller non branché~~** — Remplacé par le `FoveaCompositorEffect` qui injecte le Depth Buffer dans le Compute Shader.
-5. **`xr_action_map.tres` non configuré** — Référencé dans `project.godot` mais quasi-vide (114 bytes).
-6. **`HybridRenderer` non intégré** — Instancié dans le manager mais jamais utilisé pour rendre quoi que ce soit.
+1. **~~No PLY loader~~** — Replaced by Rust fast-path loader (`.fovea`).
+2. **Simulated reconstruction backend** — All phases (FFmpeg, COLMAP, 3DGS) execute with `await timer(3.0)`. Nothing runs for real.
+3. **~~Empty GDExtension~~** — Rust extension now implemented (`FoveaAssetLoader` + Culling pipeline).
+4. **~~OcclusionCuller not connected~~** — Replaced by `FoveaCompositorEffect` injecting Depth Buffer into Compute Shader.
+5. **`xr_action_map.tres` not configured** — Referenced in `project.godot` but almost empty (114 bytes).
+6. **`HybridRenderer` not integrated** — Instantiated in manager but never used to render anything.
 
-### 🟠 Problèmes Architecturaux
+### 🟠 Architectural Issues
 
-7. **`SplatRenderer` utilise `ImmediateMesh`** — Recréé chaque frame, pas de GPU instancing → impossible d'atteindre 90 FPS avec 100k splats.
-8. **Tri des splats CPU-only** — `SplatSorter.sort_by_depth()` en GDScript, O(n log n) sur le thread principal.
-9. **ProxyFaceRenderer** cherche son enfant par `get_node("Camera")` — cassera sur tout rig VR réel.
-10. **ROI dans `studio_to_3d_panel.gd`** — Hardcodé à `Rect2i(100, 100, 800, 800)`. Pas d'interface de dessin visuelle.
-11. **`FoveaSplattable.is_visible_to_camera()`** retourne toujours `true` — TODO non implémenté.
-12. **`calculate_blur_score()`** dans `StudioProcessor` retourne toujours `1.0`.
-13. **`run_reconstruction()` dans `ReconstructionManager`** n'existe pas — `_on_run_pressed()` l'appelle mais la méthode est absente.
-14. **Double création de `ReconstructionManager`** — Le panel crée une instance locale ET il y a un autoload.
-15. **`_exit_tree()` dans `plugin.gd`** ne retire pas `NeuralStyle` custom type (oubli).
+7. **`SplatRenderer` uses `ImmediateMesh`** — Recreated each frame, no GPU instancing → impossible to reach 90 FPS with 100k splats.
+8. **CPU-only splat sorting** — `SplatSorter.sort_by_depth()` in GDScript, O(n log n) on main thread.
+9. **`ProxyFaceRenderer` looks for child by name "Camera"** — Will break on any real VR rig.
+10. **ROI in `studio_to_3d_panel.gd`** — Hardcoded to `Rect2i(100, 100, 800, 800)`. No visual drawing interface.
+11. **`FoveaSplattable.is_visible_to_camera()`** always returns `true` — TODO not implemented.
+12. **`calculate_blur_score()`** in `StudioProcessor` always returns `1.0`.
+13. **`run_reconstruction()` in `ReconstructionManager`** does not exist — `_on_run_pressed()` calls it but method is absent.
+14. **Double `ReconstructionManager` creation** — Panel creates local instance AND there is an autoload.
+15. **`_exit_tree()` in `plugin.gd`** does not remove `NeuralStyle` custom type (oversight).
 
-### 🟡 Gaps de Features
+### 🟡 Feature Gaps
 
-16. **Pas de chargement de splats depuis fichier** — Seule la génération procédurale fonctionne.
-17. **Pas de preview temps réel du masquage** — L'utilisateur ne voit pas l'effet du threshold slider.
-18. **Pas de format binaire `.fovea`** — Pas de sérialisation/désérialisation des assets.
-19. **ComfyUI Bridge** — Mentionné dans le roadmap mais inexistant.
-20. **Splats anisotropiques** — Seulement des cercles (covariance 2D non utilisée dans le shader).
-
----
-
-## ✅ 100 TÂCHES — PLAN D'ACTION COMPLET
-
-Les tâches sont numérotées et ordonnées par priorité. Les **🔴 Critiques** débloquent le système, les **🟠 Importantes** améliorent la fiabilité, les **🟡 Normales** enrichissent les features.
+16. No splat loading from file — Only procedural generation works.
+17. No real-time masking preview — User doesn't see effect of threshold slider.
+18. No binary `.fovea` format — No serialization/deserialization of assets.
+19. ComfyUI Bridge — Mentioned in roadmap but non-existent.
+20. Anisotropic splats — Only circles (2D covariance not used in shader).
 
 ---
 
-### 🔴 CATÉGORIE 1 — BLOCKERS CRITIQUES (à faire en premier)
+## ✅ 100 TASKS — COMPLETE ACTION PLAN
 
-- [x] **1. Implémenter le chargeur Fast-Path** (`fovea_fast_path.rs`)
-  > Chargeur Rust ultra-rapide implémenté en remplacement du parser PLY GDScript lent.
-
-- [x] **2. Connecter le Fast-Path Loader au pipeline GPU**
-  > `gpu_culler_pipeline.gd` et `fovea_splat_renderer.gd` connectés pour injecter directement en VRAM.
-
-- [ ] **3. Implémenter `run_reconstruction()` dans `ReconstructionManager`**
-  > La méthode est appelée par `_on_run_pressed()` mais n'existe pas. Orchestre les 3 phases.
-
-- [ ] **4. Remplacer `_simulate_command_execution()` par `OS.create_process()`**
-  > Dans `ReconstructionBackend`, remplacer le `await timer(3.0)` par un vrai appel externe. Lire stdout via `Thread`.
-
-- [ ] **5. Remplacer `_simulate_extraction()` par un vrai appel FFmpeg**
-  > Dans `StudioProcessor`, appeler `OS.create_process("ffmpeg", [...])` pour extraire les vraies frames.
-
-- [x] **6. Implémenter le vrai `OcclusionCuller` (Hi-Z GPU)**
-  > `FoveaCompositorEffect` intercepte la passe opaque et envoie la texture de profondeur au Compute Shader.
-
-- [ ] **7. Configurer `xr_action_map.tres`**
-  > Le fichier fait 114 bytes. Créer une action map complète: `grip_press`, `trigger_press`, `thumbstick_axis`, `menu_press` pour les deux mains.
-
-- [ ] **8. Brancher `HybridRenderer` dans le pipeline de rendu**
-  > Instancié dans le Manager mais jamais utilisé. Brancher `generate_splats_from_mesh()` ou `_apply_mode()` dans `_perform_culling()`.
-
-- [ ] **9. Implémenter `FoveaSplattable.is_visible_to_camera()`**
-  > Remplacer `return true` par un vrai test frustum AABB contre la caméra courante.
-
-- [ ] **10. Corriger la double instanciation de `ReconstructionManager`**
-  > `studio_to_3d_panel.gd._ready()` crée une nouvelle instance alors qu'il y a un autoload. Utiliser `/root/ReconstructionManager`.
+Tasks are numbered and ordered by priority. **🔴 Critical** unblock the system, **🟠 Important** improve reliability, **🟡 Normal** enrich features.
 
 ---
 
-### 🔴 CATÉGORIE 2 — RENDU CORE (Performance critiques)
+### 🔴 CATEGORY 1 — CRITICAL BLOCKERS (Do First)
 
-- [x] **11. Migrer `SplatRenderer` de `ImmediateMesh` vers `MultiMesh`**
-  > Implémenté via `FoveaSplatRenderer` utilisant un `MultiMeshInstance3D` couplé au Compute Shader.
+- [x] **1. Implement Fast-Path loader** (`fovea_fast_path.rs`)
+  > Rust ultra-fast loader implemented as replacement for slow GDScript PLY parser.
 
-- [x] **12. Implémenter le GPU Bitonic Sort dans un Compute Shader**
-  > `splat_sort_compute.glsl` ajouté et orchestré par `GPUCullerPipeline`.
+- [x] **2. Connect Fast-Path loader to GPU pipeline**
+  > `gpu_culler_pipeline.gd` and `fovea_splat_renderer.gd` connected for direct VRAM injection.
 
-- [x] **13. Brancher le Culling Compute via `RenderingDevice`**
-  > `gpu_culler_pipeline.gd` fonctionnel avec backface et occlusion culling.
+- [ ] **3. Implement `run_reconstruction()` in `ReconstructionManager`**
+  > Method called by `_on_run_pressed()` but doesn't exist. Orchestrates all 3 phases.
 
-- [ ] **14. Pré-allouer les buffers de splats**
-  > Pré-allouer `_current_splats` à `max_splats_per_frame` pour éviter les resize dynamiques.
+- [ ] **4. Replace `_simulate_command_execution()` with `OS.create_process()`**
+  > In `ReconstructionBackend`, replace `await timer(3.0)` with real external call. Read stdout via `Thread`.
 
-- [ ] **15. Rendre `SplatSorter.minimize_overdraw()` opérationnel**
-  > Vérifier l'implémentation. Implémenter clustering spatial (grid 3D) pour fusionner splats voisins redondants.
+- [ ] **5. Replace `_simulate_extraction()` with real FFmpeg call**
+  > In `StudioProcessor`, call `OS.create_process("ffmpeg", [...])` to extract real frames.
 
-- [ ] **16. Implémenter le shader de splat anisotropique**
-  > Modifier `splat_render.gdshader` pour utiliser la covariance 2D. Remplacer `length(uv)` par ellipse matricielle.
+- [x] **6. Implement real `OcclusionCuller` (Hi-Z GPU)**
+  > `FoveaCompositorEffect` intercepts opaque pass and sends depth texture to Compute Shader.
 
-- [ ] **17. Ajouter le LOD aux splats (MIP-Splatting basique)**
-  > 3 niveaux: <2m = micro (5 splats/tri), 2-10m = normal, >10m = macro (1 splat/tri, radius x3).
+- [ ] **7. Configure `xr_action_map.tres`**
+  > File is 114 bytes. Create complete action map: `grip_press`, `trigger_press`, `thumbstick_axis`, `menu_press` for both hands.
 
-- [ ] **18. Implémenter le Spatial Chunking**
-  > Diviser l'espace en chunks 16³. Charger/décharger selon position caméra. Nécessaire pour grandes scènes.
+- [ ] **8. Connect `HybridRenderer` into render pipeline**
+  > Instantiated in Manager but never used. Connect `generate_splats_from_mesh()` or `_apply_mode()` in `_perform_culling()`.
 
-- [ ] **19. Optimiser `SurfaceExtractor` avec des threads**
-  > Parcours des triangles mono-thread. Utiliser `WorkerThreadPool` pour paralléliser par surface de mesh.
+- [ ] **9. Implement `FoveaSplattable.is_visible_to_camera()`**
+  > Replace `return true` with real frustum AABB test against current camera.
 
-- [ ] **20. Frustum Culling côté CPU avant le GPU**
-  > Test AABB rapide en GDScript avant d'envoyer au `_eye_culler`. Réduire les nodes passés au culling fin.
-
----
-
-### 🟠 CATÉGORIE 3 — PIPELINE STUDIOTO3D
-
-- [ ] **21. Implémenter l'interface ROI visuelle**
-  > Ajouter `TextureRect` dans le panel pour afficher la première frame. Dessiner rectangle avec souris → `session.roi_rect`.
-
-- [ ] **22. Ajouter le preview temps réel du masquage**
-  > Quand le slider change, extraire une frame, appliquer `mask_background()`, afficher le résultat dans un preview.
-
-- [ ] **23. Implémenter la vraie détection de flou (`calculate_blur_score()`)**
-  > Remplacer `return 1.0` par variance Laplacienne (kernel 3x3). Filtrer les frames floues avant export COLMAP.
-
-- [ ] **24. Détecter FFmpeg/COLMAP et afficher les chemins manquants**
-  > Au démarrage du panel, `OS.execute("ffmpeg --version")`. Afficher erreur + lien download si absent.
-
-- [ ] **25. Implémenter la gestion des erreurs du backend**
-  > `error_occurred` n'est pas connecté. Brancher dans `ReconstructionManager` et afficher dans `log_text`.
-
-- [ ] **26. Ajouter une barre de progression par phase**
-  > 3 segments visuels: Phase 1 (0-33%), Phase 2 (33-66%), Phase 3 (66-100%) avec labels.
-
-- [ ] **27. Sauvegarder et restaurer les sessions**
-  > Sérialiser `ReconstructionSession` en JSON. Sauvegarder auto dans `reconstructions/<name>/session.json`.
-
-- [ ] **28. Implémenter le reset complet de session**
-  > `_on_reset_pressed()` réinitialise l'UI mais pas `active_sessions`. Vrai cleanup: fichiers temp + mémoire.
-
-- [ ] **29. Ajouter le support des vidéos MKV et WebM**
-  > Ajouter mkv, webm, gif au filtre `FileDialog`.
-
-- [ ] **30. Implémenter l'export COLMAP complet**
-  > Vérifier que `DatasetExporter` génère `images/` + `masks/` + `database.db` + `cameras.txt` correctement.
-
-- [ ] **31. Intégrer le mode COLMAP "exhaustive matching"**
-  > Option UI: "exhaustive_matcher" (précis) vs "sequential_matcher" (rapide vidéos).
-
-- [ ] **32. Implémenter la lecture asynchrone de stdout COLMAP**
-  > COLMAP affiche sa progression. Lire ce stream via `Thread` pour mettre à jour la progress bar.
-
-- [ ] **33. Ajouter un mode "Dry Run" pour test sans exécution réelle**
-  > Logger les paramètres qui seraient envoyés sans vraiment appeler COLMAP.
-
-- [ ] **34. Implémenter l'ouverture du dossier de résultats**
-  > Bouton "Ouvrir dossier" → `OS.shell_open(output_directory)` après reconstruction.
+- [ ] **10. Fix double `ReconstructionManager` instantiation**
+  > `studio_to_3d_panel.gd._ready()` creates new instance but autoload exists. Use `/root/ReconstructionManager`.
 
 ---
 
-### 🟠 CATÉGORIE 4 — VR / EYE TRACKING
+### 🔴 CATEGORY 2 — CORE RENDERING (Performance Critical)
 
-- [ ] **35. Tester `FoveaXRInitializer` sur hardware réel**
-  > Valider sur Quest Pro ou Vision Pro. Documenter les erreurs, ajuster les fallbacks.
+- [x] **11. Migrate `SplatRenderer` from `ImmediateMesh` to `MultiMesh`**
+  > Implemented via `FoveaSplatRenderer` using `MultiMeshInstance3D` coupled with Compute Shader.
 
-- [ ] **36. Implémenter le fallback desktop (sans casque)**
-  > Si OpenXR absent: caméra orbitale. `FoveaCoreManager` détecte et adapte le rendu.
+- [x] **12. Implement GPU Bitonic Sort in Compute Shader**
+  > `splat_sort_compute.glsl` added and orchestrated by `GPUCullerPipeline`.
 
-- [ ] **37. Brancher le ray casting dans `GazeTrackerLinker`**
-  > `_calculate_gaze_world_hit()` projette `gaze_vec * 100.0`. Utiliser `PhysicsDirectSpaceState3D.intersect_ray()`.
+- [x] **13. Connect Compute Culling via `RenderingDevice`**
+  > `gpu_culler_pipeline.gd` functional with backface and occlusion culling.
 
-- [ ] **38. Implémenter l'eye tracking OpenXR extension Meta**
-  > Support de `XR_EXT_eye_gaze_interaction` pour Quest Pro. Activer extension + permissions Android.
+- [ ] **14. Pre-allocate splat buffers**
+  > Pre-allocate `_current_splats` to `max_splats_per_frame` to avoid dynamic resizes.
 
-- [ ] **39. Ajouter le support eye tracking Apple Vision Pro**
-  > Via ARKit ou runtime OpenXR d'Apple. Path de code distinct de Meta.
+- [ ] **15. Make `SplatSorter.minimize_overdraw()` operational**
+  > Verify implementation. Implement spatial clustering (3D grid) to merge redundant nearby splats.
 
-- [ ] **40. Implémenter le VRS (Variable Rate Shading) hardware**
-  > Relier `_apply_foveation_settings()` à la texture VRS de Godot 4.6.
+- [ ] **16. Implement anisotropic splat shader**
+  > Modify `splat_render.gdshader` to use 2D covariance. Replace `length(uv)` with ellipse matrix.
 
-- [ ] **41. Tester et fixer la scène `fovea_vr_rig.tscn`**
-  > Vérifier que tous les nœuds existent: `XRCamera3D`, deux `XRController3D`.
+- [ ] **17. Add LOD to splats (MIP-Splatting basic)**
+  > 3 levels: <2m = micro (5 splats/tri), 2-10m = normal, >10m = macro (1 splat/tri, radius x3).
 
-- [ ] **42. Implémenter les contrôleurs VR dans `splat_brush_playground.tscn`**
-  > Input physique pour `SplatBrush` avec manettes VR.
+- [ ] **18. Implement Spatial Chunking**
+  > Divide space into 16³ chunks. Load/unload based on camera position. Necessary for large scenes.
 
-- [ ] **43. Implémenter la vibration haptique lors du SplatBrush**
-  > `XRController3D.trigger_haptic_pulse()` quand brush touche un splat.
+- [ ] **19. Optimize `SurfaceExtractor` with threads**
+  > Triangle traversal is single-threaded. Use `WorkerThreadPool` to parallelize per surface.
 
-- [ ] **44. Corriger `ProxyFaceRenderer` pour chercher la caméra correctement**
-  > Remplacer `get_node_or_null("Camera")` par `get_viewport().get_camera_3d()`.
+- [ ] **20. Frustum culling on CPU before GPU**
+  > Fast AABB test in GDScript before sending to `_eye_culler`. Reduce nodes passed to fine culling.
 
 ---
 
-### 🟠 CATÉGORIE 5 — GDEXTENSION / C++ / RUST
+### 🟠 CATEGORY 3 — STUDIOTO3D PIPELINE
 
-- [x] **45. Implémenter le Bitonic Sort sur GPU**
-  > Déplacé intégralement sur Compute Shader plutôt qu'en C++ pour éviter les transferts CPU/GPU.
+- [ ] **21. Implement visual ROI interface**
+  > Add `TextureRect` in panel to display first frame. Draw rectangle with mouse → `session.roi_rect`.
 
-- [x] **46. Implémenter le Fast-Path Binaire en Rust**
-  > Lecture de `.fovea` via struct alignée 16 octets (`fovea_fast_path.rs`).
+- [ ] **22. Add real-time masking preview**
+  > When slider changes, extract frame, apply `mask_background()`, display result in preview.
 
-- [x] **47. Exposer l'AssetLoader via GDExtension Rust**
-  > Classe `FoveaAssetLoader` correctement déclarée et compilée avec Cargo.
+- [ ] **23. Implement real blur detection (`calculate_blur_score()`)**
+  > Replace `return 1.0` with Laplacian variance (3x3 kernel). Filter blurry frames before COLMAP export.
 
-- [x] **48. Mettre en place la structure Rust GDExtension**
-  > Cargo.toml configuré avec la dépendance `godot-rust/gdext`.
+- [ ] **24. Detect FFmpeg/COLMAP and show missing paths**
+  > At panel startup, `OS.execute("ffmpeg --version")`. Show error + download link if absent.
 
-- [x] **49. Migrer le tri vers le GPU**
-  > Remplacé par `splat_sort_compute.glsl`.
+- [ ] **25. Implement backend error handling**
+  > `error_occurred` not connected. Wire into `ReconstructionManager` and display in `log_text`.
 
-- [ ] **50. Migrer `SurfaceExtractor.gd` vers Rust avec SIMD**
-  > Parcours de triangles embarrassingly parallel. `extract_visible_triangles_native()`.
+- [ ] **26. Add per-phase progress bar**
+  > 3 visual segments: Phase 1 (0-33%), Phase 2 (33-66%), Phase 3 (66-100%) with labels.
 
-- [ ] **51. Créer un CI/CD pour compiler la GDExtension**
+- [ ] **27. Save and restore sessions**
+  > Serialize `ReconstructionSession` to JSON. Auto-save in `reconstructions/<name>/session.json`.
+
+- [ ] **28. Implement full session reset**
+  > `_on_reset_pressed()` resets UI but not `active_sessions`. Real cleanup: temp files + memory.
+
+- [ ] **29. Add MKV and WebM video support**
+  > Add mkv, webm, gif to `FileDialog` filter.
+
+- [ ] **30. Implement full COLMAP export**
+  > Verify `DatasetExporter` generates `images/` + `masks/` + `database.db` + `cameras.txt` correctly.
+
+- [ ] **31. Integrate COLMAP "exhaustive matching" mode**
+  > UI option: "exhaustive_matcher" (precise) vs "sequential_matcher" (fast for videos).
+
+- [ ] **32. Implement async COLMAP stdout reading**
+  > COLMAP shows progress. Read this stream via `Thread` to update progress bar.
+
+- [ ] **33. Add "Dry Run" mode for testing**
+  > Log parameters that would be sent without actually calling COLMAP.
+
+- [ ] **34. Implement "Open folder" after reconstruction**
+  > Button "Open folder" → `OS.shell_open(output_directory)` after reconstruction.
+
+---
+
+### 🟠 CATEGORY 4 — VR / EYE TRACKING
+
+- [ ] **35. Test `FoveaXRInitializer` on real hardware**
+  > Validate on Quest Pro or Vision Pro. Document errors, adjust fallbacks.
+
+- [ ] **36. Implement desktop fallback (no headset)**
+  > If OpenXR absent: orbit camera. `FoveaCoreManager` detects and adapts rendering.
+
+- [ ] **37. Connect ray casting in `GazeTrackerLinker`**
+  > `_calculate_gaze_world_hit()` projects `gaze_vec * 100.0`. Use `PhysicsDirectSpaceState3D.intersect_ray()`.
+
+- [ ] **38. Implement Meta OpenXR eye tracking extension**
+  > Support `XR_EXT_eye_gaze_interaction` for Quest Pro. Enable extension + Android permissions.
+
+- [ ] **39. Add Apple Vision Pro eye tracking support**
+  > Via ARKit or Apple OpenXR runtime. Separate code path from Meta.
+
+- [ ] **40. Implement VRS (Variable Rate Shading) hardware**
+  > Connect `_apply_foveation_settings()` to Godot 4.6 VRS texture.
+
+- [ ] **41. Test and fix `fovea_vr_rig.tscn`**
+  > Verify all nodes exist: `XRCamera3D`, two `XRController3D`.
+
+- [ ] **42. Implement VR controllers in `splat_brush_playground.tscn`**
+  > Physical input for `SplatBrush` with VR controllers.
+
+- [ ] **43. Implement haptic vibration on SplatBrush**
+  > `XRController3D.trigger_haptic_pulse()` when brush touches a splat.
+
+- [ ] **44. Fix `ProxyFaceRenderer` to find correct camera**
+  > Replace `get_node_or_null("Camera")` with `get_viewport().get_camera_3d()`.
+
+---
+
+### 🟠 CATEGORY 5 — GDEXTENSION / C++ / RUST
+
+- [x] **45. Implement Bitonic Sort on GPU**
+  > Moved entirely to Compute Shader rather than C++ to avoid CPU/GPU transfers.
+
+- [x] **46. Implement Fast-Path Binary in Rust**
+  > Reading `.fovea` via aligned 16-octet struct (`fovea_fast_path.rs`).
+
+- [x] **47. Expose AssetLoader via Rust GDExtension**
+  > Class `FoveaAssetLoader` properly declared and compiled with Cargo.
+
+- [x] **48. Set up Rust GDExtension structure**
+  > Cargo.toml configured with `godot-rust/gdext` dependency.
+
+- [x] **49. Migrate sorting to GPU**
+  > Replaced by `splat_sort_compute.glsl`.
+
+- [ ] **50. Migrate `SurfaceExtractor.gd` to Rust with SIMD**
+  > Triangle traversal embarrassingly parallel. `extract_visible_triangles_native()`.
+
+- [ ] **51. Create CI/CD to compile GDExtension**
   > GitHub Actions: `foveacore.dll` (Windows), `libfoveacore.so` (Linux), `libfoveacore.dylib` (macOS).
 
 ---
 
-### 🟡 CATÉGORIE 6 — FORMAT ASSET `.fovea`
+### 🟡 CATEGORY 6 — `.fovea` ASSET FORMAT
 
-- [ ] **52. Définir le format binaire `.fovea`**
-  > Spécifier: magic bytes, version, sections (mesh, splats, style, metadata). Doc dans `plans/fovea_format_spec.md`.
+- [ ] **52. Define binary `.fovea` format**
+  > Specify: magic bytes, version, sections (mesh, splats, style, metadata). Doc in `plans/fovea_format_spec.md`.
 
-- [ ] **53. Implémenter le sérialiseur `.fovea`**
-  > `fovea_asset_writer.gd`: Mesh + Array[GaussianSplat] + FoveaStyle → fichier binaire.
+- [ ] **53. Implement `.fovea` serializer**
+  > `fovea_asset_writer.gd`: Mesh + Array[GaussianSplat] + FoveaStyle → binary file.
 
-- [ ] **54. Implémenter le désérialiseur `.fovea`**
-  > `fovea_asset_loader.gd`: reconstruit les données depuis le fichier. Enregistrer via `ResourceFormatLoader`.
+- [ ] **54. Implement `.fovea` deserializer**
+  > `fovea_asset_loader.gd`: Reconstruct data from file. Register via `ResourceFormatLoader`.
 
-- [ ] **55. Enregistrer `.fovea` comme ResourceFormatLoader dans Godot**
-  > `plugin.gd`: `ResourceLoader.add_resource_format_loader()` pour que Godot reconnaisse les `.fovea`.
-
----
-
-### 🟡 CATÉGORIE 7 — FEATURES ARTISTIQUES
-
-- [ ] **56. Finaliser les Splat Layers (BASE/SATURATION/LIGHT/SHADOW)**
-  > `LayerType` est défini mais non utilisé dans le rendu. Implémenter un render pass par layer.
-
-- [ ] **57. Implémenter le SplatBrush interactif fonctionnel**
-  > Détection collision splats (octree), modification couleur/opacité/rayon, undo/redo stack.
-
-- [ ] **58. Implémenter `TexturedSplatGenerator` réel**
-  > Charger textures Sponge/DryBrush/Stipple, assigner aux splats, UV mapping sur les quads.
-
-- [ ] **59. Finaliser les Soft Matter (liquides style Manga)**
-  > Simulation: forces externes → intégration velocity → update position. Max 1000 splats déformables.
-
-- [ ] **60. Implémenter `SplatLightingAnimator` réel**
-  > Détecter `DirectionalLight3D`, calculer direction d'ombre, déplacer splats SHADOW chaque frame.
-
-- [ ] **61. Implémenter les reflets speculaires dynamiques**
-  > Passer `light_direction` au shader. Calculer `specular_intensity` par splat selon angle vue-lumière.
-
-- [ ] **62. Implémenter `HierarchicalSplatGenerator` complet**
-  > 3 LOD: LOD0 (near, micro), LOD1 (mid, standard), LOD2 (far, macro) par distance.
-
-- [ ] **63. Créer le Splat Decal Tool (weathering)**
-  > `splat_decal.gd`: spray rouille/mousse/neige sur surfaces. `RayCast3D` + pattern procedural.
-
-- [ ] **64. Implémenter le shader aquarelle**
-  > `artistic_watercolor.gdshader`: edge darkening, granulation, wet-in-wet. Pour layer SATURATION.
-
-- [ ] **65. Implémenter le shader Hatching (hachures)**
-  > `artistic_hatching.gdshader`: UV triplanaire + texture hachures. Orienter selon normale de surface.
-
-- [ ] **66. Ajouter le support GLASS dans `StyleEngine`**
-  > `MaterialType.GLASS` dans l'enum mais ignoré. Implémenter `_compute_glass_color()` avec fake refraction.
+- [ ] **55. Register `.fovea` as ResourceFormatLoader in Godot**
+  > `plugin.gd`: `ResourceLoader.add_resource_format_loader()` so Godot recognizes `.fovea`.
 
 ---
 
-### 🟡 CATÉGORIE 8 — INTELLIGENCE ARTIFICIELLE
+### 🟡 CATEGORY 7 — ARTISTIC FEATURES
 
-- [ ] **67. Créer le ComfyUI Bridge basique**
-  > `neural_style_bridge.gd`: HTTP vers ComfyUI (port 8188), envoi workflow JSON, polling résultat.
+- [ ] **56. Finalize Splat Layers (BASE/SATURATION/LIGHT/SHADOW)**
+  > `LayerType` defined but not used in rendering. Implement render pass per layer.
 
-- [ ] **68. Implémenter l'Auto-ROI par IA**
-  > Modèle SAM2/rembg pour détection objet principal et génération `roi_rect`. Appel via Python.
+- [ ] **57. Implement interactive SplatBrush functional**
+  > Splat collision detection (octree), modify color/opacity/radius, undo/redo stack.
 
-- [ ] **69. Créer le script Python `auto_roi.py`**
-  > Script dans `tools/` utilisant `rembg`. Retourne bbox de l'objet. Appelé par le Bridge.
+- [ ] **58. Implement real `TexturedSplatGenerator`**
+  > Load textures Sponge/DryBrush/Stipple, assign to splats, UV mapping on quads.
 
-- [ ] **70. Intégrer ONNX Runtime pour inférence locale**
-  > Packager un modèle ONNX léger (MobileNet-SAM). Segmentation hors-ligne dans StudioTo3D.
+- [ ] **59. Finalize Soft Matter (Manga-style liquids)**
+  > Simulation: external forces → velocity integration → position update. Max 1000 deformable splats.
 
----
+- [ ] **60. Implement `SplatLightingAnimator` real**
+  > Detect `DirectionalLight3D`, compute shadow direction, move SHADOW splats each frame.
 
-### 🟡 CATÉGORIE 9 — MULTIPLAYER / SYNC
+- [ ] **61. Implement dynamic specular reflections**
+  > Pass `light_direction` to shader. Compute `specular_intensity` per splat based on view-light angle.
 
-- [ ] **71. Concevoir le protocole de sync des splats**
-  > `plans/multiplayer_sync_spec.md`: delta encoding, batching, priorité zones fovéales.
+- [ ] **62. Implement `HierarchicalSplatGenerator` complete**
+  > 3 LOD: LOD0 (near, micro), LOD1 (mid, standard), LOD2 (far, macro) by distance.
 
-- [ ] **72. Implémenter `network_interpolator.gd` complet**
-  > Vérifier et brancher au Manager pour interpoler positions splats reçus via réseau.
+- [ ] **63. Create Splat Decal Tool (weathering)**
+  > `splat_decal.gd`: spray rust/moss/snow on surfaces. `RayCast3D` + procedural pattern.
 
-- [ ] **73. Implémenter la sync des interactions SplatBrush**
-  > Diffuser modifications splats à tous les pairs via `MultiplayerSynchronizer`.
+- [ ] **64. Implement watercolor shader**
+  > `artistic_watercolor.gdshader`: edge darkening, granulation, wet-in-wet. For SATURATION layer.
 
----
+- [ ] **65. Implement hatching shader**
+  > `artistic_hatching.gdshader`: triplanar UV + hatching texture. Orient by surface normal.
 
-### 🟡 CATÉGORIE 10 — TOOLING & UX ÉDITEUR
-
-- [ ] **74. Créer un panneau de statistiques en temps réel**
-  > Plugin panel `FoveaStats`: FPS, nb splats, temps extraction, mémoire GPU, ratio reprojection.
-
-- [ ] **75. Ajouter des gizmos 3D pour les FoveaSplattable nodes**
-  > Gizmo: bounding box du mesh, densité de splats (gradient), priorité de culling.
-
-- [ ] **76. Créer un wizard de configuration initiale**
-  > À la première activation: détecter FFmpeg/COLMAP, configurer chemins, proposer téléchargements.
-
-- [ ] **77. Implémenter le drag-and-drop de fichiers `.ply`**
-  > Glisser un `.ply` dans la scène → créer automatiquement un `FoveaSplattable` avec splats chargés.
-
-- [ ] **78. Créer le menu contextuel pour les FoveaSplattable**
-  > Clic droit → "Generate Splats Now", "Export to .fovea", "Preview Masking", "Open in StudioTo3D".
-
-- [ ] **79. Implémenter l'undo/redo pour le SplatBrush**
-  > Utiliser `UndoRedo` de Godot pour maintenir stack de modifications du painting.
-
-- [ ] **80. Créer un inspector custom pour `FoveaStyle`**
-  > Preview live du matériau procédural (sphere preview) quand les params `MaterialStyleConfig` changent.
-
-- [ ] **81. Ajouter des presets de style dans le panneau**
-  > Dropdown: Photorealistic, Ghibli, Digital Painting, Oil Paint, Sketch. Configure `StyleEngine` auto.
-
-- [ ] **82. Créer un outil de benchmark intégré**
-  > `tools/benchmark.gd`: mesure FPS à 1k/10k/100k splats, génère rapport JSON.
-
-- [ ] **83. Améliorer les logs du panneau StudioTo3D**
-  > Colorer les logs: ✅ succès, ❌ erreur, ⚠️ warning. Bouton "Copier logs" et "Exporter .txt".
+- [ ] **66. Add GLASS support in `StyleEngine`**
+  > `MaterialType.GLASS` in enum but ignored. Implement `_compute_glass_color()` with fake refraction.
 
 ---
 
-### 🟡 CATÉGORIE 11 — TESTS & VALIDATION
+### 🟡 CATEGORY 8 — ARTIFICIAL INTELLIGENCE
 
-- [ ] **84. Créer des tests unitaires pour `StyleEngine`**
-  > `addons/foveacore/test/`: vérifier couleurs dans [0,1], convergence FBM, Worley ∈ [0, √3].
+- [ ] **67. Create basic ComfyUI Bridge**
+  > `neural_style_bridge.gd`: HTTP to ComfyUI (port 8188), send workflow JSON, poll result.
 
-- [ ] **85. Créer des tests unitaires pour `SurfaceExtractor`**
-  > Meshes primitifs: cube (12 triangles), vérifier backface culling élimine les bonnes faces.
+- [ ] **68. Implement Auto-ROI by AI**
+  > SAM2/rembg model for main object detection and generate `roi_rect`. Call via Python.
 
-- [ ] **86. Créer des tests unitaires pour `TemporalReprojector`**
-  > Tester: fade-in/fade-out, invalidation sur mouvement, cleanup après `max_history_frames`.
+- [ ] **69. Create Python script `auto_roi.py`**
+  > Script in `tools/` using `rembg`. Returns bbox of object. Called by Bridge.
 
-- [ ] **87. Créer une scène de test non-VR complète**
-  > `test_desktop.tscn`: caméra orbitale, `FoveaSplattable` variés (cube/sphère/suzanne). Pas de casque requis.
-
-- [ ] **88. Créer un test de performance automatisé**
-  > Génère N `FoveaSplattable` avec M triangles, mesure temps frame sur 1000 frames, log JSON.
-
-- [ ] **89. Valider le pipeline StudioTo3D sur un vrai asset**
-  > Vrai turntable → FFmpeg → COLMAP → 3DGS. Documenter dans `tutorials/`.
-
-- [ ] **90. Créer des tests d'intégration pour le plugin**
-  > Vérifier activation/désactivation OK, autoloads créés/détruits, custom types disponibles.
+- [ ] **70. Integrate ONNX Runtime for local inference**
+  > Package lightweight ONNX model (MobileNet-SAM). Offline segmentation in StudioTo3D.
 
 ---
 
-### 🟡 CATÉGORIE 12 — DOCUMENTATION
+### 🟡 CATEGORY 9 — MULTIPLAYER / SYNC
 
-- [ ] **91. Écrire la spécification du format PLY attendu**
+- [ ] **71. Design splat sync protocol**
+  > `plans/multiplayer_sync_spec.md`: delta encoding, batching, foveal zone priority.
+
+- [ ] **72. Implement `network_interpolator.gd` complete**
+  > Verify and wire to Manager to interpolate received splat positions via network.
+
+- [ ] **73. Implement SplatBrush interaction sync**
+  > Broadcast splat modifications to all peers via `MultiplayerSynchronizer`.
+
+---
+
+### 🟡 CATEGORY 10 — TOOLING & EDITOR UX
+
+- [ ] **74. Create real-time stats panel**
+  > Plugin panel `FoveaStats`: FPS, splat count, extraction time, GPU memory, reprojection ratio.
+
+- [ ] **75. Add 3D gizmos for `FoveaSplattable` nodes**
+  > Gizmo: bounding box, splat density (gradient), culling priority.
+
+- [ ] **76. Create initial configuration wizard**
+  > On first activation: detect FFmpeg/COLMAP, configure paths, suggest downloads.
+
+- [ ] **77. Implement `.ply` drag-and-drop**
+  > Drag `.ply` into scene → auto-create `FoveaSplattable` with loaded splats.
+
+- [ ] **78. Create context menu for `FoveaSplattable`**
+  > Right-click → "Generate Splats Now", "Export to .fovea", "Preview Masking", "Open in StudioTo3D".
+
+- [ ] **79. Implement undo/redo for SplatBrush**
+  > Use Godot `UndoRedo` to maintain modification stack.
+
+- [ ] **80. Create custom inspector for `FoveaStyle`**
+  > Live preview sphere when `MaterialStyleConfig` params change.
+
+- [ ] **81. Add style presets in panel**
+  > Dropdown: Photorealistic, Ghibli, Digital Painting, Oil Paint, Sketch. Auto-configure `StyleEngine`.
+
+- [ ] **82. Create integrated benchmark tool**
+  > `tools/benchmark.gd`: measure FPS at 1k/10k/100k splats, generate JSON report.
+
+- [ ] **83. Improve StudioTo3D panel logs**
+  > Color logs: ✅ success, ❌ error, ⚠️ warning. "Copy logs" and "Export .txt" buttons.
+
+---
+
+### 🟡 CATEGORY 11 — TESTS & VALIDATION
+
+- [ ] **84. Create unit tests for `StyleEngine`**
+  > `addons/foveacore/test/`: verify colors in [0,1], FBM convergence, Worley ∈ [0, √3].
+
+- [ ] **85. Create unit tests for `SurfaceExtractor`**
+  > Primitive meshes: cube (12 triangles), verify backface culling eliminates correct faces.
+
+- [ ] **86. Create unit tests for `TemporalReprojector`**
+  > Test: fade-in/fade-out, invalidation on movement, cleanup after `max_history_frames`.
+
+- [ ] **87. Create non-VR desktop test scene**
+  > `test_desktop.tscn`: orbit camera, various `FoveaSplattable` (cube/sphere/Suzanne). No headset required.
+
+- [ ] **88. Create automated performance test**
+  > Generate N `FoveaSplattable` with M triangles, measure frame time over 1000 frames, log JSON.
+
+- [ ] **89. Validate StudioTo3D pipeline on real asset**
+  > Real turntable → FFmpeg → COLMAP → 3DGS. Document in `tutorials/`.
+
+- [ ] **90. Create integration tests for plugin**
+  > Verify activation/deactivation OK, autoloads created/destroyed, custom types available.
+
+---
+
+### 🟡 CATEGORY 12 — DOCUMENTATION
+
+- [ ] **91. Write PLY format specification**
   > `plans/ply_format_spec.md`: `x y z`, `f_dc_0/1/2`, `opacity`, `scale_0/1/2`, `rot_0/1/2/3`.
 
-- [ ] **92. Créer le guide de configuration COLMAP**
-  > `tutorials/colmap_setup.md`: download, install, PATH, première reconstruction.
+- [ ] **92. Create COLMAP setup guide**
+  > `tutorials/colmap_setup.md`: download, install, PATH, first reconstruction.
 
-- [ ] **93. Créer le guide de configuration 3DGS Training**
-  > `tutorials/3dgs_training.md`: Python, `gaussian-splatting` repo, CUDA, training depuis COLMAP.
+- [ ] **93. Create 3DGS training guide**
+  > `tutorials/3dgs_training.md`: Python, `gaussian-splatting` repo, CUDA, training from COLMAP.
 
-- [ ] **94. Documenter tous les signaux et l'API publique**
-  > Docstrings complètes: `FoveaCoreManager` API, `ReconstructionManager` signals, `FoveaSplattable` events.
+- [ ] **94. Document all signals and public API**
+  > Complete docstrings: `FoveaCoreManager` API, `ReconstructionManager` signals, `FoveaSplattable` events.
 
-- [ ] **95. Mettre à jour le README avec l'état réel**
-  > Phase 1-4 marquées ✅ mais incomplètes. Être honnête sur proto vs production.
+- [ ] **95. Update README with real status**
+  > Phases 1-4 marked ✅ but incomplete. Be honest about prototype vs production.
 
-- [ ] **96. Créer un CONTRIBUTING.md**
-  > Conventions: GDScript snake_case, classes PascalCase, PR guide, compilation GDExtension.
+- [ ] **96. Create CONTRIBUTING.md**
+  > Conventions: GDScript snake_case, PascalCase classes, PR guide, GDExtension compilation.
 
-- [ ] **97. Créer des vidéos tutoriels ou GIFs**
-  > GIF: StudioTo3D en action, SplatBrush VR, toggle foveated rendering.
+- [ ] **97. Create tutorial videos or GIFs**
+  > GIF: StudioTo3D in action, SplatBrush VR, toggle foveated rendering.
 
-- [ ] **98. Écrire `plans/architecture_overview.md`**
-  > Diagramme complet: Video → StudioProcessor → DatasetExporter → COLMAP → 3DGS → PLY → FoveaSplattable → SurfaceExtractor → SplatGenerator → FoveatedController → SplatSorter → SplatRenderer.
+- [ ] **98. Write `plans/architecture_overview.md`**
+  > Complete diagram: Video → StudioProcessor → DatasetExporter → COLMAP → 3DGS → PLY → FoveaSplattable → SurfaceExtractor → SplatGenerator → FoveatedController → SplatSorter → SplatRenderer.
 
 ---
 
-### 🟡 CATÉGORIE 13 — HOUSEKEEPING
+### 🟡 CATEGORY 13 — HOUSEKEEPING
 
-- [ ] **99. Corriger `plugin.gd._exit_tree()`: ajouter `remove_custom_type("NeuralStyle")`**
-  > Type custom ajouté dans `_enter_tree()` mais jamais retiré. Warning Godot à chaque rechargement.
+- [ ] **99. Fix `plugin.gd._exit_tree()`: add `remove_custom_type("NeuralStyle")`**
+  > Custom type added in `_enter_tree()` but never removed. Godot warning on every reload.
 
-- [ ] **100. Nettoyer les TODO restants dans le code**
-  > Audit des `# TODO`, `# FIXME`, `# placeholder`. Implémenter ou tracker:
+- [ ] **100. Clean up remaining TODOs in code**
+  > Audit `# TODO`, `# FIXME`, `# placeholder`:
   > - `fovea_splattable.gd:58` → `is_visible_to_camera()`
-  > - `test_foveacore.gd:106` → `_set_style()` appelle vraiment le StyleEngine
-  > - `reconstruction_backend.gd:47` → vrai `OS.create_process()`
-  > - `studio_processor.gd:65` → vrai FFmpeg call
+  > - `test_foveacore.gd:106` → `_set_style()` actually calls StyleEngine
+  > - `reconstruction_backend.gd:47` → real `OS.create_process()`
+  > - `studio_processor.gd:65` → real FFmpeg call
   > - `foveacore_manager.gd:170` → Hi-Z occlusion
-  > - `hybrid_renderer.gd:146` → couleur par défaut → StyleEngine
+  > - `hybrid_renderer.gd:146` → default color → StyleEngine
 
 ---
 
-## 🗺️ ORDRE DE PRIORITÉ RECOMMANDÉ
+## 🗺️ RECOMMENDED PRIORITY ORDER
 
-| Sprint | Tâches | Objectif |
+| Sprint | Tasks | Objective |
 |---|---|---|
-| Sprint 1 | #1-10, #99, #100 | Débloquer le système — rien ne fonctionne vraiment sans ça |
-| Sprint 2 | #11-20, #44 | Rendu Core — atteindre 90 FPS avec vrais splats |
-| Sprint 3 | #21-34 | StudioTo3D — pipeline vidéo→3D fonctionnel |
-| Sprint 4 | #35-43 | VR/XR — validation hardware complète |
-| Sprint 5 | #45-51 | GDExtension — performance native |
-| Sprint 6 | #52-73 | Features artistiques + IA + fovea format |
-| Sprint 7 | #74-98 | Polish, outils, docs, tests |
+| Sprint 1 | #1-10, #99, #100 | Unblock system — nothing truly works without this |
+| Sprint 2 | #11-20, #44 | Core Rendering — reach 90 FPS with real splats |
+| Sprint 3 | #21-34 | StudioTo3D — functional video→3D pipeline |
+| Sprint 4 | #35-43 | VR/XR — complete hardware validation |
+| Sprint 5 | #45-51 | GDExtension — native performance |
+| Sprint 6 | #52-73 | Artistic features + AI + fovea format |
+| Sprint 7 | #74-98 | Polish, tools, docs, tests |
 
 ---
 
-## 💡 DÉDUCTION — CE QU'ON A OUBLIÉ DE FAIRE
+## 💡 DEDUCTION — WHAT'S MISSING
 
-Voici les **oublis structurels** qui empêchent le système de fonctionner de bout en bout :
+Here are the **structural omissions** preventing end-to-end functionality:
 
-| # | Oubli | Impact |
+| # | Omission | Impact |
 |---|---|---|
-| 🔴 | **Aucun lecteur PLY** | Sans ça, impossible de charger de vrais Gaussian Splats. Tout le rendu tourne sur du procédural depuis les meshes Godot. |
-| 🔴 | **Backend FFmpeg/COLMAP non branché** | L'UI StudioTo3D "fonctionne" mais ne fait rien de réel. La boucle vidéo→3D est brisée. |
-| 🟠 | **`run_reconstruction()` manquante** | La méthode appelée par "Run" n'existe pas. |
-| 🟠 | **Systèmes non câblés entre eux** | `HybridRenderer`, `OcclusionCuller`, `ProxyFaceRenderer` sont instanciés mais jamais utilisés dans le pipeline réel. |
-| 🟠 | **Eye tracking jamais testé** | Le code est correct (XR tracker API), mais sans hardware, on ne sait pas si ça fonctionne. |
-| 🟡 | **Aucune scène de test sans VR** | Impossible de tester le moteur sans casque XR. Une scène desktop est indispensable au quotidien. |
-| 🟡 | **Pas de données de test incluses** | Aucun `.ply` de démo. Les nouveaux contributeurs ne peuvent tester absolument rien. |
+| 🔴 | **No PLY reader** | Cannot load real Gaussian Splats. All rendering is procedural from Godot meshes. |
+| 🔴 | **FFmpeg/COLMAP backend not connected** | StudioTo3D UI "works" but does nothing real. Video→3D loop is broken. |
+| 🟠 | **`run_reconstruction()` missing** | Method called by "Run" button doesn't exist. |
+| 🟠 | **Systems not wired together** | `HybridRenderer`, `OcclusionCuller`, `ProxyFaceRenderer` instantiated but never used in real pipeline. |
+| 🟠 | **Eye tracking never tested** | Code is correct (XR tracker API) but no hardware validation. |
+| 🟡 | **No VR-free test scene** | Cannot test engine without XR headset. Desktop scene essential for daily work. |
+| 🟡 | **No test data included** | No demo `.ply`. New contributors can't test anything. |
 
 ---
 
-*"Un moteur de rendu, c'est comme un moteur de voiture : tous les composants peuvent exister, mais si les câbles ne sont pas branchés, il ne démarre pas."*
+*"A rendering engine is like a car engine — all components may exist, but if the cables aren't connected, it won't start."*

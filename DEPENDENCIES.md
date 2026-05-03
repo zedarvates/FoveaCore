@@ -1,82 +1,81 @@
-# 📦 Dépendances FoveaEngine (StudioTo3D)
+# 📦 FoveaEngine Dependencies (StudioTo3D)
 
-Pour que le pipeline de reconstruction fonctionne, vous devez installer **FFmpeg** et **COLMAP** sur votre système.
+For the reconstruction pipeline to work, you must install **FFmpeg** and **COLMAP** on your system.
 
 ---
 
 ## 📹 1. FFmpeg
-Utilisé pour extraire les images de vos vidéos.
+Used to extract images from your videos.
 
-### Installation (Windows) :
-1. Téléchargez la dernière version sur **[GitHub ShareX/FFmpeg Releases](https://github.com/ShareX/FFmpeg/releases)**.
-2. Décompressez l'archive (ex: `C:\ffmpeg`).
-3. Le fichier important est `bin\ffmpeg.exe`.
+### Windows Installation:
+1. Download the latest version from **[GitHub ShareX/FFmpeg Releases](https://github.com/ShareX/FFmpeg/releases)**.
+2. Extract the archive (e.g., `C:\ffmpeg`).
+3. The important file is `bin\ffmpeg.exe`.
 
 ---
 
 ## 🏛️ 2. COLMAP
-Utilisé pour la photogrammétrie (Structure from Motion).
+Used for photogrammetry (Structure from Motion).
 
-### Installation (Windows) :
-1. Téléchargez la version Windows (avec CUDA si vous avez une carte NVIDIA) sur **[GitHub COLMAP/COLMAP Releases](https://github.com/colmap/colmap/releases)**.
-2. Décompressez l'archive (ex: `C:\colmap`).
-3. Le fichier important est `colmap.exe`.
+### Windows Installation:
+1. Download the Windows version (with CUDA if you have an NVIDIA card) from **[GitHub COLMAP/COLMAP Releases](https://github.com/colmap/colmap/releases)**.
+2. Extract the archive (e.g., `C:\colmap`).
+3. The important file is `colmap.exe`.
 
 ---
 
 ## 🧬 3. 3D Gaussian Splatting (Python)
-Utilisé pour l'entraînement du nuage de points.
+Used for point cloud training.
 
-### Pré-requis :
+### Prerequisites:
 - Python 3.10+
 - CUDA Toolkit 11.8+
-- Un GPU NVIDIA performant (8GB+ VRAM recommandé).
+- NVIDIA GPU with 8GB+ VRAM recommended.
 
 ---
 
-## ⚙️ Configuration dans Godot
+## ⚙️ Configuration in Godot
 
-Une fois installé, vous pouvez configurer les chemins dans le panel **StudioTo3D** de FoveaEngine :
+Once installed, you can configure the paths in the **StudioTo3D** panel of FoveaEngine:
 
-1. Ouvrez le panel **StudioTo3D** dans l'éditeur Godot.
-2. Allez dans la section **Settings** (en bas).
-3. Renseignez les chemins complets vers vos exécutables :
-   - FFmpeg Path : `C:\ffmpeg\bin\ffmpeg.exe`
-   - COLMAP Path : `C:\colmap\colmap.exe`
+1. Open the **StudioTo3D** panel in the Godot editor.
+2. Go to the **Settings** section (at the bottom).
+3. Fill in the full paths to your executables:
+   - FFmpeg Path: `C:\ffmpeg\bin\ffmpeg.exe`
+   - COLMAP Path: `C:\colmap\colmap.exe`
 
-4. Cliquez sur **Check Tools** pour valider que Godot arrive à les lancer.
+4. Click **Check Tools** to validate that Godot can launch them.
 
-### Astuce : Ajout au PATH
-Si vous ajoutez ces dossiers à votre variable d'environnement `PATH` de Windows, vous n'aurez pas besoin de renseigner les chemins complets dans Godot. Le moteur détectera automatiquement `ffmpeg` et `colmap`.
+### Tip: Add to PATH
+If you add these folders to your Windows `PATH` environment variable, you won't need to specify full paths in Godot. The engine will automatically detect `ffmpeg` and `colmap`.
 
 ---
 
-## 🌍 4. WorldMirror 2.0 (Reconstruction rapide)
+## 🌍 4. WorldMirror 2.0 (Fast Reconstruction)
 
-Remplace COLMAP + 3DGS par un modèle feed-forward SOTA (Tencent Hunyuan).
-Reconstruction vidéo → 3DGS + depth + caméras en ~10 secondes.
+Replaces COLMAP + 3DGS with a SOTA feed-forward model (Tencent Hunyuan). Video → 3DGS + depth + cameras in ~10 seconds.
 
-### Pré-requis :
+### Prerequisites:
 - Python 3.10+
-- CUDA 12.4 (recommandé) ou CPU fallback (lent)
-- GPU NVIDIA 8GB+ VRAM recommandé
-- ~5 GB d'espace disque pour le modèle
+- CUDA 12.4 (recommended) or CPU fallback (slow)
+- NVIDIA GPU with 8GB+ VRAM recommended
+- ~5 GB disk space for the model
 
-### Installation rapide (Windows) :
+### Quick Installation (Windows):
 ```
 scripts\setup_worldmirror.bat
 ```
 
-### Installation rapide (Linux/macOS) :
+### Quick Installation (Linux/macOS):
 ```
 bash scripts/setup_worldmirror.sh
 ```
 
-### Installation manuelle :
+### Manual Installation:
 ```bash
 pip install torch==2.4.0 torchvision==0.19.0 --index-url https://download.pytorch.org/whl/cu124
 git clone https://github.com/Tencent-Hunyuan/HY-World-2.0
 cd HY-World-2.0 && pip install -r requirements.txt
 ```
 
-Le modèle (~5 GB) est téléchargé automatiquement depuis HuggingFace à la première utilisation.
+The model (~5 GB) is automatically downloaded from HuggingFace on first use.
