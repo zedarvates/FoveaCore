@@ -67,7 +67,23 @@ void main() {
     vec3 q_pos = vec3(float(qx), float(qy), float(qz)) / 65535.0;
     vec3 world_pos = params.aabb_min + q_pos * (params.aabb_max - params.aabb_min);
 
-    // --- 2. DÉCODAGE DE LA COULEUR ET OPACITÉ ---
+	// --- 2. DÉCODAGE DE LA NORMALE (Octahedral 8-bit encoding) ---
+	uint norm_u_bits = (splat.data1 >> 16) & 0xFFu;
+	uint norm_v_bits = (splat.data1 >> 24) & 0xFFu;
+	float u = float(norm_u_bits) / 255.0 * 2.0 - 1.0;
+	float v = float(norm_v_bits) / 255.0 * 2.0 - 1.0;
+	// Octahedral decode: project (u,v) to the octahedron, then normalize
+	float z = 1.0 - abs(u) - abs(v);
+	float x = u, y = v;
+	if (z < 0.0) {
+		// Mirror the point to the opposite face
+		float old_x = x;
+		x = (1.0 - abs(y)) * sign(x);
+		y = (1.0 - abs(old_x)) * sign(y);
+	}
+	vec3 normal = normalize(vec3(x, y, z));
+
+	// --- 3. DÉCODAGE DE LA COULEUR ET OPACITÉ ---
     // (Sera surtout utile à copier-coller dans votre splat_render.glsl !)
     uint color_index = splat.data2 & 0xFFFFu;
     float r = float((color_index >> 11) & 0x1Fu) / 31.0;
@@ -77,13 +93,12 @@ void main() {
     
     float opacity = float(splat.data3 & 0xFFu) / 255.0; // Opacité restaurée
 
-    // 1. BACKFACE CULLING : Si la normale pointe à l'opposé de la caméra, on tue le thread !
-    // (Désactivé temporairement tant que les normales compressées ne sont pas implémentées)
-    // vec3 view_dir = normalize(world_pos - params.camera_position);
-    // float NdotV = dot(normal, view_dir);
-    // if (NdotV > params.backface_threshold) return;
-    
-    // 2. OCCLUSION CULLING : Test de profondeur
+	// 1. BACKFACE CULLING : Splat dont la normale pointe à l'opposé de la caméra → invisible
+	vec3 view_dir = normalize(world_pos - params.camera_position);
+	float NdotV = dot(normal, view_dir);
+	if (NdotV > params.backface_threshold) return;
+
+	// 2. OCCLUSION CULLING : Test de profondeur
     // CULLING STÉRÉOSCOPIQUE (Combined Frustum VR)
     vec4 clip_left = camera.view_proj_left * vec4(world_pos, 1.0);
     vec3 ndc_left = clip_left.xyz / clip_left.w;
