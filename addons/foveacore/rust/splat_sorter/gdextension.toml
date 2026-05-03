@@ -1,0 +1,17 @@
+[target.gdextension]
+name = "fovea_splat_sorter"
+entry_point = "splat_sorter::gdext_initialize"
+build_type = "dynamic"
+
+[target.gdextension.dependencies]
+fovea_splat_sorter = { path = "../splat_sorter" }
+
+# Windows .dll, Linux .so, macOS .dylib
+[target.x86_64-pc-windows-msvc]
+output = "bin/splat_sorter.windows.x86_64.dll"
+
+[target.x86_64-unknown-linux-gnu]
+output = "bin/splat_sorter.linux.x86_64.so"
+
+[target.x86_64-apple-darwin]
+output = "bin/splat_sorter.macos.x86_64.dylib"

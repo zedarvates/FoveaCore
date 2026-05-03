@@ -1,0 +1,21 @@
+Removing Splats and cleaning 3DGS models
+===
+
+Guide for cleaning up Gaussian Splat models:
+
+1. Load your reconstructed PLY file
+2. Run the floaters detector analysis
+3. Use the automatic cleanup function
+4. Adjust threshold if needed
+5. Preview changes before saving
+6. Export cleaned model
+
+Cleanup algorithms remove:
+- Isolated floating points
+- Outliers
+- Noise on background edges
+- Ghost artifacts
+
+For manual cleanup use the ROI selection tool.
+
+Additional parameters and advanced settings coming soon.

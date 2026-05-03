@@ -9,14 +9,22 @@ void initialize_foveacore_module(ModuleInitializationLevel p_level) {
     if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
         return;
     }
-    
-    GDREGISTER_CLASS(FoveaRenderer);
+
+    // ✅ VRAI FIX pour Godot 4.3+ : évite l'erreur d'enregistrement double
+    // Godot appelle _register_extension_class_internal AUTOMATIQUEMENT avant notre callback
+    // Donc on vérifie si la classe existe déjà AVANT de l'enregistrer
+    if (!ClassDB::class_exists("FoveaRenderer")) {
+        ClassDB::register_class<FoveaRenderer>();
+    }
 }
 
 void uninitialize_foveacore_module(ModuleInitializationLevel p_level) {
     if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
         return;
     }
+
+    // Ne pas désenregistrer la classe : Godot s'occupe déjà de ça
+    // Le désenregistrement manuel est la cause principale de l'erreur d'enregistrement double
 }
 
 extern "C" {

@@ -27,7 +27,7 @@ func _animate_splat_layers(light_dir: Vector3) -> void:
 	for splattable in get_tree().get_nodes_in_group("splattables"):
 		if not splattable is FoveaSplattable: continue
 		
-		for splat in splattable.splats:
+		for splat in splattable.loaded_splats:
 			match splat.layer_type:
 				GaussianSplat.LayerType.SHADOW:
 					# Digital Painting Shadow logic: 

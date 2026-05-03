@@ -4,33 +4,47 @@ Welcome to **FoveaEngine**, a cutting-edge reconstruction and rendering pipeline
 
 ---
 
-## 🚀 Key Features
+> [!TIP]
+> **Performance & Temps de calcul** : Le pipeline de reconstruction (SfM & 3DGS Training) est extrêmement intensif.
+> - **Phase 2 (COLMAP)** : Peut durer de 2 à 15 minutes selon la vidéo. L'interface peut sembler figée.
+> - **Phase 3 (3DGS)** : Peut durer de 15 à 30 minutes. 
+> - **GPU** : Une carte NVIDIA avec CUDA est fortement recommandée pour des performances acceptables.
 
-### 🎥 StudioTo3D Pipeline
-An automated end-to-end workflow to transform studio videos into game-ready assets.
-- **Automated Masking**: Chroma (Green/Blue/White) and Luma keying for subject isolation.
-- **SfM & 3DGS Integration**: Direct bridge to COLMAP and Gaussian Splatting training.
-- **Hybrid Export**: Generates both high-fidelity Splat layers and low-poly Mesh proxies for physics.
+---
 
-### 🎨 Layered Foveated Splatting
-The engine doesn't just render points; it renders **artistic layers**.
-- **Layers**: BASE, SATURATION, LIGHT, SHADOW.
-- **Foveated Optimization**: Integration with OpenXR Eye-Tracking to render complexity only where the user looks.
-- **Digital Painting Aesthetic**: Splats stack like glazes, creating a unique hand-painted look.
+> [!IMPORTANT]
+> **Dépendances requises** : Le pipeline StudioTo3D nécessite **FFmpeg** et **COLMAP**.
+> Veuillez consulter le guide **[DEPENDENCIES.md](./DEPENDENCIES.md)** pour configurer votre environnement.
 
-### ⚡ Advanced Interaction & Physics
-- **SplatBrush Engine**: In-editor tool to sculpt, clean, and recolor splat clouds.
-- **PhysicsProxy**: Automatic generation of collision hulls linked to splat visuals.
-- **Soft Matter & Liquids**: Real-time deformation of splats (push/bounce) and stylized liquid swirls (Manga style water).
+---
 
-### ☀️ Dynamic Real-time Lighting
-- **Lighting Animation**: Shadow splats that move with scene lights.
-- **Specular Highlights**: Dynamic opacity modulation based on light direction.
-- **Hierarchical Splatting**: Macro-splats for flat colors and micro-splats for high-detail areas (MIP-Splatting).
+## 🚀 État Actuel & Fonctionnalités
 
-### 🖌️ Textured Stamp Rendering
-- **Beyond Gaussians**: Support for alpha-textured stamps (Sponge, Stone, Dry Brush, Stipple, Hatching).
-- **Roughness Analysis**: Automatic brush selection based on surface normal variance.
+> ⚠️ **Note importante**: Ce moteur est en **Phase Développement Pré-Alpha**. Certaines fonctionnalités sont prototypées mais pas entièrement branchées ou testées.
+
+### ✅ Implémenté & Fonctionnel
+- **Rendu Core Gaussian Splatting**: Chargement, tri et affichage de splats via MultiMesh
+- **Fast-Path Rust**: Chargeur binaire `.fovea` implémenté et fonctionnel
+- **GPU Compute Culling**: Backface Culling + Hi-Z Occlusion Culling sur Compute Shader
+- **Bitonic Sort GPU**: Tri des profondeurs 100% sur GPU (0 CPU overhead)
+- **StudioTo3D UI**: Panel interface complet avec masquage Chroma/Luma
+- **Génération procédurale**: Génération de splats depuis les meshes Godot
+- **Style Engine**: 5 matériaux procéduraux + FBM/Worley noise
+
+### 🚧 En cours / Prototypé (Non finalisé)
+- **StudioTo3D Pipeline**: Interface existe mais backend FFmpeg/COLMAP simulé
+- **Eye Tracking**: API OpenXR implémentée mais non testée sur hardware réel
+- **Layered Splatting**: Structure existe mais rendu par couche non branché
+- **SplatBrush**: Architecture présente mais collision/interaction non implémentée
+- **Dynamic Lighting**: Calculs présents mais non connecté aux lumières Godot
+- **Hybrid Renderer**: Instancié mais pas intégré au pipeline principal
+
+### 📅 Roadmap / A venir
+- Support des splats anisotropiques (ellipses)
+- Format binaire `.fovea` complet avec sérialisation
+- Mise en cache LOD / MIP-Splatting
+- Bridge ComfyUI pour génération IA
+- Synchronisation Multiplayer VR
 
 ---
 
@@ -55,22 +69,33 @@ The engine doesn't just render points; it renders **artistic layers**.
 
 ---
 
-## 📈 Roadmap (Completed Phases)
+## 📈 État d'Avancement
 
-- [x] **Phase 1**: Core GS Rendering & Ply Loader.
-- [x] **Phase 2**: StudioTo3D Automation & Masking.
-- [x] **Phase 3**: SplatBrush & Foveated Logic.
-- [x] **Phase 4**: Physical Interactions, Dynamic Lighting, and Hierarchical Splatting.
-- [ ] **Phase 5**: Algorithmic Optimization & Advanced Tooling (Ongoing).
-    - **Compute Shaders**: Interaction/Lighting logic to GPU.
-    - **Splat Compression**: Custom format (~70% reduction).
-    - **Splat Decals**: Environmental weathering spray tool.
-    - **Multiplayer Sync**: Shared VR physical interactions.
+✅ **Phase 1 : Rendu Core** - COMPLÉTÉ  
+✅ **Phase 2 : Pipeline GPU** - COMPLÉTÉ  
+✅ **Phase 3 : Rust Fast-Path** - COMPLÉTÉ  
+🔄 **Phase 4 : StudioTo3D** - EN COURS  
+🔄 **Phase 5 : VR & Eye Tracking** - EN COURS  
 
-- [ ] **Pending & Validation**:
-    - [ ] **Eye-Tracking Connectivity**: Finalize runtime link with specific VR headsets (Quest Pro/Vision Pro).
-    - [ ] **Hardware Validation**: Complete end-to-end test on real XR equipment via OpenXR.
-    - [ ] **GitHub Update**: Refresh documentation after hardware verification.
+### ✅ Réalisé
+- Chargement binaire ultra-rapide en Rust
+- Compute Shaders: Backface & Hi-Z Culling
+- Tri Bitonic 100% GPU
+- Architecture complète Manager/Renderer
+- Interface StudioTo3D
+
+### 🔄 En cours de développement
+- [ ] Connexion réelle FFmpeg / COLMAP
+- [ ] Test et validation matériel VR
+- [ ] Implémentation complète SplatBrush
+- [ ] Rendu couches artistiques
+- [ ] Lumière dynamique
+
+### ❌ Non implémenté
+- Multiplayer Sync
+- Splat Decals
+- MIP-Splatting
+- Bridge IA
 
 ---
 

@@ -130,6 +130,23 @@ func _init_gpu() -> void:
 	_shader = _rd.shader_create_from_spirv(shader_spirv)
 	_pipeline = _rd.compute_pipeline_create(_shader)
 
+
+func _free_gpu() -> void:
+	if _rd:
+		if _pipeline.is_valid():
+			_rd.free_rid(_pipeline)
+			_pipeline = RID()
+		if _shader.is_valid():
+			_rd.free_rid(_shader)
+			_shader = RID()
+		if _rd:
+			_rd = null
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE:
+		_free_gpu()
+
 func _mask_background_gpu(image: Image, mode: String, threshold: float, roi: Rect2i) -> Image:
 	_init_gpu()
 	if not _rd: return null

@@ -33,7 +33,7 @@ func _ready() -> void:
 	name = "SplatRenderer"
 	_setup_multimesh()
 	# Auto-detecter la caméra principale
-	_camera = get_viewport().get_camera3d() if get_viewport() else null
+	_camera = get_viewport().get_camera_3d() if get_viewport() else null
 	# Initialiser le GPU sorter (si disponible)
 	_init_sorter()
 
@@ -251,15 +251,9 @@ func set_point_size(size: float) -> void:
 
 func set_render_distance(distance: float) -> void:
 	_render_distance = distance
-	# Cull instances beyond render distance
-	if _multimesh:
-		for i in range(_multimesh.instance_count):
-			var transform = _multimesh.get_instance_transform(i)
-			var dist = transform.origin.distance_to(_camera.global_position if _camera else Vector3.ZERO)
-			var visible = dist <= _render_distance
-			# MultiMesh doesn't support per-instance visibility, we'd need custom shader or LOD
-			# For now, just note that we'd need to rebuild the multimesh with only visible instances
-			pass
+	# MultiMesh does not support per-instance visibility natively.
+	# To enforce render distance, rebuild the multimesh with only visible instances
+	# via rebuild_visible_only() or implement LOD in the compute shader.
 
 func refresh() -> void:
 	"""Reconstruit complètement le rendu (appeler après changement massif)."""

@@ -143,11 +143,9 @@ func _detect_floating_splats() -> Array:
 	var chunk_size = max(1, splat_count / num_threads)
 	var threads: Array[Thread] = []
 	var mutex = Mutex.new()
-	var results: Array[Array] = []
-	results.resize(num_threads)
+	var results = []
 
 	for t in range(num_threads):
-		results[t] = []
 		var thread = Thread.new()
 		thread.start(_detect_chunk.bind(
 			t,
@@ -194,7 +192,7 @@ func _detect_chunk(thread_id: int, start: int, end: int, splats_data: Array, min
 
 	# Append to shared results array atomically
 	mutex.lock()
-	results[thread_id] = local_floating
+	results.append_array(local_floating)
 	mutex.unlock()
 
 func _build_kd_tree() -> Object:

@@ -17,7 +17,7 @@ func _process(delta: float) -> void:
 		_interact_with_splats(splattable, sources, delta)
 
 func _interact_with_splats(splattable: Node, sources: Array, delta: float) -> void:
-	for splat in splattable.splats:
+	for splat in splattable.loaded_splats:
 		var total_force: Vector3 = Vector3.ZERO
 		var world_pos = splattable.global_transform * (splat.position + splat.origin_offset)
 		

@@ -1,0 +1,39 @@
+[gd_scene load_steps=5 format=3 uid="uid://star_test_01"]
+
+[ext_resource type="Script" path="res://addons/foveacore/scripts/reconstruction/star_loader.gd" id="1_loader"]
+
+[sub_resource type="ProceduralSkyMaterial" id="Sky_1"]
+sky_top_color = Color(0.1, 0.1, 0.2, 1)
+
+[sub_resource type="Sky" id="Sky_2"]
+sky_material = SubResource("Sky_1")
+
+[sub_resource type="Environment" id="Env_1"]
+background_mode = 2
+sky = SubResource("Sky_2")
+ambient_light_source = 3
+
+[node name="StarTestScene" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env_1")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.866, 0.5, 0, -0.5, 0.866, 0, 5, 0)
+
+[node name="XROrigin3D" type="XROrigin3D" parent="."]
+
+[node name="XRCamera3D" type="XRCamera3D" parent="XROrigin3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, 0)
+
+[node name="StarVRExperience" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.7, -2)
+script = ExtResource("1_loader")
+star_metadata_path = "f:/foveaengine/fovea-engine/test_reconstruction/star_workspace/star_metadata.json"
+radius = 1.0
+falloff = 2.0
+depth_scale = 0.2
+playback_speed = 1.0
+
+[node name="Camera" type="Camera3D" parent="StarVRExperience"]
+visible = false

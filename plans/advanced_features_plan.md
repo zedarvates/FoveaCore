@@ -8,23 +8,41 @@ This phase aims to push the boundaries of FoveaEngine by integrating state-of-th
 
 ```mermaid
 graph TD
-    subgraph VR Interaction
-        GZ[OpenXR Gaze Tracker]
-        PH[Hybrid Physics Engine]
-        SB["SplatBrush (Cleaning/Nettoyage)"]
-    end
+	subgraph VR Interaction
+		GZ[OpenXR Gaze Tracker]
+		PH[Hybrid Physics Engine]
+		SB["SplatBrush (Cleaning/Nettoyage)"]
+	end
 
-    subgraph Advanced Rendering
-        LF[LoRA Inference Factory]
-        DF[Dynamic Foveation Control]
-        IS[Instance Segmentation (MOS)]
-    end
+	subgraph Advanced Rendering
+		LF[LoRA Inference Factory]
+		DF[Dynamic Foveation Control]
+		IS[Instance Segmentation (MOS)]
+	end
 
-    GZ --> DF
-    SB --> IS
-    PH --> IS
-    DF --> LF
-    LF --> IS
+	GZ --> DF
+	SB --> IS
+	PH --> IS
+	DF --> LF
+	LF --> IS
+
+	subgraph Game-Ready Compression
+		VQ[Vector Quantization Codebooks]
+		SQ[Spatial Grid Fixed-Point]
+		FP[Fast-Path Binary Loader]
+		SM[Coplanar Splat Merging]
+		SH[SH Baking & Pruning]
+		BC[Splat Backface Culling]
+		TS[Temporal Interleaved Sorting]
+		TB[Tile-Based Rasterization]
+		HZ[Hi-Z Occlusion Culling]
+		FP16[FP16 Compute Pipeline]
+		IN[Global Splat Instancing]
+		DV[Delta-Splat Variants]
+		ID[GPU-Driven Indirect Draw]
+		OC[Out-of-Core VRAM Streaming]
+		MA[Motion-Adaptive LOD]
+	end
 ```
 
 ## 2. Key Modules to Implement
@@ -54,6 +72,22 @@ graph TD
   - `load_onnx_lora(model_path: String)`
   - `apply_style_to_textures(base_texture: Texture2D)`
 
+### 2.5 Game-Ready Optimizer (Compression Tool)
+
+- **Functions:**
+  - `quantize_positions_to_grid(splats: Array, grid_resolution: int)` (Fixed-point mapping)
+  - `generate_pattern_codebooks(splats: Array) -> Dictionary` (Pattern recognition via K-means)
+  - `merge_coplanar_splats(splats: Array, depth_threshold: float, normal_threshold: float)` (Overdraw reduction)
+  - `bake_spherical_harmonics(splats: Array, keep_degree: int)` (Removes unused view-dependent data)
+  - `export_fast_path_binary(target_path: String)`
+
+### 2.6 Advanced GPU Pipeline (GDExtension / Compute)
+
+- **Functions:**
+  - `build_hiz_depth_buffer(proxy_mesh: Mesh)` (Visibility buffer for fast culling)
+  - `dispatch_tile_based_rasterization()` (Compute shader screen chunking)
+  - `execute_temporal_interleaved_sort()` (Async sorting spread across frames)
+
 ## 3. Immediate Implementation Tasks
 
 - [x] Create `addons/foveacore/scripts/advanced/` directory.
@@ -64,6 +98,9 @@ graph TD
 - [x] Implement `neural_style_bridge.gd` for LoRA/ONNX support.
 - [x] Implement `layered_foveated_renderer.gd` (Digital Painting Optimization).
 - [x] Implement `layered_splat_generator.gd` (Saturation/Light/Shadow extraction).
+- [x] Implement `game_ready_optimizer.gd` to bake SH and prune entropy.
+- [x] Write `gpu_culling_compute.glsl` for GPU Backface and Hi-Z Culling.
+- [x] Integrate `fovea_fast_path.rs` in Rust GDExtension for instantaneous loading.
 
 ## 4. Performance Goals
 

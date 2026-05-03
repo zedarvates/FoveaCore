@@ -8,6 +8,9 @@ class_name LayeredFoveatedController
 @export var foveal_radius: float = 0.2 # Focus zone
 @export var manager: Node = null # FoveaCoreManager
 
+var _gaze_point_set: bool = false
+var _last_gaze_point: Vector3 = Vector3.ZERO
+
 ## Detail multipliers by layer type
 var layer_settings = {
 	GaussianSplat.LayerType.BASE: {"foveal": 0.8, "peripheral": 0.3},
@@ -34,16 +37,15 @@ func calculate_layered_weight(splat: GaussianSplat, gaze_point: Vector3, camera_
 ## Filter and optimize splats for the current frame
 func optimize_layered_splats(all_splats: Array[GaussianSplat], gaze_point: Vector3, cam_pos: Vector3) -> Array[GaussianSplat]:
 	var optimized: Array[GaussianSplat] = []
-	
+	var has_gaze := _gaze_point_set and not gaze_point.is_equal_approx(Vector3.ZERO)
+
 	for splat in all_splats:
 		var weight = calculate_layered_weight(splat, gaze_point, cam_pos)
 		
 		# Apply the artistic painting logic:
 		# Saturation and Light layers are ONLY high-density in the foveal region
 		if weight > 0.05:
-			# We don't just change opacity, we can change radius to 'blend' like paint
-			if not gaze_point.is_equal_approx(Vector3.ZERO):
-				# Detail expands in center, blurs in periphery
+			if has_gaze:
 				var dist = splat.position.distance_to(gaze_point)
 				splat.radius = splat.radius * (1.0 + (dist / foveal_radius))
 			
@@ -51,3 +53,8 @@ func optimize_layered_splats(all_splats: Array[GaussianSplat], gaze_point: Vecto
 			optimized.append(splat)
 			
 	return optimized
+
+
+func set_gaze_point(point: Vector3):
+	_gaze_point_set = true
+	_last_gaze_point = point

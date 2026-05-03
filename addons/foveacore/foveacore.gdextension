@@ -1,0 +1,13 @@
+[configuration]
+
+entry_symbol = "foveacore_init"
+compatibility_minimum = "4.2"
+
+[libraries]
+
+linux.debug.x86_64 = "res://addons/foveacore/gdextension/bin/libfoveacore.so"
+linux.release.x86_64 = "res://addons/foveacore/gdextension/bin/libfoveacore.so"
+windows.debug.x86_64 = "res://addons/foveacore/gdextension/bin/foveacore.dll"
+windows.release.x86_64 = "res://addons/foveacore/gdextension/bin/foveacore.dll"
+macos.debug = "res://addons/foveacore/gdextension/bin/libfoveacore.dylib"
+macos.release = "res://addons/foveacore/gdextension/bin/libfoveacore.dylib"

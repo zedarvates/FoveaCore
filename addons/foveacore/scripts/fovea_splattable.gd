@@ -112,7 +112,7 @@ func is_visible_to_camera(camera: Camera3D) -> bool:
 		return true
 	# Test AABB + frustum sur les 8 coins du bounding box
 	if original_mesh != null:
-		var world_aabb := original_mesh.get_aabb().abs()
+		var world_aabb := original_mesh.get_aabb()
 		var gtr := global_transform
 		var p := world_aabb.position
 		var s := world_aabb.size

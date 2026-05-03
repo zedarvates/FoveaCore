@@ -18,38 +18,52 @@ var backend: ReconstructionBackend = null
 var ffmpeg_path: String = "ffmpeg":
 	set(val):
 		ffmpeg_path = val
-		if processor: processor.ffmpeg_path = val
-		ProjectSettings.set_setting("fovea/tools/ffmpeg_path", val)
-		_save_user_settings()  # Persister immédiatement
+		_propagate_ffmpeg_path()
+		_save_user_settings()
 
 var colmap_path: String = "colmap":
 	set(val):
 		colmap_path = val
-		if backend: backend.colmap_path = val
-		ProjectSettings.set_setting("fovea/tools/colmap_path", val)
+		_propagate_colmap_path()
 		_save_user_settings()
 
-# Settings persistants additionnels
 var python_path: String = "python":
 	set(val):
 		python_path = val
-		if backend: backend.python_path = val
-		ProjectSettings.set_setting("fovea/tools/python_path", val)
+		_propagate_python_path()
 		_save_user_settings()
 
 var gaussian_train_script: String = "train.py":
 	set(val):
 		gaussian_train_script = val
-		if backend: backend.gaussiantrain_script = val
-		ProjectSettings.set_setting("fovea/tools/gaussian_train_script", val)
+		_propagate_gaussian_train_script()
 		_save_user_settings()
 
 var star_bridge_script: String = "star_bridge.py":
 	set(val):
 		star_bridge_script = val
-		if backend: backend.star_bridge_script = val
-		ProjectSettings.set_setting("fovea/tools/star_bridge_script", val)
+		_propagate_star_bridge_script()
 		_save_user_settings()
+
+func _propagate_ffmpeg_path() -> void:
+	if processor: processor.ffmpeg_path = ffmpeg_path
+	ProjectSettings.set_setting("fovea/tools/ffmpeg_path", ffmpeg_path)
+
+func _propagate_colmap_path() -> void:
+	if backend: backend.colmap_path = colmap_path
+	ProjectSettings.set_setting("fovea/tools/colmap_path", colmap_path)
+
+func _propagate_python_path() -> void:
+	if backend: backend.python_path = python_path
+	ProjectSettings.set_setting("fovea/tools/python_path", python_path)
+
+func _propagate_gaussian_train_script() -> void:
+	if backend: backend.gaussiantrain_script = gaussian_train_script
+	ProjectSettings.set_setting("fovea/tools/gaussian_train_script", gaussian_train_script)
+
+func _propagate_star_bridge_script() -> void:
+	if backend: backend.star_bridge_script = star_bridge_script
+	ProjectSettings.set_setting("fovea/tools/star_bridge_script", star_bridge_script)
 
 # Fichier de configuration utilisateur (hors projet)
 var _user_config_path: String = OS.get_user_data_dir() + "/fovea_engine_user_settings.cfg"

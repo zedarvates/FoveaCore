@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://w6ki06k1de3a"
+path="res://.godot/imported/mask_background_gpu.glsl-99c1284b640ed100ae628efa88bfb060.res"
+
+[deps]
+
+source_file="res://addons/foveacore/shaders/mask_background_gpu.glsl"
+dest_files=["res://.godot/imported/mask_background_gpu.glsl-99c1284b640ed100ae628efa88bfb060.res"]
+
+[params]
+

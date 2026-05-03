@@ -10,18 +10,18 @@ uniform float radius = 0.5; // radius in UV space (0‑1)
 uniform float falloff = 2.0; // exponent for Gaussian falloff
 
 void fragment() {
-    // UV centered at (0.5, 0.5)
-    vec2 uv_centered = UV - vec2(0.5);
-    float dist = length(uv_centered) / radius;
-    // Gaussian falloff (exp(-dist^2 * falloff))
-    float alpha = exp(-dist * dist * falloff);
-    // Sample texture (optional, can be a white 1x1 for pure Gaussian)
-    vec4 tex = texture(splat_texture, UV);
-    COLOR = splat_color * tex * alpha;
-    // Discard fragments outside radius for performance
-    if (dist > 1.0) {
-        discard;
-    }
+	// UV centered at (0.5, 0.5)
+	vec2 uv_centered = UV - vec2(0.5);
+	float dist = length(uv_centered) / radius;
+	// Gaussian falloff (exp(-dist^2 * falloff))
+	float alpha = exp(-dist * dist * falloff);
+	// Sample texture (optional, can be a white 1x1 for pure Gaussian)
+	vec4 tex = texture(splat_texture, UV);
+	COLOR = splat_color * tex * alpha;
+	// Discard fragments outside radius for performance
+	if (dist > 1.0) {
+		discard;
+	}
 }
 ```
 
