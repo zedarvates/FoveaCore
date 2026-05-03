@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="my%20icone/Earthandcheck.png" alt="FoveaEngine Icon" width="128">
+</p>
+
 # 👁️ FoveaEngine — Advanced 3DGS & Neural Reconstruction Engine
 
 Welcome to **FoveaEngine**, a cutting-edge reconstruction and rendering pipeline for Godot 4.6+, specifically designed for high-fidelity VR experiences and artistic "Digital Painting" aesthetics.
@@ -79,6 +83,8 @@ Voir **[ROADMAP.md](./ROADMAP.md)** pour le plan complet. Points clés à venir 
 ---
 
 ## 🤝 Remerciements
+
+<p align="center">🤍</p>
 
 Ce projet est profondément redevable aux équipes dont les travaux open-source ont permis de débloquer des problèmes critiques de notre pipeline :
 
