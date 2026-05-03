@@ -124,6 +124,9 @@ func _read_pipes_async(stdio: FileAccess, stderr: FileAccess, pid: int, task_nam
 	]
 
 	while OS.is_process_running(pid):
+		# Yield control to prevent main thread freeze
+		await get_tree().create_timer(0.05).timeout
+
 		# Timeout check
 		if command_timeout_seconds > 0:
 			var elapsed := (Time.get_ticks_msec() - start_time) / 1000.0
@@ -135,14 +138,17 @@ func _read_pipes_async(stdio: FileAccess, stderr: FileAccess, pid: int, task_nam
 				return
 
 		var got_output = false
+		var lines_read := 0
+		const MAX_LINES_PER_FRAME := 50
 
 		# Lire stdout
 		if stdio and stdio.get_error() == OK:
-			while not stdio.eof_reached():
+			while not stdio.eof_reached() and lines_read < MAX_LINES_PER_FRAME:
 				var line = stdio.get_line()
 				if not line.is_empty():
 					got_output = true
 					line_count += 1
+					lines_read += 1
 					last_output_time = Time.get_ticks_msec()
 					full_output += line + "\n"
 					print("[%s] %s" % [task_name, line])
@@ -162,11 +168,12 @@ func _read_pipes_async(stdio: FileAccess, stderr: FileAccess, pid: int, task_nam
 
 		# Lire stderr
 		if stderr and stderr.get_error() == OK:
-			while not stderr.eof_reached():
+			while not stderr.eof_reached() and lines_read < MAX_LINES_PER_FRAME:
 				var line = stderr.get_line()
 				if not line.is_empty():
 					got_output = true
 					line_count += 1
+					lines_read += 1
 					last_output_time = Time.get_ticks_msec()
 					full_output += "[ERR] " + line + "\n"
 					print("[%s] [ERR] %s" % [task_name, line])
