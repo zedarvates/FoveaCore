@@ -31,13 +31,19 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: barichello/godot-ci:4.6
+    strategy:
+      matrix:
+        test-script:
+          - res://addons/foveacore/test/test_style_engine.gd
+          - res://addons/foveacore/test/test_surface_extractor.gd
+      fail-fast: false
     steps:
       - uses: actions/checkout@v4
-      - name: Run Godot headless tests
+      - name: Run Godot headless test
         run: |
-          godot --headless --quit-after 100 --script res://addons/foveacore/test/test_style_engine.gd 2>&1 | tee test_output.txt
+          godot --headless --quit-after 100 --script ${{ matrix.test-script }} 2>&1 | tee test_output.txt
           if grep -q "✗\|failed" test_output.txt; then
-            echo "Tests failed"
+            echo "Tests failed in ${{ matrix.test-script }}"
             exit 1
           fi
 
