@@ -77,7 +77,7 @@ func extract_frames(session: ReconstructionSession) -> void:
 	session.status = "Frames Extracted"
 	processing_completed.emit(count)
 
-## Extract a single frame for ROI preview
+## Extract a single frame for ROI preview (async, non-blocking)
 func get_preview_frame(video_path: String) -> Image:
 	var temp_path = OS.get_user_data_dir() + "/fovea_preview.jpg"
 	var args = [
@@ -89,14 +89,19 @@ func get_preview_frame(video_path: String) -> Image:
 	]
 	
 	var cmd = ffmpeg_path if not ffmpeg_path.is_empty() else "ffmpeg"
-	var out = []
-	var err = OS.execute(cmd, args, out)
+	var pid = OS.create_process(cmd, args)
 	
-	if err == -1:
+	if pid == -1:
+		push_error("StudioProcessor: Failed to launch FFmpeg for preview")
 		return null
-		
+	
+	# Wait for FFmpeg to finish (async, yields engine control)
+	while OS.is_process_running(pid):
+		await get_tree().process_frame
+	
 	if FileAccess.file_exists(temp_path):
 		var img = Image.load_from_file(temp_path)
+		return img if img else null
 		return img
 		
 	return null

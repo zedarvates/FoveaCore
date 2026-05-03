@@ -36,19 +36,24 @@ func check_all_tools() -> void:
         
     check_completed.emit(legacy_ok or worldmirror_ok, results)
 
+var _wm2_cache: int = -1  # -1=unchecked, 0=not ready, 1=ready
+
 ## Tente d'exécuter une commande et vérifie son code de retour
 func _is_command_available(cmd: String, args: PackedStringArray) -> bool:
     var output = []
-    var exit_code = OS.execute(cmd, args, output, true, true)
+    var exit_code = OS.execute(cmd, args, output, false, false)
     return exit_code == 0
 
 ## Vérifie si WorldMirror 2.0 (hyworld2) est installé
 func _check_worldmirror2_available() -> bool:
+    if _wm2_cache != -1:
+        return _wm2_cache == 1
     var output = []
     var script = "-c"
     var code = "import hyworld2.worldrecon.pipeline; print('OK')"
-    var exit_code = OS.execute("python", [script, code], output, true, true)
-    return exit_code == 0
+    var exit_code = OS.execute("python", [script, code], output, false, false)
+    _wm2_cache = 1 if exit_code == 0 else 0
+    return _wm2_cache == 1
 
 func is_worldmirror2_ready() -> bool:
     return _check_worldmirror2_available()
