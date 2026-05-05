@@ -43,11 +43,9 @@ var _target_proxy_visible: bool = true  # Target visibility based on smoothed di
 
 # Lifecycle callbacks
 func _ready() -> void:
-    # Find the camera reference (assuming main VR camera is named "Camera")
-    _camera = get_node_or_null("Camera" )
+    _camera = get_viewport().get_camera_3d()
     if _camera == null:
-        push_error("ProxyFaceRenderer: Camera3D node not found as child.")
-        return
+        push_warning("ProxyFaceRenderer: No active Camera3D found. Will retry each frame.")
     
     # Create the proxy mesh (a simple quad)
     create_proxy_mesh()
@@ -63,6 +61,8 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+    if _camera == null:
+        _camera = get_viewport().get_camera_3d()
     if _camera == null or _proxy_mesh_instance == null:
         return
     
@@ -75,7 +75,7 @@ func _process(delta: float) -> void:
     var in_foveal_zone: bool = false
     if use_foveal_zone and _camera is XRCamera3D:
         # XRCamera3D provides head orientation; we can use that to define a forward vector
-        var cam_fwd: Vector3 = -_camera.global_transform.origin.normalized()
+        var cam_fwd: Vector3 = -_camera.global_transform.basis.z.normalized()
         var to_proxy: Vector3 = (proxy_transform.origin - _camera.global_transform.origin).normalized()
         var angle: float = acos(cam_fwd.dot(to_proxy)) * 180.0 / PI
         in_foveal_zone = angle < foveal_zone_angle and distance <= foveal_zone_distance
@@ -140,9 +140,8 @@ func create_proxy_mesh() -> void:
     # Assign material to the proxy mesh
     _proxy_mesh_instance.material_override = shader_mat
     
-    # Initially point the quad to face the camera (billboard behavior)
-    # This is a simple look-at; for proper billboard you might need to update in _process
-    look_at(_camera.global_transform.origin, Vector3.UP)
+    if _camera:
+        look_at(_camera.global_transform.origin, Vector3.UP)
 
 
 # Public method to switch proxy visibility
