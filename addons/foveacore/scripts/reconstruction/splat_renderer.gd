@@ -75,18 +75,19 @@ func load_splats(splats: Array[GaussianSplat]) -> void:
 	_splats = splats.duplicate()
 	var count = min(_splats.size(), max_instances)
 
-	_setup_multimesh()
+	if _multimesh == null:
+		_setup_multimesh()
 	_multimesh.instance_count = count
 
-	# Initialiser toutes les instances
+	var cam_pos = _camera.global_position if _camera else Vector3.ZERO
 	for i in range(count):
 		var splat = _splats[i]
-		var transform = _splat_to_transform(splat, _camera.global_position if _camera else Vector3.ZERO)
+		var transform = _splat_to_transform(splat, cam_pos)
 		_multimesh.set_instance_transform(i, transform)
 		_multimesh.set_instance_color(i, splat.color)
 
-	_sort_dirty = true  # Nécessite un tri selon la caméra
-	_last_camera_pos = _camera.global_position if _camera else Vector3.ZERO
+	_sort_dirty = true
+	_last_camera_pos = cam_pos
 
 	render_updated.emit(count)
 	_report_memory_usage()

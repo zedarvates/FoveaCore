@@ -103,7 +103,43 @@ func _toggle_foveated() -> void:
 func _set_style(style_name: String) -> void:
 	if _manager:
 		print("Style changed to: ", style_name)
-		# TODO: Appliquer le style au StyleEngine
+		var style = FoveaStyle.new()
+		match style_name:
+			"stone":
+				style.detail = 1.5
+				style.grain = 0.3
+				style.light_coherence = 0.9
+				style.color_saturation = 0.4
+				style.micro_shadow = 0.6
+			"wood":
+				style.detail = 1.2
+				style.grain = 0.4
+				style.light_coherence = 0.7
+				style.color_saturation = 0.5
+				style.micro_shadow = 0.5
+			"metal":
+				style.detail = 2.0
+				style.grain = 0.2
+				style.light_coherence = 0.9
+				style.color_saturation = 0.3
+				style.micro_shadow = 0.4
+			"skin":
+				style.detail = 1.0
+				style.grain = 0.5
+				style.light_coherence = 0.6
+				style.color_saturation = 0.8
+				style.micro_shadow = 0.3
+			"fabric":
+				style.detail = 0.8
+				style.grain = 0.6
+				style.light_coherence = 0.5
+				style.color_saturation = 0.7
+				style.micro_shadow = 0.4
+			_default:
+				# Keep default values
+				pass
+		style.mode = "procedural"
+		_manager.set_style(style)
 
 
 func _reset_history() -> void:

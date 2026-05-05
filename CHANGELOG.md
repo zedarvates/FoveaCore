@@ -1,6 +1,6 @@
 # Changelog — feat/worldmirror2-integration
 
-> Branch `feat/worldmirror2-integration` — 16 commits, 28 files changed
+> Branch `feat/worldmirror2-integration` — 17 commits, 33 files changed
 > Merges into `main`
 
 ---
@@ -42,6 +42,15 @@
 | Broken signal paths in .tscn | `studio_to_3d_panel.tscn` | Fixed VBox→VSplit/TopScroll/VBoxTop + added missing connections |
 | Cargo.toml unstable | `shaders/Cargo.toml` | Pinned gdext: `branch=master` → `tag=v0.2.1` |
 | floaters_detector TODO | `floaters_detector.gd` | Referenced existing SpatialHashGrid for O(1) neighbor queries |
+| floaters_detector logic | `floaters_detector.gd:168` | `for t_results in results: floating.append_array(t_results)` → `floating.append_array(results)` (itération sur entiers au lieu du tableau) |
+| foveated_enabled gating pipeline | `foveacore_manager.gd:183` | `_perform_culling` conditionné par `foveated_enabled` → bloquait tout le rendu via toggle T |
+| vr_enabled bloquait desktop | `foveacore_manager.gd:150` | `_process` conditionné par `vr_enabled` → pipeline inactif sans casque |
+| _set_style non implémenté | `test_foveacore.gd:103` | TODO remplacé par création d'un `FoveaStyle` + appel à `manager.set_style()` |
+| triangle.normals sans vérif | `temporal_reprojector.gd:146` | Accès `normals[0]` sans garde → crash si normales absentes |
+| Camera direction faussée | `proxy_face_renderer.gd:78` | `-_camera.global_transform.origin.normalized()` → `-_camera.global_transform.basis.z.normalized()` |
+| Camera jamais trouvée | `proxy_face_renderer.gd:47` | `get_node_or_null("Camera")` → `get_viewport().get_camera_3d()` avec réessai dans `_process` |
+| look_at sur camera null | `proxy_face_renderer.gd:143` | `look_at(_camera.global_transform.origin, ...)` sans guard null → crash |
+| MultiMesh recréé chaque frame | `splat_renderer.gd:78` | `_setup_multimesh()` déplacé dans `_ready()`, plus d'appel dans `load_splats` |
 
 ---
 
@@ -101,5 +110,6 @@
 | Audit recs resolved | 15/15 |
 | Unit tests added | 40+ |
 | New classes | 7 |
+| Bug fixes (this pass) | 9 |
 
-*Generated 2026-05-03*
+*Generated 2026-05-05*
