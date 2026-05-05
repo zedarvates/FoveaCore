@@ -164,9 +164,7 @@ func _detect_floating_splats() -> Array:
 	for thread in threads:
 		thread.wait_to_finish()
 
-	# Collect results
-	for t_results in results:
-		floating.append_array(t_results)
+	floating.append_array(results)
 
 	return floating
 

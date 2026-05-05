@@ -148,7 +148,7 @@ func _setup_vr():
 			push_warning("FoveaCore: No OpenXR interface found.")
 
 func _process(delta):
-	if vr_enabled and renderer_initialized:
+	if renderer_initialized:
 		_frame_count += 1
 		_update_foveated_zones()
 		_perform_culling()
@@ -180,7 +180,7 @@ func _update_foveated_zones():
 				_foveated_controller.update_gaze(target, forward)
 
 func _perform_culling():
-	if _visibility_manager and foveated_enabled:
+	if _visibility_manager:
 		var visibility_result = _visibility_manager.extract_visible_surfaces()
 		var camera = get_viewport().get_camera_3d()
 		var camera_pos: Vector3 = _get_main_camera_position()
