@@ -143,6 +143,7 @@ func _generate_missing_splats(
 			continue
 		
 		var center = (triangle.vertices[0] + triangle.vertices[1] + triangle.vertices[2]) / 3.0
+		var normal = triangle.normals[0] if triangle.normals.size() > 0 else Vector3.UP
 		
 		# Vérifier s'il y a un splat reprojecté proche
 		var has_nearby = false
@@ -155,7 +156,7 @@ func _generate_missing_splats(
 			# Générer un nouveau splat
 			var splat = GaussianSplat.create_from_triangle(
 				center,
-				triangle.normals[0],
+				normal,
 				Color(0.7, 0.7, 0.7),
 				triangle.area,
 				camera_position,
