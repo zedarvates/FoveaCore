@@ -222,14 +222,6 @@ impl FoveaAssetLoader {
             let f_dc_2 = get_float(idx_f_dc_2);
             let opacity = get_float(idx_opac);
             
-            // Convertir SH0 en couleur RGB linéaire
-            let c0 = f_dc_0 * 0.28209479 + 0.5;
-            let c1 = f_dc_1 * 0.28209479 + 0.5;
-            let c2 = f_dc_2 * 0.28209479 + 0.5;
-            
-            let color = Color3D::new(c0, c1, c2);
-            raw_colors.push(color);
-            
             let scale_0 = if idx_scale_0 != usize::MAX { get_float(idx_scale_0) } else { -4.0 };
             let scale_1 = if idx_scale_1 != usize::MAX { get_float(idx_scale_1) } else { -4.0 };
             let scale_2 = if idx_scale_2 != usize::MAX { get_float(idx_scale_2) } else { -4.0 };
@@ -237,6 +229,22 @@ impl FoveaAssetLoader {
             let rot_1 = if idx_rot_1 != usize::MAX { get_float(idx_rot_1) } else { 0.0 };
             let rot_2 = if idx_rot_2 != usize::MAX { get_float(idx_rot_2) } else { 0.0 };
             let rot_3 = if idx_rot_3 != usize::MAX { get_float(idx_rot_3) } else { 0.0 };
+
+            // NaN / Inf Filtering
+            if !x.is_finite() || !y.is_finite() || !z.is_finite() ||
+               !f_dc_0.is_finite() || !f_dc_1.is_finite() || !f_dc_2.is_finite() ||
+               !opacity.is_finite() || !scale_0.is_finite() || !scale_1.is_finite() || !scale_2.is_finite() ||
+               !rot_0.is_finite() || !rot_1.is_finite() || !rot_2.is_finite() || !rot_3.is_finite() {
+                continue;
+            }
+
+            // Convertir SH0 en couleur RGB linéaire
+            let c0 = f_dc_0 * 0.28209479 + 0.5;
+            let c1 = f_dc_1 * 0.28209479 + 0.5;
+            let c2 = f_dc_2 * 0.28209479 + 0.5;
+            
+            let color = Color3D::new(c0, c1, c2);
+            raw_colors.push(color);
 
             aabb_min[0] = aabb_min[0].min(x); aabb_min[1] = aabb_min[1].min(y); aabb_min[2] = aabb_min[2].min(z);
             aabb_max[0] = aabb_max[0].max(x); aabb_max[1] = aabb_max[1].max(y); aabb_max[2] = aabb_max[2].max(z);
@@ -475,6 +483,28 @@ impl FoveaAssetLoader {
                 padding2: 0,
             });
         }
+
+        // Morton Order sorting helper functions
+        fn part_1_by_2(mut x: u32) -> u32 {
+            x &= 0x000003ff;
+            x = (x ^ (x << 16)) & 0xff0000ff;
+            x = (x ^ (x << 8))  & 0x0300f00f;
+            x = (x ^ (x << 4))  & 0x030c30c3;
+            x = (x ^ (x << 2))  & 0x09249249;
+            x
+        }
+
+        fn morton_encode_3d(x: u32, y: u32, z: u32) -> u32 {
+            (part_1_by_2(x) << 2) | (part_1_by_2(y) << 1) | part_1_by_2(z)
+        }
+
+        // Sort splats using Morton codes to group close ones spatially (improving GPU cache)
+        packed_splats.sort_by_cached_key(|splat| {
+            let mx = splat.pos_x as u32 >> 6;
+            let my = splat.pos_y as u32 >> 6;
+            let mz = splat.pos_z as u32 >> 6;
+            morton_encode_3d(mx, my, mz)
+        });
         
         let splats_bytes: &[u8] = unsafe {
             std::slice::from_raw_parts(
