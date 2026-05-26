@@ -1,7 +1,7 @@
 use godot::prelude::*;
 
 // Déclaration de nos modules Rust
-pub mod splatting;
+pub mod fovea_fast_path;
 
 // Structure principale représentant notre GDExtension
 struct FoveaCoreExtension;

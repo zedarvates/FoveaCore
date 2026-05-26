@@ -54,6 +54,26 @@ func _ready():
     if asset_path != "":
         load_and_render_splats()
 
+func _process(_delta: float) -> void:
+    var camera := get_viewport().get_camera_3d()
+    if camera == null or material_override == null:
+        return
+        
+    var dist := global_position.distance_to(camera.global_position)
+    
+    # Calcul dynamique du ratio LOD stochastique selon la distance
+    var lod := 1.0
+    if dist > 25.0:
+        lod = 0.15   # Rend seulement 15% des splats au loin
+    elif dist > 15.0:
+        lod = 0.40   # Rend 40% à moyenne distance
+    elif dist > 8.0:
+        lod = 0.75   # Rend 75% de près
+        
+    var mat := material_override as ShaderMaterial
+    if mat:
+        mat.set_shader_parameter("lod_ratio", lod)
+
 ## Configure le rendu avec une palette de couleurs (Digital Painting style)
 func setup_palette(palette: FoveaColorPalette) -> void:
     if palette == null or palette.colors.is_empty():
