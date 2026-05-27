@@ -33,6 +33,9 @@ uniform float fovea_outer_radius = 0.6;    // Zone 50% (Au-delà = 25%)
 // Nombre de segments pour l'ellipse (doit correspondre à la génération CPU)
 uniform int splat_subdivisions = 16;
 
+// Niveau de détail stochastique (1.0 = complet, 0.0 = masqué)
+uniform float lod_ratio = 1.0;
+
 // Données transmises du Vertex au Fragment
 varying flat vec3 v_color;
 varying flat float v_opacity;
@@ -157,7 +160,9 @@ void vertex() {
     float dist_to_gaze = distance(aspect_uv, aspect_gaze);
     float random_val = fract(sin(float(INSTANCE_ID) * 12.9898) * 43758.5453);
     
-    if (dist_to_gaze > fovea_outer_radius && random_val > 0.25) {
+    if (random_val > lod_ratio) {
+        POSITION = vec4(0.0);
+    } else if (dist_to_gaze > fovea_outer_radius && random_val > 0.25) {
         POSITION = vec4(0.0);
     } else if (dist_to_gaze > fovea_inner_radius && random_val > 0.50) {
         POSITION = vec4(0.0);

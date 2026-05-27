@@ -4,6 +4,9 @@ extends Node
 
 class_name FoveaCoreManagerScript
 
+const _ProxyFaceRendererScript = preload("res://addons/foveacore/scripts/advanced/proxy_face_renderer.gd")
+
+
 ## Configuration VR
 @export_group("VR Settings")
 @export var vr_enabled := true
@@ -279,7 +282,7 @@ func register_splattable(node: FoveaSplattable):
 	if _visibility_manager:
 		_visibility_manager.register_splattable(node)
 	# Attach LOD proxy for distant rendering
-	var proxy = ProxyFaceRenderer.new()
+	var proxy = _ProxyFaceRendererScript.new()
 	proxy.name = "ProxyFace_" + node.name
 	proxy.target_splattable = node
 	proxy.switch_distance = 30.0
@@ -292,7 +295,7 @@ func unregister_splattable(node: FoveaSplattable):
 		_visibility_manager.unregister_splattable(node)
 	# Remove LOD proxy
 	for child in node.get_children():
-		if child is ProxyFaceRenderer:
+		if child.get_script() == _ProxyFaceRendererScript:
 			child.queue_free()
 
 func set_style(style: FoveaStyle):

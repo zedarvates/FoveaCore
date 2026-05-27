@@ -29,7 +29,12 @@ func _enter_tree():
 	add_custom_type("WorldMirrorCameraImporter", "Node", preload("res://addons/foveacore/scripts/reconstruction/worldmirror_camera_importer.gd"), null)
 	add_custom_type("WorldMirrorDepthLoader", "Node", preload("res://addons/foveacore/scripts/reconstruction/worldmirror_depth_loader.gd"), null)
 	
-	print("FoveaCore plugin loaded with Advanced Features (Eye-tracking, Physics, Neural, PLY Loader)")
+	# Sprint 4 — Clay Deformer & Physics Tools
+	add_custom_type("FoveaClayDeformer", "Node3D",    preload("res://addons/foveacore/scripts/advanced/fovea_clay_deformer.gd"),  null)
+	add_custom_type("FoveaVoxelizer",    "RefCounted", preload("res://addons/foveacore/scripts/advanced/fovea_voxelizer.gd"),     null)
+	add_custom_type("FoveaSplatCleaner", "RefCounted", preload("res://addons/foveacore/scripts/advanced/fovea_splat_cleaner.gd"), null)
+	
+	print("FoveaCore plugin loaded — Eye-tracking, Physics, Neural, PLY Loader, Clay Deformer (Sprint 4)")
 	
 	# Add the StudioTo3D Panel
 	var panel = preload("res://addons/foveacore/scripts/reconstruction/studio_to_3d_panel.tscn").instantiate()
@@ -50,4 +55,7 @@ func _exit_tree():
 	remove_custom_type("StudioRoiPainter")
 	remove_custom_type("WorldMirrorCameraImporter")
 	remove_custom_type("WorldMirrorDepthLoader")
+	remove_custom_type("FoveaClayDeformer")
+	remove_custom_type("FoveaVoxelizer")
+	remove_custom_type("FoveaSplatCleaner")
 	print("FoveaCore unloaded")

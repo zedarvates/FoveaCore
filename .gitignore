@@ -2,3 +2,15 @@
 .godot/
 /android/
 __pycache__/
+
+# Windows temp files (file locks, editor backups) — audit ASSET fix
+~*.dll
+~*.TMP
+*.TMP
+
+# Rust build artifacts
+addons/foveacore/rust/target/
+addons/foveacore/shaders/target/
+
+# Audit exports
+audit_foveacore.diff
