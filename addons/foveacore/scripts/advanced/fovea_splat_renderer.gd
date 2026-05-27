@@ -14,6 +14,14 @@ var culler_pipeline: GPUCullerPipeline
 var splat_mesh: ArrayMesh
 var triangle_mesh_generator
 
+## Référence optionnelle au FoveaClayDeformer attaché à ce renderer.
+## Peut être assigné manuellement ou automatiquement par le deformer lui-même.
+var deformer: FoveaClayDeformer = null
+
+## Cache des transforms originaux (état de repos), alimenté après chaque load.
+## Partagé avec le deformer pour un accès non-destructif.
+var _original_transforms: Array[Transform3D] = []
+
 func _ready():
     culler_pipeline = GPUCullerPipeline.new()
     
@@ -58,9 +66,9 @@ func _process(_delta: float) -> void:
     var camera := get_viewport().get_camera_3d()
     if camera == null or material_override == null:
         return
-        
+
     var dist := global_position.distance_to(camera.global_position)
-    
+
     # Calcul dynamique du ratio LOD stochastique selon la distance
     var lod := 1.0
     if dist > 25.0:
@@ -69,10 +77,14 @@ func _process(_delta: float) -> void:
         lod = 0.40   # Rend 40% à moyenne distance
     elif dist > 8.0:
         lod = 0.75   # Rend 75% de près
-        
+
     var mat := material_override as ShaderMaterial
     if mat:
         mat.set_shader_parameter("lod_ratio", lod)
+
+    # Passe de déformation Clay (non-destructif : opère sur les originaux)
+    if deformer and deformer.enabled and multimesh and multimesh.instance_count > 0:
+        deformer.deform_multimesh(multimesh)
 
 ## Configure le rendu avec une palette de couleurs (Digital Painting style)
 func setup_palette(palette: FoveaColorPalette) -> void:
@@ -196,6 +208,13 @@ func load_and_render_splats():
         ))
     
     print("FoveaEngine: %d splats injectés dans le MultiMesh (mode TRIANGLE)." % surviving_splats_count)
+
+    # Alimenter le cache original_transforms pour le clay deformer
+    _original_transforms.resize(surviving_splats_count)
+    for i in surviving_splats_count:
+        _original_transforms[i] = multimesh.get_instance_transform(i)
+    if deformer:
+        deformer.set_original_transforms(multimesh, _original_transforms)
     
     # Libération du buffer GPU
     culler_pipeline.rd.free_rid(output_buffer_rid)
