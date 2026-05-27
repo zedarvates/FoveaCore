@@ -279,7 +279,7 @@ func register_splattable(node: FoveaSplattable):
 	if _visibility_manager:
 		_visibility_manager.register_splattable(node)
 	# Attach LOD proxy for distant rendering
-	var proxy = ProxyFaceRenderer.new()
+	var proxy = FoveaProxyFaceRenderer.new()
 	proxy.name = "ProxyFace_" + node.name
 	proxy.target_splattable = node
 	proxy.switch_distance = 30.0
@@ -292,7 +292,7 @@ func unregister_splattable(node: FoveaSplattable):
 		_visibility_manager.unregister_splattable(node)
 	# Remove LOD proxy
 	for child in node.get_children():
-		if child is ProxyFaceRenderer:
+		if child is FoveaProxyFaceRenderer:
 			child.queue_free()
 
 func set_style(style: FoveaStyle):
