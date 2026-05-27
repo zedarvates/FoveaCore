@@ -14,6 +14,14 @@ var culler_pipeline: GPUCullerPipeline
 var splat_mesh: ArrayMesh
 var triangle_mesh_generator
 
+## Référence optionnelle au FoveaClayDeformer attaché à ce renderer.
+## Peut être assigné manuellement ou automatiquement par le deformer lui-même.
+var deformer: FoveaClayDeformer = null
+
+## Cache des transforms originaux (état de repos), alimenté après chaque load.
+## Partagé avec le deformer pour un accès non-destructif.
+var _original_transforms: Array[Transform3D] = []
+
 func _ready():
     culler_pipeline = GPUCullerPipeline.new()
     
@@ -53,6 +61,30 @@ func _ready():
 
     if asset_path != "":
         load_and_render_splats()
+
+func _process(_delta: float) -> void:
+    var camera := get_viewport().get_camera_3d()
+    if camera == null or material_override == null:
+        return
+
+    var dist := global_position.distance_to(camera.global_position)
+
+    # Calcul dynamique du ratio LOD stochastique selon la distance
+    var lod := 1.0
+    if dist > 25.0:
+        lod = 0.15   # Rend seulement 15% des splats au loin
+    elif dist > 15.0:
+        lod = 0.40   # Rend 40% à moyenne distance
+    elif dist > 8.0:
+        lod = 0.75   # Rend 75% de près
+
+    var mat := material_override as ShaderMaterial
+    if mat:
+        mat.set_shader_parameter("lod_ratio", lod)
+
+    # Passe de déformation Clay (non-destructif : opère sur les originaux)
+    if deformer and deformer.enabled and multimesh and multimesh.instance_count > 0:
+        deformer.deform_multimesh(multimesh)
 
 ## Configure le rendu avec une palette de couleurs (Digital Painting style)
 func setup_palette(palette: FoveaColorPalette) -> void:
@@ -143,40 +175,67 @@ func load_and_render_splats():
     var culled_bytes = culler_pipeline.rd.buffer_get_data(output_buffer_rid)
     
     # Chaque splat compressé fait 16 octets (SPLAT_BYTE_SIZE dans le culler)
-    var surviving_splats_count = culled_bytes.size() / 16 
-    
+    var surviving_splats_count = culled_bytes.size() / 16
+
     multimesh.instance_count = surviving_splats_count
-    
-    # 4. Décodage et Injection dans le MultiMesh
-    # On utilise les custom_data pour passer les paramètres au shader
+
+    # 4. Décodage et Injection dans le MultiMesh — mode BATCH (PERF-04 fix)
+    # On remplace les N appels set_instance_transform() / set_instance_custom_data()
+    # par deux écritures en bloc via PackedFloat32Array, ~10-50× plus rapide.
+    #
+    # Format transform_array : 12 floats par instance (matrice 3×4, row-major)
+    #   [m00 m01 m02 m03 | m10 m11 m12 m13 | m20 m21 m22 m23]
+    # Pour une translation pure (Basis = IDENTITY) :
+    #   [1 0 0 tx | 0 1 0 ty | 0 0 1 tz]
+    #
+    # Format custom_data_array : 4 floats par instance (RGBA Color)
+    const TRANSFORM_FLOATS_PER_INSTANCE := 12
+    const CUSTOM_FLOATS_PER_INSTANCE    := 4
+
+    var xf_array  := PackedFloat32Array()
+    var cd_array  := PackedFloat32Array()
+    xf_array.resize(surviving_splats_count * TRANSFORM_FLOATS_PER_INSTANCE)
+    cd_array.resize(surviving_splats_count * CUSTOM_FLOATS_PER_INSTANCE)
+
+    # Tableau intermédiaire pour construire _original_transforms en une passe
+    _original_transforms.resize(surviving_splats_count)
+
     for i in range(surviving_splats_count):
-        var offset = i * 16
-        # Lecture de la grille quantisée (16 bits)
-        var px = culled_bytes.decode_u16(offset) / 65535.0 * 10.0
-        var py = culled_bytes.decode_u16(offset + 2) / 65535.0 * 10.0
-        var pz = culled_bytes.decode_u16(offset + 4) / 65535.0 * 10.0
-        
-        var transform = Transform3D(Basis(), Vector3(px, py, pz))
-        multimesh.set_instance_transform(i, transform)
-        
-        # On injecte l'index de couleur et l'opacité dans custom_data
-        var color_index = culled_bytes.decode_u16(offset + 8)  # data2 low word
-        var covar_index = culled_bytes.decode_u16(offset + 10) # data2 high word
-        var opacity = culled_bytes.decode_u8(offset + 12) / 255.0
-        
-        # Stockage dans custom_data (RGBA format)
-        # R,G = position quantifiée (pour décodage shader si besoin)
-        # B = opacity
-        # A = unused
-        multimesh.set_instance_custom_data(i, Color(
-            float(color_index) / 65535.0,
-            float(covar_index) / 65535.0,
-            opacity,
-            1.0
-        ))
-    
-    print("FoveaEngine: %d splats injectés dans le MultiMesh (mode TRIANGLE)." % surviving_splats_count)
-    
+        var src := i * 16
+        # Décoder position quantisée 16-bit → float monde
+        var px := culled_bytes.decode_u16(src)     / 65535.0 * 10.0
+        var py := culled_bytes.decode_u16(src + 2) / 65535.0 * 10.0
+        var pz := culled_bytes.decode_u16(src + 4) / 65535.0 * 10.0
+
+        # Remplir transform_array (translation pure, Basis = IDENTITY)
+        var xf_off := i * TRANSFORM_FLOATS_PER_INSTANCE
+        xf_array[xf_off]      = 1.0; xf_array[xf_off + 1]  = 0.0; xf_array[xf_off + 2]  = 0.0; xf_array[xf_off + 3]  = px
+        xf_array[xf_off + 4]  = 0.0; xf_array[xf_off + 5]  = 1.0; xf_array[xf_off + 6]  = 0.0; xf_array[xf_off + 7]  = py
+        xf_array[xf_off + 8]  = 0.0; xf_array[xf_off + 9]  = 0.0; xf_array[xf_off + 10] = 1.0; xf_array[xf_off + 11] = pz
+
+        # Remplir custom_data_array
+        var color_index := culled_bytes.decode_u16(src + 8)
+        var covar_index := culled_bytes.decode_u16(src + 10)
+        var opacity     := culled_bytes.decode_u8(src + 12) / 255.0
+        var cd_off := i * CUSTOM_FLOATS_PER_INSTANCE
+        cd_array[cd_off]     = float(color_index) / 65535.0
+        cd_array[cd_off + 1] = float(covar_index) / 65535.0
+        cd_array[cd_off + 2] = opacity
+        cd_array[cd_off + 3] = 1.0
+
+        # Cache des originaux pour le clay deformer
+        _original_transforms[i] = Transform3D(Basis(), Vector3(px, py, pz))
+
+    # Écriture en bloc dans le MultiMesh (un seul aller-retour GPU)
+    multimesh.transform_array      = xf_array
+    multimesh.custom_data_array    = cd_array
+
+    print("FoveaEngine: %d splats injectés dans le MultiMesh (mode TRIANGLE, batch)." % surviving_splats_count)
+
+    # Partager le cache avec le clay deformer si présent
+    if deformer:
+        deformer.set_original_transforms(multimesh, _original_transforms)
+
     # Libération du buffer GPU
     culler_pipeline.rd.free_rid(output_buffer_rid)
 

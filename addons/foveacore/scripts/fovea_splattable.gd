@@ -10,9 +10,22 @@ const _PlyLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/
 ## Densité locale des splats (1.0 = densité globale)
 @export var splat_density := 1.0
 
-## Chemin vers un fichier .ply de Gaussian Splatting (optionnel)
-## Si renseigné, les splats sont chargés depuis ce fichier au lieu d'être générés procéduralement
+## Chemin vers un fichier de Gaussian Splatting (.ply, .fovea, .spz)
+@export_file("*.ply", "*.fovea", "*.spz") var splat_file_path: String = ""
+
+## @deprecated Utiliser splat_file_path à la place.
+## Conservé uniquement pour la compatibilité ascendante des scènes existantes.
+## Migration : remplacer ply_file_path par splat_file_path dans l'inspecteur.
+## Cette propriété sera supprimée dans une future version de FoveaCore.
 @export_file("*.ply") var ply_file_path: String = ""
+
+@export_group("Physics Collisions")
+## Activer la génération de collision physique automatique depuis les voxels
+@export var generate_collisions := false
+## Résolution de la grille de voxels en mètres (ex: 0.15 = 15cm)
+@export var voxel_size := 0.15
+## Seuil d'opacité pour considérer un voxel comme solide (0.0..1.0)
+@export_range(0.0, 1.0) var opacity_threshold := 0.1
 
 ## Override du style local (null = utiliser le style global)
 @export var style_override: FoveaStyle = null
@@ -56,12 +69,29 @@ func _exit_tree() -> void:
 
 func _ready() -> void:
 	_capture_mesh_reference()
+	
+	# Gestion de la compatibilité des fichiers de splats
+	if splat_file_path.is_empty() and not ply_file_path.is_empty():
+		splat_file_path = ply_file_path
+		
 	# Masquer le mesh si nécessaire
 	if hide_mesh_when_splatting and splatting_enabled and _mesh_instance_ref != null:
 		_mesh_instance_ref.visible = false
+		
 	# Charger le PLY si un chemin est fourni
-	if not ply_file_path.is_empty():
-		_load_splats_from_ply()
+	if not splat_file_path.is_empty():
+		if splat_file_path.ends_with(".ply"):
+			_load_splats_from_ply()
+		else:
+			print("FoveaSplattable: Rendu natif détecté pour ", splat_file_path)
+			
+		if generate_collisions:
+			if splat_file_path.ends_with(".fovea"):
+				# call_deferred évite de bloquer le main thread au démarrage de scène
+				# La collision est générée sur la prochaine frame (PERF-01 fix)
+				call_deferred("_generate_collision_shape")
+			else:
+				push_warning("FoveaSplattable: La génération de collision physique nécessite un fichier .fovea (pas .ply). Convertir d'abord avec FoveaAssetLoader.convert_ply_to_fovea().")
 
 
 ## Cherche un MeshInstance3D dans le parent ou les enfants directs.
@@ -90,14 +120,34 @@ func _capture_mesh_reference() -> void:
 
 ## Charger les splats depuis le fichier PLY configuré
 func _load_splats_from_ply() -> void:
-	print("FoveaSplattable: Chargement PLY depuis '", ply_file_path, "'...")
-	var gaussians = _PlyLoaderScript.load_gaussians_from_ply(ply_file_path)
+	print("FoveaSplattable: Chargement PLY depuis '", splat_file_path, "'...")
+	var gaussians = _PlyLoaderScript.load_gaussians_from_ply(splat_file_path)
 	if gaussians == null or gaussians.is_empty():
 		push_error("FoveaSplattable: PLYLoader returned empty")
 		return
 	loaded_splats = gaussians
 	has_ply_splats = true
 	print("FoveaSplattable: %d splats loaded from PLY" % loaded_splats.size())
+
+
+## Génère et attache une collision physique ConcavePolygonShape3D
+func _generate_collision_shape() -> void:
+	print("FoveaSplattable: Génération de la collision physique via FoveaVoxelizer...")
+	var collision_shape = FoveaVoxelizer.generate_collision_shape(splat_file_path, voxel_size, opacity_threshold)
+	if collision_shape == null:
+		push_warning("FoveaSplattable: Impossible de générer la collision pour " + splat_file_path)
+		return
+		
+	var static_body = StaticBody3D.new()
+	static_body.name = "SplatCollisionBody"
+	
+	var collision_node = CollisionShape3D.new()
+	collision_node.name = "SplatCollisionShape"
+	collision_node.shape = collision_shape
+	
+	static_body.add_child(collision_node)
+	add_child(static_body)
+	print("FoveaSplattable: Collision physique attachée avec succès au nœud.")
 
 
 func set_density(density: float) -> void:

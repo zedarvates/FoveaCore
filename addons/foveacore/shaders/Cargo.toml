@@ -5,6 +5,7 @@ edition = "2021"
 
 [lib]
 crate-type = ["cdylib"]
+path = "lib.rs"
 
 [dependencies]
 godot = { git = "https://github.com/godot-rust/gdext", tag = "v0.2.1" }

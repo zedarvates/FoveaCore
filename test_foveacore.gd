@@ -135,7 +135,7 @@ func _set_style(style_name: String) -> void:
 				style.light_coherence = 0.5
 				style.color_saturation = 0.7
 				style.micro_shadow = 0.4
-			_default:
+			_:
 				# Keep default values
 				pass
 		style.mode = "procedural"
