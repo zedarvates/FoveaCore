@@ -10,6 +10,18 @@ extends MultiMeshInstance3D
 @export var use_triangle_mesh: bool = true  # Utiliser le maillage triangle optimisé
 @export var splat_subdivisions: int = 16    # Nombre de segments pour l'ellipse
 
+@export_group("Cleaning (FoveaSplatCleaner)")
+## Activer le filtrage des floaters et NaN après le GPU culling (P3 intégration cleaner)
+@export var enable_cleaning: bool = true
+## Radius de voisinage pour la détection des floaters (cellules voxel)
+@export_range(1, 4) var floater_neighbor_radius: int = 1
+## Nombre minimum de voisins pour qu'un splat soit conservé
+@export_range(1, 10) var floater_min_neighbors: int = 2
+## Décimer le nuage de points après le nettoyage
+@export var enable_decimation: bool = false
+## Cible après décimation (0 = désactivé)
+@export var decimation_target: int = 50000
+
 var culler_pipeline: GPUCullerPipeline
 var splat_mesh: ArrayMesh
 var triangle_mesh_generator
@@ -175,7 +187,25 @@ func load_and_render_splats():
     var culled_bytes = culler_pipeline.rd.buffer_get_data(output_buffer_rid)
     
     # Chaque splat compressé fait 16 octets (SPLAT_BYTE_SIZE dans le culler)
-    var surviving_splats_count = culled_bytes.size() / 16
+    var surviving_splats_count := culled_bytes.size() / 16
+    print("FoveaEngine: %d splats GPU après culling." % surviving_splats_count)
+
+    # 4b. Passe de nettoyage optionnelle (FoveaSplatCleaner — P3)
+    # Opère sur les bytes bruts AVANT décodage : pas de coût supplémentaire d'allocation.
+    if enable_cleaning and surviving_splats_count > 0:
+        var before_clean := surviving_splats_count
+        # Filtre NaN/outliers (splats quantisés à (65535,65535,65535))
+        culled_bytes = FoveaSplatCleaner.filter_nan_inf(culled_bytes)
+        # Filtre des floaters isolés dans l'espace voxel
+        culled_bytes = FoveaSplatCleaner.filter_floaters(
+            culled_bytes, floater_neighbor_radius, floater_min_neighbors)
+        # Décimation optionnelle
+        if enable_decimation and decimation_target > 0:
+            culled_bytes = FoveaSplatCleaner.decimate(culled_bytes, decimation_target)
+        surviving_splats_count = culled_bytes.size() / 16
+        if before_clean != surviving_splats_count:
+            print("FoveaEngine: SplatCleaner: %d → %d splats (-%d)." % [
+                before_clean, surviving_splats_count, before_clean - surviving_splats_count])
 
     multimesh.instance_count = surviving_splats_count
 
