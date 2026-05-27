@@ -132,18 +132,15 @@ var _renderer: FoveaSplatRenderer = null
 # ─────────────────────────────────────────────
 
 func _ready() -> void:
-	# Tentative d'auto-connexion au renderer parent
+	# Tentative d'auto-connexion au renderer parent.
+	# Le FoveaSplatRenderer est le driver exclusif de deform_multimesh() :
+	# son _process() appelle deformer.deform_multimesh() une seule fois par frame.
+	# NE PAS ajouter de _process() ici pour éviter un double appel (BUG-01).
 	var parent := get_parent()
 	if parent is FoveaSplatRenderer:
 		_renderer = parent
 		_renderer.deformer = self
 		print("FoveaClayDeformer: Auto-connecté à FoveaSplatRenderer '%s'" % parent.name)
-
-func _process(_delta: float) -> void:
-	if not enabled:
-		return
-	if _renderer and _renderer.multimesh and _renderer.multimesh.instance_count > 0:
-		deform_multimesh(_renderer.multimesh)
 
 # ─────────────────────────────────────────────
 #  Public API
