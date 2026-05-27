@@ -4,7 +4,7 @@
 # ============================================================================
 
 extends Node3D
-class_name ProxyFaceRenderer
+class_name FoveaProxyFaceRenderer
 
 @export var target_splattable: Node3D # Le FoveaSplattable (MultiMesh) à remplacer
 @export var switch_distance: float = 30.0 # Distance d'activation en mètres

@@ -11,7 +11,7 @@ const _PlyLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/
 @export var splat_density := 1.0
 
 ## Chemin vers un fichier de Gaussian Splatting (.ply, .fovea, .spz)
-@export_file("*.ply,*.fovea,*.spz") var splat_file_path: String = ""
+@export_file("*.ply", "*.fovea", "*.spz") var splat_file_path: String = ""
 
 ## Fallback de compatibilité ascendante
 @export_file("*.ply") var ply_file_path: String = ""
