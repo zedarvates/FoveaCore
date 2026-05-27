@@ -13,7 +13,10 @@ const _PlyLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/
 ## Chemin vers un fichier de Gaussian Splatting (.ply, .fovea, .spz)
 @export_file("*.ply", "*.fovea", "*.spz") var splat_file_path: String = ""
 
-## Fallback de compatibilité ascendante
+## @deprecated Utiliser splat_file_path à la place.
+## Conservé uniquement pour la compatibilité ascendante des scènes existantes.
+## Migration : remplacer ply_file_path par splat_file_path dans l'inspecteur.
+## Cette propriété sera supprimée dans une future version de FoveaCore.
 @export_file("*.ply") var ply_file_path: String = ""
 
 @export_group("Physics Collisions")
@@ -83,7 +86,12 @@ func _ready() -> void:
 			print("FoveaSplattable: Rendu natif détecté pour ", splat_file_path)
 			
 		if generate_collisions:
-			_generate_collision_shape()
+			if splat_file_path.ends_with(".fovea"):
+				# call_deferred évite de bloquer le main thread au démarrage de scène
+				# La collision est générée sur la prochaine frame (PERF-01 fix)
+				call_deferred("_generate_collision_shape")
+			else:
+				push_warning("FoveaSplattable: La génération de collision physique nécessite un fichier .fovea (pas .ply). Convertir d'abord avec FoveaAssetLoader.convert_ply_to_fovea().")
 
 
 ## Cherche un MeshInstance3D dans le parent ou les enfants directs.

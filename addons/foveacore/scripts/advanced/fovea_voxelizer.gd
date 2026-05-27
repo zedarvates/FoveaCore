@@ -3,8 +3,14 @@ extends RefCounted
 
 ## FoveaEngine : Voxeliseur et Générateur de Collision (Sprint 1)
 ## Construit une grille physique de collision à partir de la densité et de l'opacité des splats.
+## Seuls les fichiers .fovea (format binaire natif FoveaCore) sont acceptés.
 
 const SPLAT_BYTE_SIZE = 16
+
+## Magic bytes attendus en tête de tout fichier .fovea valide
+const FOVEA_MAGIC := "FOVEA_3D"
+## Taille minimale = header (36 octets) + au moins 1 splat (16 octets)
+const FOVEA_MIN_SIZE := 52
 
 ## Génère un CollisionShape3D (ConcavePolygonShape3D) pour les splats du fichier
 static func generate_collision_shape(fovea_path: String, voxel_size_meters: float = 0.15, opacity_threshold: float = 0.1) -> Shape3D:
@@ -17,10 +23,34 @@ static func generate_collision_shape(fovea_path: String, voxel_size_meters: floa
 	var shape = mesh.create_trimesh_shape()
 	return shape
 
-## Génère un maillage (ArrayMesh) représentant les voxels occupés
+## Génère un maillage (ArrayMesh) représentant les voxels occupés.
+## IMPORTANT: seuls les fichiers .fovea sont acceptés. Passer un .ply produirait
+## une géométrie de collision corrompue sans erreur visible (BUG-02 fix).
 static func generate_voxel_mesh(fovea_path: String, voxel_size_meters: float = 0.15, opacity_threshold: float = 0.1) -> ArrayMesh:
+	# Guard 1 : vérification de l'extension
+	if not fovea_path.ends_with(".fovea"):
+		push_error("FoveaVoxelizer: Seuls les fichiers .fovea sont supportés. Reçu: '" + fovea_path + "'")
+		return null
+
 	if not FileAccess.file_exists(fovea_path):
 		push_error("FoveaVoxelizer: Fichier introuvable: " + fovea_path)
+		return null
+
+	# Guard 2 : vérification du magic byte FOVEA_3D
+	var check_file := FileAccess.open(fovea_path, FileAccess.READ)
+	if check_file == null:
+		push_error("FoveaVoxelizer: Impossible d'ouvrir le fichier: " + fovea_path)
+		return null
+	var file_size := check_file.get_length()
+	if file_size < FOVEA_MIN_SIZE:
+		push_error("FoveaVoxelizer: Fichier trop petit pour être valide (%d octets): %s" % [file_size, fovea_path])
+		check_file.close()
+		return null
+	var magic_bytes := check_file.get_buffer(8)
+	check_file.close()
+	var magic_str := magic_bytes.get_string_from_ascii()
+	if magic_str != FOVEA_MAGIC:
+		push_error("FoveaVoxelizer: Magic byte invalide. Attendu '%s', obtenu '%s'. Fichier corrompu ou au mauvais format." % [FOVEA_MAGIC, magic_str])
 		return null
 		
 	# 1. Obtenir les métadonnées (AABB et octets)
