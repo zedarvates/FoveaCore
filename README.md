@@ -35,7 +35,9 @@ Welcome to **FoveaEngine**, a cutting-edge reconstruction and rendering pipeline
 - **GPU Background Masking**: Compute shader `mask_background_gpu.glsl` (Studio White, Chroma, Smart)
 - **Style Engine**: 6 procedural materials (stone, wood, metal, skin, fabric, glass) + FBM/Worley noise
 - **Gaussian Splatting**: PLY parsing, splat rendering, export, floaters detection
-- **Foveated Rendering**: 3-zone VR rendering (base/saturation/light/shadow per zone)
+- **Interactive Splat Deformation**: `FoveaClayDeformer` (Sprint 4) allows dynamic splat sculpting and deformation in real time.
+- **Modular Subsystems Architecture**: Decomposed the monolithic `FoveaCoreManager` into three specialized subsystems (`FoveaVRSubsystem`, `FoveaFoveatedSubsystem`, `FoveaSplatSubsystem`) for extreme modularity and optimal thread safety.
+- **In-Pipeline GPU Splat Cleaning**: Fully integrated `FoveaSplatCleaner` inside the rendering pipeline to instantly prune NaNs/Infs, filter floaters (via dynamic `SpatialHashGrid`), and perform decimation.
 - **SplatBrush**: VR sculpting tool functional
 
 ### 🚧 In Progress
