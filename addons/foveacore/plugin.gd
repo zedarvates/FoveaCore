@@ -33,7 +33,12 @@ func _enter_tree():
 	add_custom_type("FoveaClayDeformer", "Node3D",    preload("res://addons/foveacore/scripts/advanced/fovea_clay_deformer.gd"),  null)
 	add_custom_type("FoveaVoxelizer",    "RefCounted", preload("res://addons/foveacore/scripts/advanced/fovea_voxelizer.gd"),     null)
 	add_custom_type("FoveaSplatCleaner", "RefCounted", preload("res://addons/foveacore/scripts/advanced/fovea_splat_cleaner.gd"), null)
-	
+
+	# Manager Sub-Systems (refactoring God Object)
+	add_custom_type("FoveaVRSubsystem",       "Node", preload("res://addons/foveacore/scripts/fovea_vr_subsystem.gd"),       null)
+	add_custom_type("FoveaFoveatedSubsystem", "Node", preload("res://addons/foveacore/scripts/fovea_foveated_subsystem.gd"), null)
+	add_custom_type("FoveaSplatSubsystem",    "Node", preload("res://addons/foveacore/scripts/fovea_splat_subsystem.gd"),    null)
+
 	print("FoveaCore plugin loaded — Eye-tracking, Physics, Neural, PLY Loader, Clay Deformer (Sprint 4)")
 	
 	# Add the StudioTo3D Panel
@@ -58,4 +63,7 @@ func _exit_tree():
 	remove_custom_type("FoveaClayDeformer")
 	remove_custom_type("FoveaVoxelizer")
 	remove_custom_type("FoveaSplatCleaner")
+	remove_custom_type("FoveaVRSubsystem")
+	remove_custom_type("FoveaFoveatedSubsystem")
+	remove_custom_type("FoveaSplatSubsystem")
 	print("FoveaCore unloaded")
