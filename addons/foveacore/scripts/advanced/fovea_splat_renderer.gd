@@ -11,16 +11,23 @@ extends MultiMeshInstance3D
 @export var splat_subdivisions: int = 16    # Nombre de segments pour l'ellipse
 
 @export_group("Cleaning (FoveaSplatCleaner)")
-## Activer le filtrage des floaters et NaN après le GPU culling (P3 intégration cleaner)
+## Activer le filtrage des floaters et NaN apres le GPU culling
 @export var enable_cleaning: bool = true
-## Radius de voisinage pour la détection des floaters (cellules voxel)
+## Radius de voisinage pour la detection des floaters (cellules voxel)
 @export_range(1, 4) var floater_neighbor_radius: int = 1
-## Nombre minimum de voisins pour qu'un splat soit conservé
+## Nombre minimum de voisins pour qu'un splat soit conserve
 @export_range(1, 10) var floater_min_neighbors: int = 2
-## Décimer le nuage de points après le nettoyage
+## Decimer le nuage de points apres le nettoyage
 @export var enable_decimation: bool = false
-## Cible après décimation (0 = désactivé)
+## Cible apres decimation (0 = desactive)
 @export var decimation_target: int = 50000
+
+@export_group("Temporal Sorting (Phase 3)")
+## Facteur d'entrelacement du tri GPU.
+## 1 = tri complet chaque frame (qualite max, GPU stall max).
+## 2 = la moitie des splats est retrie chaque frame (bon compromis).
+## 4 = un quart par frame — recommande pour VR 90Hz (temps GPU strict).
+@export_enum("Full:1", "Half:2", "Quarter:4") var sort_interleave_factor: int = 4
 
 var culler_pipeline: GPUCullerPipeline
 var splat_mesh: ArrayMesh
@@ -36,6 +43,7 @@ var _original_transforms: Array[Transform3D] = []
 
 func _ready():
     culler_pipeline = GPUCullerPipeline.new()
+    culler_pipeline.interleave_factor = sort_interleave_factor
     
     # Charger le générateur de maillage triangle
     triangle_mesh_generator = load("res://addons/foveacore/scripts/advanced/triangle_splat_mesh.gd")

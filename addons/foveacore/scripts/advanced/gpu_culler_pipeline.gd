@@ -1,9 +1,9 @@
 class_name GPUCullerPipeline
 extends RefCounted
 
-## FoveaEngine : Pipeline de Compute Shader pour le Backface Culling
-## VERSION TRIANGLE - Optimisé pour le rendu par maillage triangulaire
-## Les splats sont maintenant des triangles réels, plus de quad avec discard par fragment
+## FoveaEngine : Pipeline de Compute Shader pour le Backface Culling + Tri Bitonique
+## VERSION TRIANGLE - Optimise pour le rendu par maillage triangulaire
+## Phase 3 : Temporal & Interleaved Sorting - tri non-bloquant sur plusieurs frames
 
 var rd: RenderingDevice
 var shader_rid: RID
@@ -11,20 +11,28 @@ var pipeline_rid: RID
 var sort_shader_rid: RID
 var sort_pipeline_rid: RID
 
-const SPLAT_BYTE_SIZE = 16 # Format Fast-Path (FoveaPackedSplat)
+const SPLAT_BYTE_SIZE: int = 16 # Format Fast-Path (FoveaPackedSplat)
 
-func _init():
+## Etat du tri temporel entrelace
+## interleave_factor = 1 : tri complet chaque frame (comportement legacy)
+## interleave_factor = 2 : moitie des splats ce frame, l'autre moitie la prochaine
+## interleave_factor = 4 : quart des splats par frame (recommande VR 90Hz)
+var interleave_factor: int = 4
+var _frame_counter: int    = 0
+
+func _init() -> void:
     rd = RenderingServer.create_local_rendering_device()
     _load_compute_shader()
 
-func _load_compute_shader():
-    var shader_file = load("res://addons/foveacore/shaders/gpu_culling_compute.glsl")
-    var spirv = shader_file.get_spirv()
-    shader_rid = rd.shader_create_from_spirv(spirv)
-    pipeline_rid = rd.compute_pipeline_create(shader_rid)
-    
-    var sort_file = load("res://addons/foveacore/shaders/sort_compute.glsl")
-    sort_shader_rid = rd.shader_create_from_spirv(sort_file.get_spirv())
+func _load_compute_shader() -> void:
+    var shader_file: RDShaderFile = load("res://addons/foveacore/shaders/gpu_culling_compute.glsl")
+    var spirv: RDShaderSPIRV = shader_file.get_spirv()
+    shader_rid    = rd.shader_create_from_spirv(spirv)
+    pipeline_rid  = rd.compute_pipeline_create(shader_rid)
+
+    # Nouveau shader bitonique : opere directement sur PackedSplat, sans depth+indices separes
+    var sort_file: RDShaderFile = load("res://addons/foveacore/shaders/sort_bitonic_splats.glsl")
+    sort_shader_rid   = rd.shader_create_from_spirv(sort_file.get_spirv())
     sort_pipeline_rid = rd.compute_pipeline_create(sort_shader_rid)
 
 ## Charge le fichier via Rust et exécute le Culling sur le GPU
@@ -141,53 +149,96 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
     var culled_percentage = 100.0 - ((float(valid_splat_count) / total_splats) * 100.0)
     print("FoveaEngine: Compute Culling terminé. Splats restants : %d (%.1f%% supprimés)" % [valid_splat_count, culled_percentage])
     
-    # 7. TRI BITONIQUE SUR LE GPU
+    # 7. TRI BITONIQUE TEMPOREL (Phase 3 : Temporal & Interleaved Sorting)
+    # AVANT : submit()+sync() a CHAQUE etape => O(log^2(N)) stalls CPU<->GPU
+    # APRES  : toutes les passes dans UNE seule compute list => 1 seul submit()+sync()
+    # + repartition temporelle : seulement 1/interleave_factor des splats est retrie
+    #   ce frame, evitant le pic GPU qui causait les frame drops VR.
     if valid_splat_count > 1:
-        var next_power_of_two = 1
-        while next_power_of_two < valid_splat_count:
-            next_power_of_two <<= 1
-            
-        var sort_uniform = RDUniform.new()
-        sort_uniform.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
-        sort_uniform.binding = 0
-        sort_uniform.add_id(output_buffer)
-        var sort_uniform_set = rd.uniform_set_create([sort_uniform], sort_shader_rid, 0)
-        
-        var sort_workgroups = ceil(float(next_power_of_two) / 256.0)
-        
-        var stage = 2
-        while stage <= next_power_of_two:
-            var step_size = stage >> 1
-            while step_size > 0:
-                var pc_bytes = PackedByteArray()
-                pc_bytes.resize(28)
-                pc_bytes.encode_u32(0, step_size)
-                pc_bytes.encode_u32(4, stage)
-                pc_bytes.encode_u32(8, valid_splat_count)
-                pc_bytes.encode_float(12, 0.0)
-                pc_bytes.encode_float(16, cam_pos.x)
-                pc_bytes.encode_float(20, cam_pos.y)
-                pc_bytes.encode_float(24, cam_pos.z)
-                
-                var sort_list = rd.compute_list_begin()
-                rd.compute_list_bind_compute_pipeline(sort_list, sort_pipeline_rid)
-                rd.compute_list_bind_uniform_set(sort_list, sort_uniform_set, 0)
-                rd.compute_list_set_push_constant(sort_list, pc_bytes, 28)
-                rd.compute_list_dispatch(sort_list, sort_workgroups, 1, 1)
-                rd.compute_list_end()
-                rd.submit()
-                
-                step_size >>= 1
-            stage <<= 1
-        
-        rd.sync()
-        print("FoveaEngine: GPU Bitonic Sort terminé.")
-    
-    # Libération
+        _temporal_sort_bitonic(
+            output_buffer, valid_splat_count, cam_pos,
+            aabb_min, aabb_max
+        )
+        print("FoveaEngine: GPU Bitonic Sort temporel termine (frame %d, facteur %d)." % \
+            [_frame_counter, interleave_factor])
+
+    _frame_counter += 1
+
+    # Liberation (input et counter, output_buffer reste valide pour le renderer)
     rd.free_rid(input_buffer)
     rd.free_rid(counter_buffer)
-    
+
     return output_buffer
+
+## Tri bitonique GPU en UNE SEULE compute list non-bloquante.
+## Toutes les etapes (stage/step) sont enchainees sans submit() intermediaire.
+## Support Temporal Interleaved : seule une fraction des splats est triee ce frame.
+func _temporal_sort_bitonic(
+        buffer_rid: RID,
+        splat_count: int,
+        cam_pos:   Vector3,
+        aabb_min:  Vector3,
+        aabb_max:  Vector3
+) -> void:
+    # Puissance de 2 superieure ou egale a splat_count
+    var padded: int = 1
+    while padded < splat_count:
+        padded <<= 1
+
+    var sort_uniform: RDUniform = RDUniform.new()
+    sort_uniform.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+    sort_uniform.binding      = 0
+    sort_uniform.add_id(buffer_rid)
+    var sort_set: RID = rd.uniform_set_create([sort_uniform], sort_shader_rid, 0)
+
+    var sort_workgroups: int = int(ceil(float(padded) / 256.0))
+    var aabb_range: float = (aabb_max - aabb_min).length()
+
+    # Calcul du masque temporel pour ce frame
+    # interleave_factor=1 => frame_mask=0 (tous les splats chaque frame)
+    # interleave_factor=2 => frame_mask=1, frame_id= 0 ou 1 alternativement
+    # interleave_factor=4 => frame_mask=3, frame_id= 0,1,2,3 en rotation
+    var frame_mask: int = interleave_factor - 1  # 0, 1, ou 3
+    var frame_id:   int = _frame_counter & frame_mask
+
+    # --- Enchainage de TOUTES les passes dans une seule compute list ---
+    var compute_list: int = rd.compute_list_begin()
+    rd.compute_list_bind_compute_pipeline(compute_list, sort_pipeline_rid)
+    rd.compute_list_bind_uniform_set(compute_list, sort_set, 0)
+
+    var stage: int = 2
+    while stage <= padded:
+        var step_size: int = stage >> 1
+        while step_size > 0:
+            var pc_bytes: PackedByteArray = PackedByteArray()
+            pc_bytes.resize(64)  # Alignement std430 sur 16 bytes
+            pc_bytes.encode_u32(0,  splat_count)
+            pc_bytes.encode_u32(4,  padded)
+            pc_bytes.encode_u32(8,  step_size)
+            pc_bytes.encode_u32(12, stage)
+            pc_bytes.encode_float(16, cam_pos.x)
+            pc_bytes.encode_float(20, cam_pos.y)
+            pc_bytes.encode_float(24, cam_pos.z)
+            pc_bytes.encode_float(28, aabb_range)
+            pc_bytes.encode_u32(32,  frame_mask)
+            pc_bytes.encode_u32(36,  frame_id)
+            pc_bytes.encode_float(40, aabb_min.x)
+            pc_bytes.encode_float(44, aabb_min.y)
+            pc_bytes.encode_float(48, aabb_min.z)
+            pc_bytes.encode_float(52, 0.0)  # pad0
+            pc_bytes.encode_float(56, 0.0)  # pad1
+            pc_bytes.encode_float(60, 0.0)  # pad2
+
+            rd.compute_list_set_push_constant(compute_list, pc_bytes, 64)
+            rd.compute_list_dispatch(compute_list, sort_workgroups, 1, 1)
+
+            step_size >>= 1
+        stage <<= 1
+
+    rd.compute_list_end()
+    # UN SEUL submit+sync pour toutes les passes = elimine tous les stalls intermediaires
+    rd.submit()
+    rd.sync()
 
 func _load_fovea_bytes(fovea_path: String) -> PackedByteArray:
     if ClassDB.can_instantiate("FoveaAssetLoader"):

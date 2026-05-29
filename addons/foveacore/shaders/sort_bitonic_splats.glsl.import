@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://fovea_sort_bitonic_splats"
+path="res://.godot/imported/sort_bitonic_splats.glsl-fovea_temporal_sort.res"
+
+[deps]
+
+source_file="res://addons/foveacore/shaders/sort_bitonic_splats.glsl"
+dest_files=["res://.godot/imported/sort_bitonic_splats.glsl-fovea_temporal_sort.res"]
+
+[params]
+
