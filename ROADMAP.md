@@ -18,7 +18,7 @@ This document outlines the roadmap to transform FoveaCore into a world-class hyb
   - [x] **Installation Script**: Setup script + CUDA 12.4 dependency checker
   - [x] **UI Mode Selector**: COLMAP vs WorldMirror 2.0 radio in panel
 - [ ] **Real-time Mask Preview**: Instant feedback of cutout settings.
-- [ ] **Reset & Session Management**: Facilitate iterative testing.
+- [x] **Reset & Session Management**: Facilitate iterative testing.
 
 
 ## 🟠 Phase 2: Performance & Native Power (The RUST 🦀 Leap)
