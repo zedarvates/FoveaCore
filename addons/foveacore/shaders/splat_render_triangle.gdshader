@@ -171,32 +171,50 @@ void vertex() {
             POSITION = vec4(0.0);
         } else {
             POSITION = clip_pos;
-            v_uv = local_pos * 0.5 + 0.5;  // UV pour le fragment shader
-            v_local_pos = vec3(rotated / pixel_extent, 0.0);  // Normalisé
+            v_uv = local_pos * 0.5 + 0.5;  // UV pour lookup palette
+            // v_local_pos stocke la position NON-normalisee dans l'espace ecran (pixels)
+            // pour que le fragment evalue correctement le conic : d^T * Sigma^-1 * d
+            // rotated est en pixels (decalage depuis le centre du splat)
+            v_local_pos = vec3(rotated, 0.0);
         }
     }
 }
 
 void fragment() {
-    // Calcul simplifié: on utilise la distance au centre pour l'alpha
-    // L'ellipse est déjà formée par la géométrie, donc pas besoin de exp()
-    // On utilise un falloff doux pour les bords
-    
-    float dist_sq = dot(v_local_pos.xy, v_local_pos.xy);
-    
-    // Si on est en dehors du cercle unité (marge de sécurité), on discard
-    if (dist_sq > 1.05) {
+    // ============================================================================
+    // Alpha Gaussien reel : exp(-0.5 * d^T * Sigma^-1 * d)
+    // v_conic = (cov2d.z, -cov2d.y, cov2d.x) * inv_det  (conic inverse 2x2 symetrique)
+    //   -> Sigma^-1 = | v_conic.x  v_conic.y |
+    //                  | v_conic.y  v_conic.z |
+    //
+    // v_local_pos.xy est la position dans l'ellipse normalisee (apres rotation+scale)
+    // cela signifie que d est deja dans l'espace de l'ellipse :
+    // on utilise directement les coordonnees locales non-normalisees
+    // stockees avant normalisation dans le vertex shader.
+    // ============================================================================
+
+    vec2 d = v_local_pos.xy;
+
+    // Quadratic power : -0.5 * (a*dx^2 + 2b*dx*dy + c*dy^2)
+    float power = -0.5 * (v_conic.x * d.x * d.x
+                        + 2.0 * v_conic.y * d.x * d.y
+                        + v_conic.z * d.y * d.y);
+
+    // Un power positif signifie que le conic est invalide (degenere) -> discard
+    if (power > 0.0) {
         discard;
     }
-    
-    // Falloff doux (évite les bords durs)
-    float alpha = smoothstep(1.0, 0.85, dist_sq) * v_opacity;
-    
-    if (alpha < 0.01) {
+
+    // Alpha Gaussien : T = exp(power), module par l'opacite sigmoide du splat
+    float gaussian_alpha = exp(power);
+    float alpha = min(0.99, v_opacity * gaussian_alpha);
+
+    // Seuil de visibilite : en dessous de ~0.4% on evite l'overdraw inutile
+    if (alpha < 0.004) {
         discard;
     }
-    
-    ALBEDO = v_color;
-    ALPHA = alpha;
-    EMISSION = v_color * 0.05;
+
+    ALBEDO    = v_color;
+    ALPHA     = alpha;
+    EMISSION  = v_color * 0.05;
 }

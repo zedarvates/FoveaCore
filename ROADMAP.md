@@ -32,7 +32,7 @@ This document outlines the roadmap to transform FoveaCore into a world-class hyb
 ## 🔵 Phase 3: Visual Fidelity & Stylization
 *Objective: Create a unique "Digital Painting" aesthetic.*
 
-- [ ] **Anisotropic Splats**: Move from circles to ellipses for photographic fidelity.
+- [x] **Anisotropic Splats**: True ellipses via covariance codebook texture + Gaussian exp() alpha in fragment shader (real 3DGS math, graceful isotropic fallback).
 - [x] **Parallax Proxy Rendering**: (STAR prototype implemented) Depth simulation on simplified surfaces.
 - [ ] **Vectorized Splat Dispatcher**: Batch processing (SIMD) for maximum GPU saturation.
 - [ ] **Spatial Chunking & Streaming**: Divide models into spatial chunks for progressive loading (Priority to "first line" in front of camera).
