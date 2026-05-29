@@ -17,7 +17,7 @@ This document outlines the roadmap to transform FoveaCore into a world-class hyb
   - [x] **Format Compatibility**: Verification of PLY/depth/cameras outputs → FoveaEngine pipeline
   - [x] **Installation Script**: Setup script + CUDA 12.4 dependency checker
   - [x] **UI Mode Selector**: COLMAP vs WorldMirror 2.0 radio in panel
-- [ ] **Real-time Mask Preview**: Instant feedback of cutout settings.
+- [x] **Real-time Mask Preview**: Instant feedback of cutout settings.
 - [x] **Reset & Session Management**: Facilitate iterative testing.
 
 
