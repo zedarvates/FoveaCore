@@ -310,6 +310,40 @@ func load_session(path: String) -> ReconstructionSession:
 		return res
 	return null
 
+## Delete active session and optional files on disk
+func delete_session(session: ReconstructionSession, delete_disk_files: bool = false) -> void:
+	if session == null:
+		return
+	
+	if active_sessions.has(session.session_name):
+		active_sessions.erase(session.session_name)
+		print("Manager: Erased active session: ", session.session_name)
+		
+	if delete_disk_files:
+		var global_dir = ProjectSettings.globalize_path(session.output_directory)
+		if DirAccess.dir_exists_absolute(global_dir):
+			print("Manager: Deleting session directory recursively: ", global_dir)
+			_delete_dir_recursive(global_dir)
+		else:
+			print("Manager: Session directory does not exist: ", global_dir)
+
+func _delete_dir_recursive(path: String) -> void:
+	var dir = DirAccess.open(path)
+	if dir:
+		dir.list_dir_begin()
+		var file_name = dir.get_next()
+		while file_name != "":
+			if file_name != "." and file_name != "..":
+				var full_path = path.path_join(file_name)
+				if dir.current_is_dir():
+					_delete_dir_recursive(full_path)
+				else:
+					DirAccess.remove_absolute(full_path)
+			file_name = dir.get_next()
+		dir.list_dir_end()
+		DirAccess.remove_absolute(path)
+
+
 ## Step 1: Extraction & Masking
 func run_extraction(session: ReconstructionSession, mask_mode: String = "Studio White") -> void:
 	session_started.emit(session.session_name)
