@@ -165,6 +165,43 @@ func _safe_connect_btn(btn: Button, callable: Callable):
 # --- Handlers ---
 
 func _on_reset_pressed() -> void:
+	if current_session == null:
+		_perform_ui_reset()
+		return
+
+	# Créer une boîte de dialogue interactive pour confirmer l'action
+	var confirm := ConfirmationDialog.new()
+	confirm.title = "Reset Session & Files"
+	confirm.dialog_text = "How would you like to reset the session '%s'?\n\n- CONFIRM: Erase all files on disk and reset the UI.\n- RESET UI ONLY: Reset UI inputs only, leaving files intact.\n- CANCEL: Do nothing." % current_session.session_name
+	
+	confirm.ok_button_text = "Delete Files & Reset"
+	
+	# Ajouter un bouton personnalisé pour réinitialiser uniquement l'UI
+	var ui_only_btn = confirm.add_button("Reset UI Only", false, "reset_ui_only")
+	
+	confirm.confirmed.connect(func():
+		_log("Wiping all workspace files on disk for session: " + current_session.session_name)
+		manager.delete_session(current_session, true)
+		_perform_ui_reset()
+		confirm.queue_free()
+	)
+	
+	confirm.custom_action.connect(func(action):
+		if action == "reset_ui_only":
+			_log("Resetting UI only. Files kept on disk.")
+			manager.delete_session(current_session, false)
+			_perform_ui_reset()
+			confirm.queue_free()
+	)
+	
+	confirm.canceled.connect(func():
+		confirm.queue_free()
+	)
+	
+	add_child(confirm)
+	confirm.popup_centered(Vector2i(500, 220))
+
+func _perform_ui_reset() -> void:
 	current_session = null
 	if video_path_edit: video_path_edit.text = ""
 	if session_name_edit: session_name_edit.text = ""
@@ -175,7 +212,14 @@ func _on_reset_pressed() -> void:
 	if show_mask_toggle: show_mask_toggle.button_pressed = true
 	if roi_toggle: roi_toggle.button_pressed = false
 	if _preview_manager: _preview_manager.on_threshold_changed(0)
-	_log("Session Reset.")
+	
+	# Nettoyer également le renderer 3D s'il y en a un actif
+	if current_renderer:
+		current_renderer.queue_free()
+		current_renderer = null
+		
+	_log("Session Reset Complete.")
+
 
 func _on_save_pressed() -> void:
 	_ensure_session()
