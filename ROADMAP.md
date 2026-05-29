@@ -41,7 +41,7 @@ This document outlines the roadmap to transform FoveaCore into a world-class hyb
 - [ ] **Coplanar Splat Merging & Quad Simplification**: Algorithmic fusion of splats sharing same depth/surface to generate unified quads and eliminate GPU overdraw.
 - [ ] **Spherical Harmonics (SH) Baking**: Bake view-dependent complex reflections into diffuse colors for matte materials (80% color weight reduction).
 - [x] **Splat Backface Culling**: Compute Shader implemented (`gpu_culling_compute.glsl`) to instantly eliminate back-facing splats.
-- [ ] **Temporal & Interleaved Sorting**: Asynchronous sorting of distant splats spread over multiple frames to guarantee strict 11ms GPU execution time in VR.
+- [x] **Temporal & Interleaved Sorting**: GPU sort distribued over N frames via `frame_mask/frame_id` + single compute-list submit (eliminates O(log²N) CPU-GPU stalls). Configurable via `sort_interleave_factor` export (1/2/4).
 - [ ] **Tile-Based Rasterization**: Divide screen into tiles (16x16) in compute shader to limit sorting and blending to purely local splats (standard 3DGS approach).
 - [ ] **FP16 Compute Pipeline**: Migrate compute buffers from float32 to float16 to double VRAM bandwidth and saturate modern ALUs.
 - [ ] **Global Splat Instancing (Mega-Buffer)**: Render thousands of copies of same asset (e.g., forests, crowds) with single VRAM copy, via multi-transform compute shader.
