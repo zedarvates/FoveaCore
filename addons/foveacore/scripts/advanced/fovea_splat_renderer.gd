@@ -29,6 +29,14 @@ extends MultiMeshInstance3D
 ## 4 = un quart par frame — recommande pour VR 90Hz (temps GPU strict).
 @export_enum("Full:1", "Half:2", "Quarter:4") var sort_interleave_factor: int = 4
 
+@export_group("Color Palette & Dithering (Phase 3)")
+## Activer l'utilisation de la palette 8-bit si presente dans l'asset .fovea
+@export var enable_palette: bool = true
+## Activer le dithering Floyd-Steinberg pour masquer le banding
+@export var use_dithering: bool = true
+## Intensite du dithering Floyd-Steinberg
+@export_range(0.0, 2.0) var dither_strength: float = 1.0
+
 var culler_pipeline: GPUCullerPipeline
 var splat_mesh: ArrayMesh
 var triangle_mesh_generator
@@ -85,6 +93,9 @@ func _ready():
 
     if asset_path != "":
         load_and_render_splats()
+        if enable_palette:
+            load_palette_from_fovea()
+        update_material_shader()
         call_deferred("_upload_covar_codebook")
 
 func _process(_delta: float) -> void:
@@ -216,14 +227,14 @@ func load_palette_from_fovea() -> void:
         return
 
     var loader := ClassDB.instantiate("FoveaAssetLoader")
-    if not loader or not loader.has_method("load_color_codebook"):
+    if not loader or not loader.has_method("load_color_palette"):
         return
 
-    var palette_bytes: PackedByteArray = loader.load_color_codebook(asset_path)
+    var palette_bytes: PackedByteArray = loader.load_color_palette(asset_path)
     if palette_bytes.is_empty():
         return
 
-    var palette_colors := palette_bytes.size() / 4
+    var palette_colors := palette_bytes.size() / 12 # 3 floats * 4 bytes per color
     if palette_colors == 0:
         return
 
@@ -233,12 +244,34 @@ func load_palette_from_fovea() -> void:
     palette.palette_size = palette_colors
     palette.colors.resize(palette_colors)
     for i in palette_colors:
-        var r := float(palette_bytes[i * 4]) / 255.0
-        var g := float(palette_bytes[i * 4 + 1]) / 255.0
-        var b := float(palette_bytes[i * 4 + 2]) / 255.0
+        var r := palette_bytes.decode_float(i * 12)
+        var g := palette_bytes.decode_float(i * 12 + 4)
+        var b := palette_bytes.decode_float(i * 12 + 8)
         palette.colors[i] = Color(r, g, b)
 
     setup_palette(palette)
+
+## Met a jour le shader du materiau en fonction de l'activation de la palette et du dithering
+func update_material_shader() -> void:
+    var mat := material_override as ShaderMaterial
+    if not mat:
+        return
+    
+    var has_palette := false
+    if enable_palette and ClassDB.can_instantiate("FoveaAssetLoader") and asset_path != "":
+        var loader = ClassDB.instantiate("FoveaAssetLoader")
+        if loader and loader.has_method("load_color_palette"):
+            var palette_bytes: PackedByteArray = loader.load_color_palette(asset_path)
+            has_palette = not palette_bytes.is_empty()
+            
+    if has_palette and use_dithering:
+        mat.shader = load("res://addons/foveacore/shaders/splat_render_triangle_palette.gdshader")
+        mat.set_shader_parameter("use_dithering", true)
+        mat.set_shader_parameter("dither_strength", dither_strength)
+        print("FoveaSplatRenderer: Utilizing splat_render_triangle_palette shader with Floyd-Steinberg dithering.")
+    else:
+        mat.shader = load("res://addons/foveacore/shaders/splat_render_triangle.gdshader")
+        mat.set_shader_parameter("use_palette", has_palette)
 
 func load_and_render_splats():
     var camera = get_viewport().get_camera_3d()

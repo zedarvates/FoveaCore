@@ -21,8 +21,9 @@ uniform sampler2D covar_texture;
 
 // Palette de couleurs (256 couleurs RGB, format RGBA32F)
 // Chaque ligne = 16 couleurs, 16 lignes = 256 couleurs
-uniform sampler2D color_palette;
+uniform sampler2D palette_texture;
 uniform int palette_size = 256;
+uniform bool use_palette = true; // Uniforme de compatibilite
 
 // Paramètres de Fovéation (Eye Tracking / Zone Culling)
 global uniform vec2 fovea_gaze_left;  // Centre du regard œil gauche (0..1)
@@ -199,7 +200,7 @@ void fragment() {
     float palette_y = float(v_palette_index / 16);
     vec2 palette_uv = (vec2(palette_x, palette_y) + 0.5) / 16.0;
     
-    vec3 color_from_palette = texture(color_palette, palette_uv).rgb;
+    vec3 color_from_palette = texture(palette_texture, palette_uv).rgb;
     
     // Applique le dithering pour réduire le banding
     float dither_factor = apply_floyd_steinberg_dither(v_screen_pos, 1.0);
