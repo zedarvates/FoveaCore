@@ -26,7 +26,7 @@ This document outlines the roadmap to transform FoveaCore into a world-class hyb
 
 - [x] **Rust GDExtension**: Fast-Path pipeline implemented (ultra-fast loading without CPU parsing).
 - [x] **GPU Bitonic Sorting**: Depth sorting offloaded to compute shader.
-- [ ] **Multithreading**: Parallelize surface extraction across all CPU cores.
+- [x] **Multithreading**: Parallelize surface extraction across all CPU cores via `FoveaThreadPool` (N threads, chunk-based decode, pre-allocated buffers).
 - [x] **Hi-Z Optimization**: Native Occlusion Culler branching via `CompositorEffect`.
 
 ## 🔵 Phase 3: Visual Fidelity & Stylization
