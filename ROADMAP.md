@@ -36,8 +36,8 @@ This document outlines the roadmap to transform FoveaCore into a world-class hyb
 - [x] **Parallax Proxy Rendering**: (STAR prototype implemented) Depth simulation on simplified surfaces.
 - [ ] **Vectorized Splat Dispatcher**: Batch processing (SIMD) for maximum GPU saturation.
 - [ ] **Spatial Chunking & Streaming**: Divide models into spatial chunks for progressive loading (Priority to "first line" in front of camera).
-- [ ] **Splat Pattern Compression (Vector Quantization)**: Use codebooks (K-means) to group redundant colors, rotations, and scales into indexed patterns.
-- [ ] **Spatial Quantization (Fixed-Point Math)**: Map XYZ positions to local 16-bit grid to drastically reduce memory bandwidth.
+- [x] **Splat Pattern Compression (Vector Quantization)**: 8-bit color index palette (256 colors) + 1024-cluster covariance codebook via K-Means++ and Floyd-Steinberg dithering.
+- [x] **Spatial Quantization (Fixed-Point Math)**: Raw XYZ coordinates mapped to 16-bit local grid mapped by AABB in both Culling Compute and Fragment shaders.
 - [ ] **Coplanar Splat Merging & Quad Simplification**: Algorithmic fusion of splats sharing same depth/surface to generate unified quads and eliminate GPU overdraw.
 - [ ] **Spherical Harmonics (SH) Baking**: Bake view-dependent complex reflections into diffuse colors for matte materials (80% color weight reduction).
 - [x] **Splat Backface Culling**: Compute Shader implemented (`gpu_culling_compute.glsl`) to instantly eliminate back-facing splats.
