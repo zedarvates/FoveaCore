@@ -71,8 +71,13 @@ func _ready():
     material.set_shader_parameter("palette_size", 0)
     self.material_override = material
 
+    # Texture covariance par defaut (sphere unite) : evite la lecture de texture vide
+    # Elle sera remplacee par le vrai codebook apres le chargement du fichier .fovea
+    _set_default_covar_texture()
+
     if asset_path != "":
         load_and_render_splats()
+        call_deferred("_upload_covar_codebook")
 
 func _process(_delta: float) -> void:
     var camera := get_viewport().get_camera_3d()
@@ -117,6 +122,84 @@ func setup_palette(palette: FoveaColorPalette) -> void:
     material.set_shader_parameter("palette_size", palette.colors.size())
     print("FoveaSplatRenderer: Palette '%s' (%d colors) applied to shader." % \
           [palette.palette_name, palette.colors.size()])
+
+## Upload de la texture covariance par defaut (sphere unite 1x1)
+## Garantit que le shader ne lit jamais une texture non-initialisee
+func _set_default_covar_texture() -> void:
+    # Format : 2 colonnes x 1 ligne, RGBAF (32-bit float par canal)
+    # Col 0 (u=0.25) : scale=(0,0,0), rot_w=1.0  -> exp(scale) = (1,1,1) = sphere unite
+    # Col 1 (u=0.75) : rot_xyz=(0,0,0), pad=0
+    var default_data: PackedByteArray = PackedByteArray()
+    default_data.resize(32)  # 2 pixels x 4 canaux x 4 bytes (float32)
+    # Pixel 0 : scale_x=0, scale_y=0, scale_z=0, rot_w=1
+    default_data.encode_float(0,  0.0)   # scale_x
+    default_data.encode_float(4,  0.0)   # scale_y
+    default_data.encode_float(8,  0.0)   # scale_z
+    default_data.encode_float(12, 1.0)   # rot_w
+    # Pixel 1 : rot_x=0, rot_y=0, rot_z=0, pad=0
+    default_data.encode_float(16, 0.0)   # rot_x
+    default_data.encode_float(20, 0.0)   # rot_y
+    default_data.encode_float(24, 0.0)   # rot_z
+    default_data.encode_float(28, 0.0)   # pad
+
+    var img: Image = Image.create_from_data(2, 1, false, Image.FORMAT_RGBAF, default_data)
+    var tex: ImageTexture = ImageTexture.create_from_image(img)
+
+    var mat := material_override as ShaderMaterial
+    if mat:
+        mat.set_shader_parameter("covar_texture", tex)
+
+## Upload du codebook de covariance depuis le fichier .fovea (Phase 3 : Anisotropic Splats)
+## Appelee via call_deferred() apres load_and_render_splats() pour ne pas bloquer _ready()
+func _upload_covar_codebook() -> void:
+    if asset_path == "":
+        return
+
+    var mat := material_override as ShaderMaterial
+    if mat == null:
+        return
+
+    # Tentative de chargement via GDExtension Rust
+    var codebook_bytes: PackedByteArray = PackedByteArray()
+    if ClassDB.can_instantiate("FoveaAssetLoader"):
+        var loader = ClassDB.instantiate("FoveaAssetLoader")
+        if loader and loader.has_method("load_covariance_codebook"):
+            codebook_bytes = loader.load_covariance_codebook(asset_path)
+
+    if codebook_bytes.is_empty():
+        # Pas de codebook dans ce fichier .fovea : fallback sphere isotrope
+        push_warning("FoveaSplatRenderer: Pas de codebook covariance dans '%s'. Splats isotropes." % asset_path)
+        return  # La texture par defaut (sphere unite) est deja en place
+
+    # Le codebook est un tableau de K entrees de 7 floats : [sx, sy, sz, rw, rx, ry, rz]
+    # Stockage dans une texture 2 colonnes x K lignes (FORMAT_RGBAF)
+    var entry_size: int = 7 * 4  # 7 floats x 4 bytes
+    var k: int = codebook_bytes.size() / entry_size
+    if k == 0:
+        return
+
+    # Texture 2 x K pixels : col0 = (sx,sy,sz,rw), col1 = (rx,ry,rz,0)
+    var tex_data: PackedByteArray = PackedByteArray()
+    tex_data.resize(k * 2 * 4 * 4)  # K lignes x 2 pixels x 4 canaux x 4 bytes
+
+    for i: int in range(k):
+        var src: int = i * entry_size
+        var dst: int = i * 32  # 2 pixels x 16 bytes par pixel
+        # Col 0 : scale_xyz + rot_w
+        tex_data.encode_float(dst,      codebook_bytes.decode_float(src))
+        tex_data.encode_float(dst + 4,  codebook_bytes.decode_float(src + 4))
+        tex_data.encode_float(dst + 8,  codebook_bytes.decode_float(src + 8))
+        tex_data.encode_float(dst + 12, codebook_bytes.decode_float(src + 12))
+        # Col 1 : rot_xyz + pad
+        tex_data.encode_float(dst + 16, codebook_bytes.decode_float(src + 16))
+        tex_data.encode_float(dst + 20, codebook_bytes.decode_float(src + 20))
+        tex_data.encode_float(dst + 24, codebook_bytes.decode_float(src + 24))
+        tex_data.encode_float(dst + 28, 0.0)
+
+    var img: Image = Image.create_from_data(2, k, false, Image.FORMAT_RGBAF, tex_data)
+    var tex: ImageTexture = ImageTexture.create_from_image(img)
+    mat.set_shader_parameter("covar_texture", tex)
+    print("FoveaSplatRenderer: Codebook covariance charge : %d entrees (Splats anisotropes)." % k)
 
 ## Load palette from .fovea file and apply to material
 func load_palette_from_fovea() -> void:
