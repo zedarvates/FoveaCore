@@ -161,3 +161,127 @@ static func decimate(bytes: PackedByteArray, target_count: int) -> PackedByteArr
 		
 	print("FoveaSplatCleaner: Décimation terminée. %d -> %d splats." % [total_splats, idx])
 	return out_bytes
+
+## Fusionne les splats co-planaires proches pour réduire le GPU overdraw (Phase 3).
+##
+## "Co-planaire" est défini comme : même bucket de profondeur Z quantifié
+## ET même bucket de normale (u,v octahédrale), dans la même cellule XY.
+## Les groupes de taille >= min_group_size sont fondus en un splat centroïde
+## qui représente toute la surface locale — réduction typique de 20-40%.
+##
+## @param bytes           Buffer PackedSplat 16 bytes post-culling
+## @param z_bucket        Taille du bucket de profondeur Z (0..65535)
+## @param normal_bucket   Taille du bucket de normale octahédrale (0..255)
+## @param xy_bucket       Taille du bucket de regroupement XY spatial
+## @param min_group_size  Nombre minimum de splats pour déclencher la fusion
+## @returns Buffer fusionné (toujours valide, potentiellement plus court)
+static func merge_coplanar(
+		bytes: PackedByteArray,
+		z_bucket: int        = 512,
+		normal_bucket: int   = 24,
+		xy_bucket: int       = 1024,
+		min_group_size: int  = 4
+) -> PackedByteArray:
+	if bytes.is_empty():
+		return bytes
+	var total_splats: int = bytes.size() / SPLAT_BYTE_SIZE
+	if total_splats < min_group_size * 2:
+		return bytes  # Pas assez de splats pour profiter de la fusion
+
+	# ── Pass 1 : Indexation dans une grille multi-dimensionnelle ────────────
+	# Clé = (qx/xy_bucket, qy/xy_bucket, qz/z_bucket, nu/normal_bucket, nv/normal_bucket)
+	# Cette clé regroupe les splats qui partagent la même position XY grossière,
+	# la même profondeur Z, et la même orientation de surface.
+	var grid: Dictionary = {}
+
+	for i: int in range(total_splats):
+		var off: int = i * SPLAT_BYTE_SIZE
+
+		var qx: int = bytes.decode_u16(off)
+		var qy: int = bytes.decode_u16(off + 2)
+		var qz: int = bytes.decode_u16(off + 4)
+		var nu: int = bytes.decode_u8(off + 6)   # Normal U (octahedral)
+		var nv: int = bytes.decode_u8(off + 7)   # Normal V (octahedral)
+
+		# Construire une clé entière combinée pour eviter Vector5i (inexistant)
+		# On encode (bx, by, bz, bnu, bnv) dans un seul entier 64-bit via un hash compact
+		var bx:  int = qx  / xy_bucket
+		var by:  int = qy  / xy_bucket
+		var bz:  int = qz  / z_bucket
+		var bnu: int = nu  / normal_bucket
+		var bnv: int = nv  / normal_bucket
+
+		# Combinaison de hachage : on utilise un entier de taille suffisante
+		# Plages : bx∈[0..63], by∈[0..63], bz∈[0..127], bnu∈[0..10], bnv∈[0..10]
+		# → on peut tout tenir dans un seul int64 (GDScript: int est 64 bits)
+		var key: int = bx | (by << 6) | (bz << 12) | (bnu << 19) | (bnv << 24)
+
+		if not grid.has(key):
+			grid[key] = []
+		grid[key].append(i)
+
+	# ── Pass 2 : Fusion des groupes ──────────────────────────────────────────
+	var out_bytes: PackedByteArray = PackedByteArray()
+	out_bytes.resize(bytes.size())  # Worst case : aucune fusion
+	var out_count: int = 0
+	var merged_groups: int = 0
+
+	for key: int in grid:
+		var group: Array = grid[key]
+		var n: int = group.size()
+
+		if n < min_group_size:
+			# Groupe trop petit → copier les splats tels quels
+			for idx: int in group:
+				var src: int = idx * SPLAT_BYTE_SIZE
+				var dst: int = out_count * SPLAT_BYTE_SIZE
+				for b: int in range(SPLAT_BYTE_SIZE):
+					out_bytes[dst + b] = bytes[src + b]
+				out_count += 1
+		else:
+			# Groupe suffisamment grand → fusionner en un splat centroïde
+			var sum_x: float = 0.0
+			var sum_y: float = 0.0
+			var sum_z: float = 0.0
+			var sum_opac: float = 0.0
+			var max_opac: int = 0
+			var dominant_off: int = group[0] * SPLAT_BYTE_SIZE
+
+			for idx: int in group:
+				var src: int = idx * SPLAT_BYTE_SIZE
+				sum_x += float(bytes.decode_u16(src))
+				sum_y += float(bytes.decode_u16(src + 2))
+				sum_z += float(bytes.decode_u16(src + 4))
+				var opac: int = bytes.decode_u8(src + 12)
+				sum_opac += float(opac)
+				if opac > max_opac:
+					max_opac = opac
+					dominant_off = src  # Splat le plus opaque = représentatif du groupe
+
+			var avg_x: int = int(sum_x / float(n))
+			var avg_y: int = int(sum_y / float(n))
+			var avg_z: int = int(sum_z / float(n))
+			var avg_opac: int = mini(255, int(sum_opac / float(n)))
+
+			var dst: int = out_count * SPLAT_BYTE_SIZE
+
+			# Position : centroïde du groupe
+			out_bytes.encode_u16(dst,     avg_x)
+			out_bytes.encode_u16(dst + 2, avg_y)
+			out_bytes.encode_u16(dst + 4, avg_z)
+
+			# Normale, couleur, covariance : copié du splat dominant (le plus opaque)
+			for b: int in range(6, SPLAT_BYTE_SIZE):
+				out_bytes[dst + b] = bytes[dominant_off + b]
+
+			# Réinjecter l'opacité moyenne
+			out_bytes.encode_u8(dst + 12, avg_opac)
+
+			out_count += 1
+			merged_groups += 1
+
+	out_bytes.resize(out_count * SPLAT_BYTE_SIZE)
+	var reduction_pct: float = (1.0 - float(out_count) / float(total_splats)) * 100.0
+	print("FoveaSplatCleaner: merge_coplanar: %d → %d splats (-%d groupes, -%.1f%% overdraw)." % [
+		total_splats, out_count, merged_groups, reduction_pct])
+	return out_bytes

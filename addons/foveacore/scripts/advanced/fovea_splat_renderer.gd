@@ -9,6 +9,7 @@ extends MultiMeshInstance3D
 @export var cull_threshold: float = 0.0 # 0.0 = Cull tout ce qui dépasse 90 degrés
 @export var use_triangle_mesh: bool = true  # Utiliser le maillage triangle optimisé
 @export var splat_subdivisions: int = 16    # Nombre de segments pour l'ellipse
+@export var sort_distance_threshold: float = 0.1  # Distance minimale de déplacement de la caméra pour recalculer le tri/culling
 
 @export_group("Cleaning (FoveaSplatCleaner)")
 ## Activer le filtrage des floaters et NaN apres le GPU culling
@@ -21,6 +22,12 @@ extends MultiMeshInstance3D
 @export var enable_decimation: bool = false
 ## Cible apres decimation (0 = desactive)
 @export var decimation_target: int = 50000
+## Fusionner les splats co-planaires pour réduire le GPU overdraw (Phase 3)
+@export var enable_coplanar_merge: bool = false
+## Taille du bucket de profondeur Z pour la fusion co-planaire (valeur plus petite = plus agressif)
+@export_range(128, 2048, 128) var coplanar_z_bucket: int = 512
+## Nombre minimum de splats dans un groupe pour déclencher la fusion
+@export_range(2, 16) var coplanar_min_group: int = 4
 
 @export_group("Temporal Sorting (Phase 3)")
 ## Facteur d'entrelacement du tri GPU.
@@ -28,6 +35,18 @@ extends MultiMeshInstance3D
 ## 2 = la moitie des splats est retrie chaque frame (bon compromis).
 ## 4 = un quart par frame — recommande pour VR 90Hz (temps GPU strict).
 @export_enum("Full:1", "Half:2", "Quarter:4") var sort_interleave_factor: int = 4
+
+@export_group("Motion-Adaptive Splatting (Phase 3)")
+## Activer le LOD adaptatif à la vélocité caméra (réduit la charge GPU en mouvement rapide)
+@export var enable_motion_lod: bool = true
+## Seuil de vitesse (m/s) au-dessus duquel le LOD se dégrade
+@export var motion_speed_threshold: float = 1.5
+## LOD minimum appliqué à pleine vitesse (0.2 = 20% des splats seulement)
+@export_range(0.05, 1.0, 0.05) var motion_lod_minimum: float = 0.25
+## Activer l'étirement des splats dans la direction du mouvement (motion blur natif)
+@export var enable_motion_stretch: bool = true
+## Facteur maximal d'étirement à haute vitesse
+@export_range(0.0, 5.0, 0.1) var motion_stretch_max: float = 2.5
 
 @export_group("Color Palette & Dithering (Phase 3)")
 ## Activer l'utilisation de la palette 8-bit si presente dans l'asset .fovea
@@ -48,6 +67,11 @@ var deformer: FoveaClayDeformer = null
 ## Cache des transforms originaux (état de repos), alimenté après chaque load.
 ## Partagé avec le deformer pour un accès non-destructif.
 var _original_transforms: Array[Transform3D] = []
+var _last_camera_pos: Vector3 = Vector3.ZERO
+
+## Suivi de la vélocité caméra pour le Motion-Adaptive LOD
+var _prev_cam_pos: Vector3   = Vector3.ZERO
+var _motion_lod_applied: float = 1.0  # Cache du lod_ratio courant pour éviter les envois inutiles
 
 func _ready():
     culler_pipeline = GPUCullerPipeline.new()
@@ -103,6 +127,12 @@ func _process(_delta: float) -> void:
     if camera == null or material_override == null:
         return
 
+    # Mettre à jour le culling/tri en temps réel si la caméra bouge
+    var cam_pos = camera.global_position
+    if (cam_pos - _last_camera_pos).length() > sort_distance_threshold:
+        _last_camera_pos = cam_pos
+        load_and_render_splats()
+
     var dist := global_position.distance_to(camera.global_position)
 
     # Calcul dynamique du ratio LOD stochastique selon la distance
@@ -114,9 +144,47 @@ func _process(_delta: float) -> void:
     elif dist > 8.0:
         lod = 0.75   # Rend 75% de près
 
+    # ── Motion-Adaptive Splatting (Phase 3) ──────────────────────────────────
+    # Réduit dynamiquement le LOD et étire les splats selon la vélocité caméra.
+    # En VR à 90 Hz, une rotation rapide de la tête passe facilement à 2-4 m/s.
+    # En mode motion, on rendu moins de splats (moins de fillrate) et on les
+    # étire dans la direction du mouvement (motion blur natif gratuit).
     var mat := material_override as ShaderMaterial
     if mat:
+        if enable_motion_lod and _delta > 0.0001:
+            var cam_vel_world: Vector3 = (cam_pos - _prev_cam_pos) / _delta
+            var speed: float           = cam_vel_world.length()
+
+            if speed > motion_speed_threshold:
+                # Interpolation linéaire vers le LOD minimum selon la vitesse
+                var over_threshold: float = speed - motion_speed_threshold
+                var motion_t: float = clampf(over_threshold / motion_speed_threshold, 0.0, 1.0)
+                lod = lerpf(lod, motion_lod_minimum, motion_t)
+
+                if enable_motion_stretch:
+                    # Projeter la vélocité monde à l'espace vue pour la direction écran
+                    var view_basis: Basis = camera.get_camera_transform().affine_inverse().basis
+                    var vel_view: Vector3 = view_basis * cam_vel_world
+                    var motion_dir_2d := Vector2(vel_view.x, -vel_view.y)  # flip Y screen
+                    if motion_dir_2d.length() > 0.001:
+                        motion_dir_2d = motion_dir_2d.normalized()
+                    var stretch: float = motion_t * motion_stretch_max
+                    mat.set_shader_parameter("motion_dir_screen",     motion_dir_2d)
+                    mat.set_shader_parameter("motion_stretch_factor", stretch)
+                else:
+                    mat.set_shader_parameter("motion_stretch_factor", 0.0)
+            else:
+                # Retour progressif à la qualité maximale (smooth recovery)
+                if enable_motion_stretch:
+                    var current_stretch: float = mat.get_shader_parameter("motion_stretch_factor")
+                    if current_stretch > 0.01:
+                        mat.set_shader_parameter("motion_stretch_factor",
+                            lerpf(current_stretch, 0.0, 0.15))  # Decay progressif
+                    else:
+                        mat.set_shader_parameter("motion_stretch_factor", 0.0)
+
         mat.set_shader_parameter("lod_ratio", lod)
+        _prev_cam_pos = cam_pos
 
     # Passe de déformation Clay (non-destructif : opère sur les originaux)
     if deformer and deformer.enabled and multimesh and multimesh.instance_count > 0:
@@ -279,11 +347,12 @@ func load_and_render_splats():
         push_error("FoveaSplatRenderer: No camera in viewport.")
         return
     var cam_pos = camera.global_position
+    _last_camera_pos = cam_pos
     
     # Get depth texture from camera if available
     var depth_tex: RID = RID()
-    if camera.get_camera_attributes():
-        var attrs = camera.get_camera_attributes()
+    if "attributes" in camera and camera.attributes:
+        var attrs = camera.attributes
         if attrs.has_method("get_depth_texture"):
             depth_tex = attrs.get_depth_texture()
     
@@ -297,6 +366,12 @@ func load_and_render_splats():
             if aabb.size.length_squared() > 0.001:
                 aabb_min = aabb.position
                 aabb_max = aabb.end
+
+    # Injecter l'AABB dans le shader material pour la dé-quantisation
+    var mat := material_override as ShaderMaterial
+    if mat:
+        mat.set_shader_parameter("aabb_min", aabb_min)
+        mat.set_shader_parameter("aabb_max", aabb_max)
 
     # 3. Exécution du Compute Shader ultra-rapide (Culling)
     var output_buffer_rid = culler_pipeline.process_splats_from_file(
@@ -331,6 +406,13 @@ func load_and_render_splats():
             print("FoveaEngine: SplatCleaner: %d → %d splats (-%d)." % [
                 before_clean, surviving_splats_count, before_clean - surviving_splats_count])
 
+    # Passe de fusion co-planaire (Coplanar Splat Merging, Phase 3)
+    # Regroupe les splats co-surfaciques pour éliminer l'overdraw GPU.
+    if enable_coplanar_merge and surviving_splats_count > 0:
+        culled_bytes = FoveaSplatCleaner.merge_coplanar(
+            culled_bytes, coplanar_z_bucket, 24, 1024, coplanar_min_group)
+        surviving_splats_count = culled_bytes.size() / 16
+
     multimesh.instance_count = surviving_splats_count
 
     # 4. Décodage PARALLÈLE — FoveaThreadPool (Phase 2 : Multithreading)
@@ -339,7 +421,7 @@ func load_and_render_splats():
     # boucle séquentielle précédente (~10-50× plus rapide sur > 50k splats).
     var t_decode_start: int = Time.get_ticks_usec()
     var decode_result: FoveaThreadPool.DecodeResult = \
-        FoveaThreadPool.decode_parallel(culled_bytes, surviving_splats_count)
+        FoveaThreadPool.decode_parallel(culled_bytes, surviving_splats_count, aabb_min, aabb_max)
     var t_decode_ms: float = (Time.get_ticks_usec() - t_decode_start) / 1000.0
     print("FoveaEngine: Décodage parallèle de %d splats en %.2f ms (%d threads)." % [
         surviving_splats_count, t_decode_ms, OS.get_processor_count()])
@@ -380,3 +462,89 @@ func update_splat_mesh_mode(use_triangle: bool):
     
     multimesh.mesh = splat_mesh
     material_override.set_shader_parameter("splat_subdivisions", splat_subdivisions)
+
+## Rendu de splats non-quantisés passés sous forme de GaussianSplat (compatibilité avec FoveaCoreManager)
+func render_splats(splats: Array[GaussianSplat]) -> int:
+    var count: int = splats.size()
+    multimesh.instance_count = count
+
+    if count == 0:
+        return 0
+
+    # Calcul de l'AABB à partir des splats
+    var aabb_min: Vector3 = Vector3(INF, INF, INF)
+    var aabb_max: Vector3 = Vector3(-INF, -INF, -INF)
+    for s: GaussianSplat in splats:
+        aabb_min = aabb_min.min(s.position)
+        aabb_max = aabb_max.max(s.position)
+
+    # Marges sur l'AABB
+    aabb_min -= Vector3(0.1, 0.1, 0.1)
+    aabb_max += Vector3(0.1, 0.1, 0.1)
+
+    # Injecter l'AABB dans le shader
+    var mat := material_override as ShaderMaterial
+    if mat:
+        mat.set_shader_parameter("aabb_min", aabb_min)
+        mat.set_shader_parameter("aabb_max", aabb_max)
+        mat.set_shader_parameter("use_palette", false)
+
+    # Packer les splats en format 16-octets
+    var raw_bytes: PackedByteArray = pack_gaussian_splats(splats, aabb_min, aabb_max)
+
+    # Décoder de façon parallèle
+    var decode_result: FoveaThreadPool.DecodeResult = FoveaThreadPool.decode_parallel(raw_bytes, count, aabb_min, aabb_max)
+
+    # Assigner au MultiMesh
+    multimesh.transform_array = decode_result.xf_array
+    multimesh.custom_data_array = decode_result.cd_array
+
+    _original_transforms = decode_result.original_transforms
+
+    return count
+
+## Packs GaussianSplat objects into a raw 16-byte PackedSplat array compatible with the shader
+func pack_gaussian_splats(splats: Array[GaussianSplat], aabb_min: Vector3, aabb_max: Vector3) -> PackedByteArray:
+    var bytes: PackedByteArray = PackedByteArray()
+    bytes.resize(splats.size() * 16)
+
+    var range_x: float = max(aabb_max.x - aabb_min.x, 0.001)
+    var range_y: float = max(aabb_max.y - aabb_min.y, 0.001)
+    var range_z: float = max(aabb_max.z - aabb_min.z, 0.001)
+
+    for i: int in range(splats.size()):
+        var s: GaussianSplat = splats[i]
+        var src: int = i * 16
+
+        # Quantize position
+        var qx: int = int(clamp((s.position.x - aabb_min.x) / range_x * 65535.0, 0, 65535))
+        var qy: int = int(clamp((s.position.y - aabb_min.y) / range_y * 65535.0, 0, 65535))
+        var qz: int = int(clamp((s.position.z - aabb_min.z) / range_z * 65535.0, 0, 65535))
+
+        bytes.encode_u16(src, qx)
+        bytes.encode_u16(src + 2, qy)
+        bytes.encode_u16(src + 4, qz)
+
+        # Normals (default 0)
+        bytes.encode_s8(src + 6, 0)
+        bytes.encode_s8(src + 7, 0)
+
+        # Color index / RGB565
+        var r5: int = int(clamp(s.color.r * 31.0, 0, 31))
+        var g6: int = int(clamp(s.color.g * 63.0, 0, 63))
+        var b5: int = int(clamp(s.color.b * 31.0, 0, 31))
+        var rgb565: int = (r5 << 11) | (g6 << 5) | b5
+
+        bytes.encode_u16(src + 8, rgb565)
+        # covar_index (0 = isotropic default)
+        bytes.encode_u16(src + 10, 0)
+
+        # Opacity
+        var op: int = int(clamp(s.opacity * 255.0, 0, 255))
+        bytes.encode_u8(src + 12, op)
+        # layer_id, dither_seed, padding
+        bytes.encode_u8(src + 13, 0)
+        bytes.encode_u8(src + 14, 0)
+        bytes.encode_u8(src + 15, 0)
+
+    return bytes
