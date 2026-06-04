@@ -36,6 +36,12 @@ uniform int splat_subdivisions = 16;
 // Niveau de détail stochastique (1.0 = complet, 0.0 = masqué)
 uniform float lod_ratio = 1.0;
 
+// Motion-Adaptive Splatting (Phase 3)
+// Direction de la vélocité caméra projetée en espace écran (normalisée)
+uniform vec2  motion_dir_screen     = vec2(0.0);
+// Facteur d'étirement le long de la direction du mouvement (0.0 = désactivé)
+uniform float motion_stretch_factor = 0.0;
+
 // Données transmises du Vertex au Fragment
 varying flat vec3 v_color;
 varying flat float v_opacity;
@@ -141,6 +147,14 @@ void vertex() {
         scaled.x * cos_t - scaled.y * sin_t,
         scaled.x * sin_t + scaled.y * cos_t
     );
+    
+    // Motion Stretch : étirement du splat dans la direction de la vélocité caméra
+    // Simule un motion blur natif sans passe post-process supplémentaire.
+    // Chaque vertex est déplacé proportionnellement à sa projection sur la direction de mouvement.
+    if (motion_stretch_factor > 0.0 && length(motion_dir_screen) > 0.001) {
+        float proj_on_motion = dot(local_pos, motion_dir_screen);
+        rotated += motion_dir_screen * proj_on_motion * motion_stretch_factor * max(radius1, radius2);
+    }
     
     // Conversion en offset NDC
     vec2 pixel_extent = vec2(radius1, radius2);
