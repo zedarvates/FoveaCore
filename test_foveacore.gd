@@ -45,6 +45,12 @@ func _process(delta: float) -> void:
 	_frame_count += 1
 	_frame_time += delta
 
+	# Auto-quit if running headlessly or with --quit argument (for automated validation)
+	if OS.has_feature("headless") or "--quit" in OS.get_cmdline_args():
+		if _frame_count >= 10:
+			print("FoveaCore: Automated test run completed. Exiting.")
+			get_tree().quit()
+
 	if _frame_time >= 1.0:
 		_fps = float(_frame_count) / _frame_time
 		_frame_count = 0

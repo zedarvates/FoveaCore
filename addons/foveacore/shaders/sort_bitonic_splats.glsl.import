@@ -2,13 +2,13 @@
 
 importer="glsl"
 type="RDShaderFile"
-uid="uid://fovea_sort_bitonic_splats"
-path="res://.godot/imported/sort_bitonic_splats.glsl-fovea_temporal_sort.res"
+uid="uid://corda1xl7i4bp"
+path="res://.godot/imported/sort_bitonic_splats.glsl-cb10d7d584525cc8aaf4ada14db178eb.res"
 
 [deps]
 
 source_file="res://addons/foveacore/shaders/sort_bitonic_splats.glsl"
-dest_files=["res://.godot/imported/sort_bitonic_splats.glsl-fovea_temporal_sort.res"]
+dest_files=["res://.godot/imported/sort_bitonic_splats.glsl-cb10d7d584525cc8aaf4ada14db178eb.res"]
 
 [params]
 

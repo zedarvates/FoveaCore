@@ -5,6 +5,11 @@ extends RefCounted
 ## VERSION TRIANGLE - Optimise pour le rendu par maillage triangulaire
 ## Phase 3 : Temporal & Interleaved Sorting - tri non-bloquant sur plusieurs frames
 
+class BlockData:
+    var start_index: int
+    var end_index: int
+    var aabb: AABB
+
 var rd: RenderingDevice
 var shader_rid: RID
 var pipeline_rid: RID
@@ -20,11 +25,19 @@ const SPLAT_BYTE_SIZE: int = 16 # Format Fast-Path (FoveaPackedSplat)
 var interleave_factor: int = 4
 var _frame_counter: int    = 0
 
-func _init() -> void:
+## Cache pour eviter d'acceder au disque ou de recalculer a chaque frame
+var _cached_bytes: Dictionary = {}
+var _cached_blocks: Dictionary = {}
+
     rd = RenderingServer.create_local_rendering_device()
-    _load_compute_shader()
+    if rd:
+        _load_compute_shader()
+    else:
+        push_warning("GPUCullerPipeline: local rendering device not available (headless or dummy/compatibility renderer).")
 
 func _load_compute_shader() -> void:
+    if not rd:
+        return
     var shader_file: RDShaderFile = load("res://addons/foveacore/shaders/gpu_culling_compute.glsl")
     var spirv: RDShaderSPIRV = shader_file.get_spirv()
     shader_rid    = rd.shader_create_from_spirv(spirv)
@@ -44,12 +57,40 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
         push_error("FoveaEngine: Échec du chargement du fichier Fast-Path.")
         return RID()
         
-    var total_splats = raw_bytes.size() / SPLAT_BYTE_SIZE
-    print("FoveaEngine: Dispatching Compute Shader pour %d splats..." % total_splats)
+    # 1.5. Culling de frustum CPU par bloc spatial (Phase 3: Spatial Chunking)
+    # Puisque les splats sont ordonnés par code de Morton, les blocs consécutifs de 4096
+    # splats sont très compacts spatialement. On peut éliminer les blocs hors frustum
+    # sur le CPU pour éviter d'uploader et de traiter des millions de points sur le GPU.
+    var blocks := _precompute_blocks(fovea_path, raw_bytes, aabb_min, aabb_max)
+    var frustum = FrustumUtils.Frustum.new()
+    frustum.from_matrix(camera.get_camera_projection(), camera.global_transform)
+    
+    var visible_blocks: Array[BlockData] = []
+    for block in blocks:
+        if frustum.contains_aabb(block.aabb):
+            visible_blocks.append(block)
+            
+    var culled_blocks_count := blocks.size() - visible_blocks.size()
+    if culled_blocks_count > 0:
+        print("FoveaEngine: CPU Frustum Culling: %d/%d blocs rejetes." % [culled_blocks_count, blocks.size()])
+        
+    if visible_blocks.is_empty():
+        print("FoveaEngine: Aucun bloc visible sur le CPU, skip complet GPU.")
+        return RID()
+        
+    var visible_bytes := PackedByteArray()
+    for block in visible_blocks:
+        var size := (block.end_index - block.start_index) * SPLAT_BYTE_SIZE
+        var src_offset := block.start_index * SPLAT_BYTE_SIZE
+        var block_slice = raw_bytes.slice(src_offset, src_offset + size)
+        visible_bytes.append_array(block_slice)
+        
+    var total_splats = visible_bytes.size() / SPLAT_BYTE_SIZE
+    print("FoveaEngine: Dispatching Compute Shader pour %d splats visibles..." % total_splats)
 
     # 2. Création des Buffers GPU
-    var input_buffer = rd.storage_buffer_create(raw_bytes.size(), raw_bytes)
-    var output_buffer = rd.storage_buffer_create(raw_bytes.size())
+    var input_buffer = rd.storage_buffer_create(visible_bytes.size(), visible_bytes)
+    var output_buffer = rd.storage_buffer_create(visible_bytes.size())
     
     var counter_bytes = PackedByteArray()
     counter_bytes.resize(4) 
@@ -241,19 +282,74 @@ func _temporal_sort_bitonic(
     rd.sync()
 
 func _load_fovea_bytes(fovea_path: String) -> PackedByteArray:
+    if _cached_bytes.has(fovea_path):
+        return _cached_bytes[fovea_path]
+
+    var bytes: PackedByteArray = PackedByteArray()
     if ClassDB.can_instantiate("FoveaAssetLoader"):
         var loader = ClassDB.instantiate("FoveaAssetLoader")
         if loader:
-            return loader.load_fast_path(fovea_path)
-    if not FileAccess.file_exists(fovea_path):
-        push_error("GPU Culler: File not found: " + fovea_path)
-        return PackedByteArray()
-    var file = FileAccess.open(fovea_path, FileAccess.READ)
-    if not file:
-        return PackedByteArray()
-    var bytes = file.get_buffer(file.get_length())
-    file.close()
+            bytes = loader.load_fast_path(fovea_path)
+    if bytes.is_empty():
+        if not FileAccess.file_exists(fovea_path):
+            push_error("GPU Culler: File not found: " + fovea_path)
+            return PackedByteArray()
+        var file = FileAccess.open(fovea_path, FileAccess.READ)
+        if not file:
+            return PackedByteArray()
+        bytes = file.get_buffer(file.get_length())
+        file.close()
+        
+    _cached_bytes[fovea_path] = bytes
     return bytes
+
+func _precompute_blocks(fovea_path: String, raw_bytes: PackedByteArray, aabb_min: Vector3, aabb_max: Vector3) -> Array[BlockData]:
+    if _cached_blocks.has(fovea_path):
+        return _cached_blocks[fovea_path]
+        
+    var blocks: Array[BlockData] = []
+    var total_splats := raw_bytes.size() / SPLAT_BYTE_SIZE
+    var block_size_splats := 4096 # 4096 splats per block
+    var block_count := int(ceil(float(total_splats) / block_size_splats))
+    
+    var range_vec := aabb_max - aabb_min
+    
+    for b in range(block_count):
+        var start := b * block_size_splats
+        var end := int(min((b + 1) * block_size_splats, total_splats))
+        
+        var min_pos := Vector3(1e9, 1e9, 1e9)
+        var max_pos := Vector3(-1e9, -1e9, -1e9)
+        
+        for i in range(start, end):
+            var offset := i * SPLAT_BYTE_SIZE
+            var qx := raw_bytes.decode_u16(offset)
+            var qy := raw_bytes.decode_u16(offset + 2)
+            var qz := raw_bytes.decode_u16(offset + 4)
+            
+            var px := float(qx) / 65535.0
+            var py := float(qy) / 65535.0
+            var pz := float(qz) / 65535.0
+            
+            var pos := aabb_min + Vector3(px, py, pz) * range_vec
+            
+            min_pos.x = min(min_pos.x, pos.x)
+            min_pos.y = min(min_pos.y, pos.y)
+            min_pos.z = min(min_pos.z, pos.z)
+            
+            max_pos.x = max(max_pos.x, pos.x)
+            max_pos.y = max(max_pos.y, pos.y)
+            max_pos.z = max(max_pos.z, pos.z)
+            
+        var block := BlockData.new()
+        block.start_index = start
+        block.end_index = end
+        # On donne une petite marge (e.g. 0.1) aux AABB pour eviter le culling agressif aux bords des ellipses
+        block.aabb = AABB(min_pos, max_pos - min_pos).grow(0.1)
+        blocks.append(block)
+        
+    _cached_blocks[fovea_path] = blocks
+    return blocks
 
 func cleanup():
     if rd:

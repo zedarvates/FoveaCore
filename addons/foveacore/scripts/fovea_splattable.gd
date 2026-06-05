@@ -82,8 +82,16 @@ func _ready() -> void:
 	if not splat_file_path.is_empty():
 		if splat_file_path.ends_with(".ply"):
 			_load_splats_from_ply()
-		else:
+		elif splat_file_path.ends_with(".fovea"):
 			print("FoveaSplattable: Rendu natif détecté pour ", splat_file_path)
+			# Instancier dynamiquement FoveaSplatRenderer pour les assets natifs
+			var renderer = FoveaSplatRenderer.new()
+			renderer.name = "FoveaSplatRenderer"
+			renderer.asset_path = splat_file_path
+			renderer.sort_distance_threshold = 0.1
+			add_child(renderer)
+		else:
+			print("FoveaSplattable: Format de fichier non géré pour le rendu direct: ", splat_file_path)
 			
 		if generate_collisions:
 			if splat_file_path.ends_with(".fovea"):
