@@ -1,8 +1,8 @@
 shader_type canvas_item;
 
 // Uniforms
-uniform sampler2D splat_texture : hint_albedo;
-uniform vec4 splat_color : hint_color = vec4(1.0, 1.0, 1.0, 1.0);
+uniform sampler2D splat_texture : source_color;
+uniform vec4 splat_color : source_color = vec4(1.0, 1.0, 1.0, 1.0);
 uniform float radius = 0.5; // radius in UV space (0‑1)
 uniform float falloff = 2.0; // exponent for Gaussian falloff
 

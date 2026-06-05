@@ -45,7 +45,7 @@ void vertex() {
     uint data3 = floatBitsToUint(INSTANCE_CUSTOM.w);
 
     uint qx = data0 & 0xFFFFu;
-    uint qy = (data0 >> 16) & 0xFFFFu;
+    uint qy = (data0 >> 16u) & 0xFFFFu;
     uint qz = data1 & 0xFFFFu;
     vec3 q_pos = vec3(float(qx), float(qy), float(qz)) / 65535.0;
     vec3 world_pos = aabb_min + q_pos * (aabb_max - aabb_min);
@@ -57,15 +57,15 @@ void vertex() {
         vec4 pal_color = textureLod(palette_texture, vec2(0.5, tex_v), 0.0);
         v_color = pal_color.rgb;
     } else {
-        float r = float((color_index >> 11) & 0x1Fu) / 31.0;
-        float g = float((color_index >> 5) & 0x3Fu)  / 63.0;
+        float r = float((color_index >> 11u) & 0x1Fu) / 31.0;
+        float g = float((color_index >> 5u) & 0x3Fu)  / 63.0;
         float b = float(color_index & 0x1Fu)         / 31.0;
         v_color = vec3(r, g, b);
     }
     v_opacity = float(data3 & 0xFFu) / 255.0;
 
     // --- 2. CALCUL DE LA COVARIANCE ---
-    uint covar_index = (data2 >> 16) & 0xFFFFu;
+    uint covar_index = (data2 >> 16u) & 0xFFFFu;
     ivec2 tex_size = textureSize(covar_texture, 0);
     float tex_v = (float(covar_index) + 0.5) / float(max(tex_size.y, 1));
     
