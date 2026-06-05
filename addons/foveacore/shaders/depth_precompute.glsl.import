@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://dm6nflm1dfh1x"
+path="res://.godot/imported/depth_precompute.glsl-a10c2464d34376182a0a0158312a248e.res"
+
+[deps]
+
+source_file="res://addons/foveacore/shaders/depth_precompute.glsl"
+dest_files=["res://.godot/imported/depth_precompute.glsl-a10c2464d34376182a0a0158312a248e.res"]
+
+[params]
+

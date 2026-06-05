@@ -45,9 +45,9 @@ vec3 compute_cov2d(vec3 center_cam, mat3 cov3d, mat4 proj_matrix, vec2 viewport_
     float focal_y = proj_matrix[1][1] * viewport_size.y * 0.5;
     
     mat3 J = mat3(
-        focal_x / t, 0.0,         -(focal_x * center_cam.x) / (t * t),
-        0.0,         -focal_y / t, (focal_y * center_cam.y) / (t * t),
-        0.0,         0.0,         0.0
+        vec3(focal_x / t, 0.0,         -(focal_x * center_cam.x) / (t * t)),
+        vec3(0.0,         -focal_y / t, (focal_y * center_cam.y) / (t * t)),
+        vec3(0.0,         0.0,         0.0)
     );
     
     mat3 W = mat3(1.0); // Vue vers Caméra (déjà fait si cov3d est en espace vue)

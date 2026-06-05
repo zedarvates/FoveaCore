@@ -351,7 +351,11 @@ func load_and_render_splats():
     
     # Get depth texture from camera if available
     var depth_tex: RID = RID()
-    if "attributes" in camera and camera.attributes:
+    if camera.has_method("get_camera_attributes") and camera.get_camera_attributes():
+        var attrs = camera.get_camera_attributes()
+        if attrs.has_method("get_depth_texture"):
+            depth_tex = attrs.get_depth_texture()
+    elif "attributes" in camera and camera.attributes:
         var attrs = camera.attributes
         if attrs.has_method("get_depth_texture"):
             depth_tex = attrs.get_depth_texture()
@@ -383,10 +387,10 @@ func load_and_render_splats():
     if culler_pipeline == null or culler_pipeline.rd == null:
         push_error("FoveaSplatRenderer: culler_pipeline or rd is null, skipping data readback.")
         return
-    var culled_bytes = culler_pipeline.rd.buffer_get_data(output_buffer_rid)
+    var culled_bytes: PackedByteArray = culler_pipeline.rd.buffer_get_data(output_buffer_rid)
     
     # Chaque splat compressé fait 16 octets (SPLAT_BYTE_SIZE dans le culler)
-    var surviving_splats_count := culled_bytes.size() / 16
+    var surviving_splats_count: int = int(culled_bytes.size() / 16)
     print("FoveaEngine: %d splats GPU après culling." % surviving_splats_count)
 
     # 4b. Passe de nettoyage optionnelle (FoveaSplatCleaner — P3)

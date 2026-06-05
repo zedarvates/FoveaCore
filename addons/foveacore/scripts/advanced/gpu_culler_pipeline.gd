@@ -29,6 +29,7 @@ var _frame_counter: int    = 0
 var _cached_bytes: Dictionary = {}
 var _cached_blocks: Dictionary = {}
 
+func _init() -> void:
     rd = RenderingServer.create_local_rendering_device()
     if rd:
         _load_compute_shader()

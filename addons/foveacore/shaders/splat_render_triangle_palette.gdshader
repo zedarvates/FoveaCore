@@ -56,7 +56,7 @@ void vertex() {
 
     // Extraction de la position 3D quantifiée (16 bits par axe)
     uint qx = data0 & 0xFFFFu;
-    uint qy = (data0 >> 16) & 0xFFFFu;
+    uint qy = (data0 >> 16u) & 0xFFFFu;
     uint qz = data1 & 0xFFFFu;
     vec3 q_pos = vec3(float(qx), float(qy), float(qz)) / 65535.0;
     vec3 world_pos = aabb_min + q_pos * (aabb_max - aabb_min);
@@ -69,7 +69,7 @@ void vertex() {
     v_opacity = float(data3 & 0xFFu) / 255.0;
 
     // --- 2. CALCUL DE LA COVARIANCE (Anisotropie via Codebook) ---
-    uint covar_index = (data2 >> 16) & 0xFFFFu;
+    uint covar_index = (data2 >> 16u) & 0xFFFFu;
     
     ivec2 tex_size = textureSize(covar_texture, 0);
     float tex_v = (float(covar_index) + 0.5) / float(max(tex_size.y, 1));
