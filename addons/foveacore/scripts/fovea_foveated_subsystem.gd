@@ -24,6 +24,14 @@ var _cached_parafoveal: float = -1.0
 var _cached_peripheral: float = -1.0
 var _dirty: bool = true
 
+func _ready() -> void:
+	# S'assurer que les uniforms shader globaux sont déclarés
+	var existing = RenderingServer.global_shader_parameter_get_list()
+	if not existing.has("fovea_gaze_left"):
+		RenderingServer.global_shader_parameter_add("fovea_gaze_left", RenderingServer.GLOBAL_VAR_TYPE_VEC2, Vector2(0.5, 0.5))
+	if not existing.has("fovea_gaze_right"):
+		RenderingServer.global_shader_parameter_add("fovea_gaze_right", RenderingServer.GLOBAL_VAR_TYPE_VEC2, Vector2(0.5, 0.5))
+
 func setup(r: float, foveal: float, parafoveal: float, peripheral: float) -> void:
 	foveal_radius = r
 	foveal_density = foveal
@@ -62,6 +70,20 @@ func update(enabled: bool) -> void:
 			var forward := -camera.global_transform.basis.z
 			var target  := camera.global_transform.origin + forward * 10.0
 			_controller.update_gaze(target, forward)
+
+	# Projection 3D -> 2D (écran) du point de regard pour les shaders GPU
+	var camera := get_viewport().get_camera_3d()
+	if camera:
+		var gaze_pt := _controller.get_gaze_point()
+		var screen_gaze := Vector2(0.5, 0.5)
+		if gaze_pt != Vector3.ZERO:
+			var viewport_size := get_viewport().get_visible_rect().size
+			if viewport_size.x > 0 and viewport_size.y > 0:
+				var unprojected := camera.unproject_position(gaze_pt)
+				screen_gaze = unprojected / viewport_size
+		
+		RenderingServer.global_shader_parameter_set("fovea_gaze_left", screen_gaze)
+		RenderingServer.global_shader_parameter_set("fovea_gaze_right", screen_gaze)
 
 ## Accès au contrôleur (pour FoveaSplatSubsystem.apply_foveated_pass)
 func get_controller() -> FoveatedController:

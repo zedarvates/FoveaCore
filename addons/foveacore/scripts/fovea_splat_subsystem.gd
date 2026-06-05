@@ -22,7 +22,7 @@ var global_splat_density: float = 1.0
 var temporal_reprojector: TemporalReprojector = null
 var occlusion_culler: OcclusionCuller = null
 var splat_sorter: SplatSorter = null
-var splat_renderer: SplatRenderer = null
+var splat_renderer: FoveaSplatRenderer = null
 
 ## Position caméra du frame précédent (pour reprojection temporelle)
 var _previous_camera_position: Vector3 = Vector3.ZERO

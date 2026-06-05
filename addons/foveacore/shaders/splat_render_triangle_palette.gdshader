@@ -66,7 +66,7 @@ void vertex() {
     v_palette_index = int(data2 & 0xFFu);
     
     // Extraction de l'opacité (8 bits)
-    v_opacity = float((data3 >> 8) & 0xFFu) / 255.0;
+    v_opacity = float(data3 & 0xFFu) / 255.0;
 
     // --- 2. CALCUL DE LA COVARIANCE (Anisotropie via Codebook) ---
     uint covar_index = (data2 >> 16) & 0xFFFFu;

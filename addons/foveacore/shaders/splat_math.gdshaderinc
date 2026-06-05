@@ -17,17 +17,17 @@ vec3 compute_sh_degree_0(vec3 f_dc) {
 mat3 compute_cov3d(vec3 scale, vec4 rot) {
     // Matrice de scale
     mat3 S = mat3(
-        exp(scale.x), 0.0, 0.0,
-        0.0, exp(scale.y), 0.0,
-        0.0, 0.0, exp(scale.z)
+        vec3(exp(scale.x), 0.0, 0.0),
+        vec3(0.0, exp(scale.y), 0.0),
+        vec3(0.0, 0.0, exp(scale.z))
     );
     
     // Matrice de rotation depuis quaternion (r, x, y, z)
     float r = rot.x, x = rot.y, y = rot.z, z = rot.w;
     mat3 R = mat3(
-        1.0 - 2.0 * (y*y + z*z), 2.0 * (x*y - r*z),       2.0 * (x*z + r*y),
-        2.0 * (x*y + r*z),       1.0 - 2.0 * (x*x + z*z), 2.0 * (y*z - r*x),
-        2.0 * (x*z - r*y),       2.0 * (y*z + r*x),       1.0 - 2.0 * (x*x + y*y)
+        vec3(1.0 - 2.0 * (y*y + z*z), 2.0 * (x*y - r*z),       2.0 * (x*z + r*y)),
+        vec3(2.0 * (x*y + r*z),       1.0 - 2.0 * (x*x + z*z), 2.0 * (y*z - r*x)),
+        vec3(2.0 * (x*z - r*y),       2.0 * (y*z + r*x),       1.0 - 2.0 * (x*x + y*y))
     );
     
     mat3 M = R * S;

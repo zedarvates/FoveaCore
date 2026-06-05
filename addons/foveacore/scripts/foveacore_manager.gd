@@ -53,6 +53,11 @@ var _vr: FoveaVRSubsystem = null
 ## Sous-système Foveated Rendering
 var _foveated: FoveaFoveatedSubsystem = null
 
+## Alias pour la liaison de l'eye-tracking (GazeTrackerLinker)
+var _foveated_controller: FoveatedController:
+	get:
+		return _foveated.get_controller() if _foveated else null
+
 ## Sous-système Pipeline Splat (génération → tri → rendu)
 var _splat_pipeline: FoveaSplatSubsystem = null
 
@@ -62,7 +67,7 @@ var _visibility_manager: VisibilityManager = null
 var _hybrid_renderer: HybridRenderer = null
 var _occlusion_culler: OcclusionCuller = null
 var _temporal_reprojector: TemporalReprojector = null
-var _splat_renderer: SplatRenderer = null
+var _splat_renderer: FoveaSplatRenderer = null
 var _splat_sorter: SplatSorter = null
 
 ## État global
@@ -99,7 +104,8 @@ func _init_culling_nodes() -> void:
 	_hybrid_renderer = HybridRenderer.new()
 	add_child(_hybrid_renderer)
 
-	_splat_renderer = SplatRenderer.new()
+	_splat_renderer = FoveaSplatRenderer.new()
+	_splat_renderer.name = "FoveaSplatRenderer"
 	add_child(_splat_renderer)
 
 	_splat_sorter = SplatSorter.new()

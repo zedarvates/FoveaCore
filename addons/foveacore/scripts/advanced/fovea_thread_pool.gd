@@ -31,8 +31,8 @@ const AABB_RANGE: float = 10.0
 # ── Résultat d'un decode parallèle ──────────────────────────────────────────
 
 class DecodeResult:
-	var xf_array:  PackedFloat32Array = PackedFloat32Array()
-	var cd_array:  PackedFloat32Array = PackedFloat32Array()
+	var xf_array:  PackedVector3Array = PackedVector3Array()
+	var cd_array:  PackedColorArray = PackedColorArray()
 	var original_transforms: Array[Transform3D] = []
 	var splat_count: int = 0
 
@@ -41,8 +41,10 @@ class DecodeResult:
 ## Décode culled_bytes en parallel sur tous les cœurs CPU disponibles.
 ## @param culled_bytes  : PackedByteArray issue du compute shader
 ## @param num_splats    : nombre de splats valides dans le buffer
+## @param aabb_min      : AABB min de l'asset
+## @param aabb_max      : AABB max de l'asset
 ## @returns DecodeResult prêt pour injection dans MultiMesh
-static func decode_parallel(culled_bytes: PackedByteArray, num_splats: int) -> DecodeResult:
+static func decode_parallel(culled_bytes: PackedByteArray, num_splats: int, aabb_min: Vector3, aabb_max: Vector3) -> DecodeResult:
 	var result: DecodeResult = DecodeResult.new()
 	result.splat_count = num_splats
 
@@ -50,8 +52,8 @@ static func decode_parallel(culled_bytes: PackedByteArray, num_splats: int) -> D
 		return result
 
 	# Pré-allouer les buffers finaux en une seule opération
-	result.xf_array.resize(num_splats * TRANSFORM_FLOATS)
-	result.cd_array.resize(num_splats * CUSTOM_FLOATS)
+	result.xf_array.resize(num_splats * 4)
+	result.cd_array.resize(num_splats)
 	result.original_transforms.resize(num_splats)
 
 	# Déterminer le nombre de threads optimal
@@ -65,7 +67,7 @@ static func decode_parallel(culled_bytes: PackedByteArray, num_splats: int) -> D
 	# Pour les petits nuages, mono-thread est plus rapide (pas de surcharge)
 	if num_splats < 4096 or thread_count <= 1:
 		_decode_chunk(culled_bytes, result.xf_array, result.cd_array,
-				result.original_transforms, 0, num_splats)
+				result.original_transforms, 0, num_splats, aabb_min, aabb_max)
 		return result
 
 	# Découper en chunks et dispatcher
@@ -91,9 +93,11 @@ static func decode_parallel(culled_bytes: PackedByteArray, num_splats: int) -> D
 		var _orig     := result.original_transforms
 		var _start    := start
 		var _end      := end
+		var _min      := aabb_min
+		var _max      := aabb_max
 
 		thread.start(func() -> void:
-			_decode_chunk(_culled, _xf, _cd, _orig, _start, _end)
+			_decode_chunk(_culled, _xf, _cd, _orig, _start, _end, _min, _max)
 		)
 
 	# Attendre tous les threads
@@ -108,38 +112,42 @@ static func decode_parallel(culled_bytes: PackedByteArray, num_splats: int) -> D
 ## Cette fonction DOIT être sans effet de bord sur les ranges des autres threads.
 static func _decode_chunk(
 		culled_bytes:         PackedByteArray,
-		xf_array:             PackedFloat32Array,
-		cd_array:             PackedFloat32Array,
+		xf_array:             PackedVector3Array,
+		cd_array:             PackedColorArray,
 		original_transforms:  Array[Transform3D],
 		start:                int,
-		end:                  int
+		end:                  int,
+		aabb_min:             Vector3,
+		aabb_max:             Vector3
 ) -> void:
 	for i: int in range(start, end):
 		var src: int = i * SPLAT_BYTE_SIZE
 
-		# Décoder position quantisée 16-bit → float monde
-		# Format FoveaPackedSplat: [u16 px][u16 py][u16 pz][u16 pad][u16 color][u16 covar][u8 opacity][u8 flags][u8 pad0][u8 pad1]
-		var px: float = culled_bytes.decode_u16(src)     / 65535.0 * AABB_RANGE
-		var py: float = culled_bytes.decode_u16(src + 2) / 65535.0 * AABB_RANGE
-		var pz: float = culled_bytes.decode_u16(src + 4) / 65535.0 * AABB_RANGE
+		# Décoder position quantisée 16-bit → float monde (dé-quantisation spatiale via AABB réelle)
+		var qx: float = float(culled_bytes.decode_u16(src))     / 65535.0
+		var qy: float = float(culled_bytes.decode_u16(src + 2)) / 65535.0
+		var qz: float = float(culled_bytes.decode_u16(src + 4)) / 65535.0
+
+		var px: float = aabb_min.x + qx * (aabb_max.x - aabb_min.x)
+		var py: float = aabb_min.y + qy * (aabb_max.y - aabb_min.y)
+		var pz: float = aabb_min.z + qz * (aabb_max.z - aabb_min.z)
 
 		# Remplir transform_array (translation pure, Basis = IDENTITY)
-		# Layout row-major 3×4 : [m00 m01 m02 m03 | m10 m11 m12 m13 | m20 m21 m22 m23]
-		var xf_off: int = i * TRANSFORM_FLOATS
-		xf_array[xf_off]      = 1.0; xf_array[xf_off + 1]  = 0.0; xf_array[xf_off + 2]  = 0.0; xf_array[xf_off + 3]  = px
-		xf_array[xf_off + 4]  = 0.0; xf_array[xf_off + 5]  = 1.0; xf_array[xf_off + 6]  = 0.0; xf_array[xf_off + 7]  = py
-		xf_array[xf_off + 8]  = 0.0; xf_array[xf_off + 9]  = 0.0; xf_array[xf_off + 10] = 1.0; xf_array[xf_off + 11] = pz
+		# Dans Godot 4.3+, MultiMesh.transform_array est un PackedVector3Array
+		# Chaque transform est composé de 4 Vector3 : col0 (right), col1 (up), col2 (back), col3 (origin)
+		var xf_off: int = i * 4
+		xf_array[xf_off]      = Vector3.RIGHT
+		xf_array[xf_off + 1]  = Vector3.UP
+		xf_array[xf_off + 2]  = Vector3.BACK
+		xf_array[xf_off + 3]  = Vector3(px, py, pz)
 
-		# Remplir custom_data_array
-		var color_index: float = float(culled_bytes.decode_u16(src + 8))  / 65535.0
-		var covar_index: float = float(culled_bytes.decode_u16(src + 10)) / 65535.0
-		var opacity:     float = float(culled_bytes.decode_u8(src + 12))  / 255.0
-
-		var cd_off: int = i * CUSTOM_FLOATS
-		cd_array[cd_off]     = color_index
-		cd_array[cd_off + 1] = covar_index
-		cd_array[cd_off + 2] = opacity
-		cd_array[cd_off + 3] = 1.0
+		# Remplir custom_data_array avec les bits bruts des 4 mots de 32 bits (data0-data3)
+		# Re-interprétés en floats via decode_float pour correspondre aux floatBitsToUint du Shader
+		var r: float = culled_bytes.decode_float(src)
+		var g: float = culled_bytes.decode_float(src + 4)
+		var b: float = culled_bytes.decode_float(src + 8)
+		var a: float = culled_bytes.decode_float(src + 12)
+		cd_array[i] = Color(r, g, b, a)
 
 		# Cache des originaux pour le FoveaClayDeformer (non-destructif)
 		original_transforms[i] = Transform3D(Basis(), Vector3(px, py, pz))
