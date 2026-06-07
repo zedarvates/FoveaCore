@@ -7,7 +7,7 @@ shader_type spatial;
 // ============================================================================
 
 // Optimisations extrêmes pour VR : Pas d'ombres, pas de culling, blending additif ou alpha
-render_mode unshaded, cull_disabled, blend_mix, depth_draw_never, depth_prepass_alpha;
+render_mode cull_disabled, blend_mix, depth_draw_never, depth_prepass_alpha;
 
 // Inclusion de notre librairie mathématique
 #include "res://addons/foveacore/shaders/splat_math.gdshaderinc"
@@ -56,12 +56,8 @@ void vertex() {
     uint data2 = floatBitsToUint(INSTANCE_CUSTOM.z);
     uint data3 = floatBitsToUint(INSTANCE_CUSTOM.w);
 
-    // Extraction de la position 3D quantifiée
-    uint qx = data0 & 0xFFFFu;
-    uint qy = (data0 >> 16u) & 0xFFFFu;
-    uint qz = data1 & 0xFFFFu;
-    vec3 q_pos = vec3(float(qx), float(qy), float(qz)) / 65535.0;
-    vec3 world_pos = aabb_min + q_pos * (aabb_max - aabb_min);
+    // Position de l'instance/splat dans le monde via MODEL_MATRIX
+    vec3 world_pos = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 
     // Extraction de la couleur (palette ou RGB565 selon use_palette)
     uint color_index = data2 & 0xFFFFu;
@@ -93,7 +89,12 @@ void vertex() {
     vec4 rot = vec4(tex0.w, tex1.x, tex1.y, tex1.z);
     
     mat3 cov3d = compute_cov3d(scale, rot);
-    vec3 center_cam = (VIEW_MATRIX * vec4(world_pos, 1.0)).xyz;
+    
+    // Transformer la covariance de l'espace local à l'espace vue (inclut rotation/échelle d'instance)
+    mat3 MV = mat3(MODELVIEW_MATRIX);
+    cov3d = MV * cov3d * transpose(MV);
+    
+    vec3 center_cam = (MODELVIEW_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
     vec3 cov2d = compute_cov2d(center_cam, cov3d, PROJECTION_MATRIX, VIEWPORT_SIZE);
     
     float det = (cov2d.x * cov2d.z) - (cov2d.y * cov2d.y);
@@ -190,6 +191,14 @@ void vertex() {
             // pour que le fragment evalue correctement le conic : d^T * Sigma^-1 * d
             // rotated est en pixels (decalage depuis le centre du splat)
             v_local_pos = vec3(rotated, 0.0);
+            
+            // Calcul de la normale de surface depuis le quaternion de rotation 3DGS (Lumière dynamique)
+            vec3 splat_normal = vec3(
+                2.0 * (rot.y * rot.w + rot.x * rot.z),
+                2.0 * (rot.z * rot.w - rot.x * rot.y),
+                1.0 - 2.0 * (rot.y * rot.y + rot.z * rot.z)
+            );
+            NORMAL = (VIEW_MATRIX * vec4(normalize(splat_normal), 0.0)).xyz;
         }
     }
 }
@@ -230,5 +239,17 @@ void fragment() {
 
     ALBEDO    = v_color;
     ALPHA     = alpha;
-    EMISSION  = v_color * 0.05;
+    EMISSION  = v_color * 0.01;
+}
+
+void light() {
+    // Éclairage diffus Lambertien standard
+    float NdotL = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
+    DIFFUSE_LIGHT += LIGHT_COLOR * NdotL * ATTENUATION;
+    
+    // Brillance spéculaire de surface Blinn-Phong soft
+    vec3 H = normalize(VIEW + LIGHT);
+    float NdotH = clamp(dot(NORMAL, H), 0.0, 1.0);
+    float specular = pow(NdotH, 16.0) * 0.15;
+    SPECULAR_LIGHT += LIGHT_COLOR * specular * ATTENUATION;
 }

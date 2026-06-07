@@ -5,6 +5,19 @@
 
 ---
 
+## 🛠️ Sprint 4 — StudioTo3D & Integration Polish (June 2026)
+
+### 🐛 Pipeline & Integration Fixes
+- **FFmpeg Overwrite Prompt**: Added `-y` flag to FFmpeg extraction commands to bypass overwrite prompts and resolve pipeline freezes.
+- **Process Frame Deadlock**: Swapped `process_frame` yields with short timers (`create_timer(0.01)`) to avoid viewport freezes when the editor goes idle.
+- **Thread Signal Safety**: Replaced unsafe deferred string-based signal emission with the modern, thread-stable `Signal.emit.call_deferred(...)` syntax.
+- **COLMAP Workspace Skip**: Removed pre-creation of empty `sparse` directories to prevent COLMAP's automatic reconstructor from skipping mapping.
+- **Python Bridge Paths**: Globalized Python script bridge execution using absolute paths to resolve working directory script loading errors.
+- **Automatic Scene Instancing**: Enhanced `studio_to_3d_panel.gd` to automatically instantiate a `FoveaSplattable` node under the active edited 3D scene root and set its owner upon successful reconstruction.
+- **Documentation**: Updated `README.md` to reflect proper `FoveaSplattable` properties and describe the automatic scene integration feature.
+
+---
+
 ## 🛠️ Sprint 4 — Audit Corrections & Architectural Decomposition (May 2026)
 
 ### 📐 FoveaCoreManager Decomposition (Subsystems)

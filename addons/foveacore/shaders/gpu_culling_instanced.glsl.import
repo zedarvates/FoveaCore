@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://bijqqtb1fhc05"
+path="res://.godot/imported/gpu_culling_instanced.glsl-bae42d19284f469c4f70685337dc86cb.res"
+
+[deps]
+
+source_file="res://addons/foveacore/shaders/gpu_culling_instanced.glsl"
+dest_files=["res://.godot/imported/gpu_culling_instanced.glsl-bae42d19284f469c4f70685337dc86cb.res"]
+
+[params]
+

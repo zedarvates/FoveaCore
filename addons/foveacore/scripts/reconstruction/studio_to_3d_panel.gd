@@ -63,11 +63,15 @@ var floaters_detector: FloatersDetector = null
 @onready var wm2_target_label: Label = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/WM2Row/WM2TargetLabel")
 @onready var wm2_status: Label = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/WM2Row/WM2Status")
 
+# COLMAP controls
+@onready var colmap_exhaustive_check: CheckBox = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/ColmapOptsRow/ExhaustiveCheck")
+
 @onready var reload_ply_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/ReloadPLY")
 @onready var export_ply_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/ExportPLY")
 @onready var toggle_renderer_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/ToggleRenderer")
 
 var current_renderer: _SplatRendererScript = null  # Référence au renderer 3D actuel
+var dry_run_check: CheckBox = null
 
 func _ready() -> void:
 	floaters_detector = FloatersDetector.new()
@@ -94,6 +98,7 @@ func _ready() -> void:
 	_safe_connect(manager.session_progress_updated, _on_progress_updated)
 	_safe_connect(manager.session_completed, _on_session_completed)
 	_safe_connect(manager.reconstruction_failed, _on_reconstruction_failed)
+	_safe_connect(manager.log_line_received, _on_log_line_received)
 	
 	# 3. Connecter l'UI manuellement
 	_safe_connect_btn(browse_button, _on_browse_pressed)
@@ -116,6 +121,8 @@ func _ready() -> void:
 	if threshold_slider:
 		threshold_slider.value_changed.connect(_on_threshold_changed)
 	if mask_option:
+		if mask_option.item_count == 4:
+			mask_option.add_item("None")
 		mask_option.item_selected.connect(_on_mask_mode_changed)
 	if show_mask_toggle:
 		show_mask_toggle.toggled.connect(_on_show_mask_toggled)
@@ -127,6 +134,24 @@ func _ready() -> void:
 		lod_toggle.toggled.connect(_on_lod_toggled)
 	if point_size_slider:
 		point_size_slider.value_changed.connect(_on_point_size_changed)
+
+	# Dynamic UI injection
+	var header_box = get_node_or_null("VSplit/TopScroll/VBoxTop/HeaderBox")
+	if header_box:
+		var open_folder_btn = Button.new()
+		open_folder_btn.name = "OpenFolder"
+		open_folder_btn.text = "Open Folder"
+		open_folder_btn.pressed.connect(_on_open_folder_pressed)
+		header_box.add_child(open_folder_btn)
+		
+	var pipeline_container = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline")
+	if pipeline_container:
+		dry_run_check = CheckBox.new()
+		dry_run_check.name = "DryRunCheck"
+		dry_run_check.text = "Dry Run (Simulate)"
+		dry_run_check.button_pressed = false
+		dry_run_check.toggled.connect(_on_dry_run_toggled)
+		pipeline_container.add_child(dry_run_check)
 
 	_setup_preview_manager()
 
@@ -148,11 +173,7 @@ func _ready() -> void:
 	_log("StudioTo3D UI Initialized (Safe Mode).")
 	
 	# 4. Vérifier les outils au démarrage
-	var results = manager.check_tools()
-	if results["ffmpeg"]:
-		_log("FFmpeg found: " + manager.ffmpeg_path)
-	else:
-		_log("WARNING: FFmpeg not found. Please check paths in Settings.")
+	call_deferred("_check_tools_and_popup", true)
 
 func _safe_connect(sig: Signal, callable: Callable):
 	if not sig.is_connected(callable):
@@ -213,6 +234,11 @@ func _perform_ui_reset() -> void:
 	if roi_toggle: roi_toggle.button_pressed = false
 	if _preview_manager: _preview_manager.on_threshold_changed(0)
 	
+	# Cleanup temporary preview frame
+	var temp_preview_path = OS.get_user_data_dir() + "/fovea_preview.jpg"
+	if FileAccess.file_exists(temp_preview_path):
+		DirAccess.remove_absolute(temp_preview_path)
+	
 	# Nettoyer également le renderer 3D s'il y en a un actif
 	if current_renderer:
 		current_renderer.queue_free()
@@ -238,7 +264,7 @@ func _on_load_pressed() -> void:
 	var dialog = FileDialog.new()
 	dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	dialog.access = FileDialog.ACCESS_RESOURCES
-	dialog.filters = PackedStringArray(["*.tres ; Reconstruction Session"])
+	dialog.filters = PackedStringArray(["*.json ; Reconstruction Session"])
 	dialog.file_selected.connect(func(path):
 		var session = manager.load_session(path)
 		if session:
@@ -257,6 +283,8 @@ func _update_ui_from_session() -> void:
 	if session_name_edit: session_name_edit.text = current_session.session_name
 	if threshold_slider: threshold_slider.value = current_session.background_threshold
 	if status_label: status_label.text = "Status: " + current_session.status
+	if colmap_exhaustive_check: colmap_exhaustive_check.button_pressed = current_session.exhaustive_matching
+	if dry_run_check: dry_run_check.button_pressed = current_session.dry_run
 	if _preview_manager: _preview_manager.on_threshold_changed(0)
 
 	# Load preview if available
@@ -294,7 +322,7 @@ func _on_browse_pressed() -> void:
 	var dialog = FileDialog.new()
 	dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	dialog.access = FileDialog.ACCESS_FILESYSTEM
-	dialog.filters = PackedStringArray(["*.mp4, *.mov, *.avi ; Video Files"])
+	dialog.filters = PackedStringArray(["*.mp4, *.mov, *.avi, *.mkv, *.webm, *.gif ; Video Files"])
 	dialog.file_selected.connect(_on_video_selected)
 	add_child(dialog)
 	dialog.popup_centered(Vector2i(800, 600))
@@ -331,6 +359,8 @@ func _on_threshold_changed(_value: float) -> void:
 
 func _on_mask_mode_changed(_index: int) -> void:
 	if _preview_manager: _preview_manager.on_mask_mode_changed(_index)
+	if current_session and mask_option:
+		current_session.mask_mode = mask_option.get_item_text(_index)
 
 func _on_show_mask_toggled(checked: bool) -> void:
 	if _preview_manager: _preview_manager.on_show_mask_toggled(checked)
@@ -472,6 +502,13 @@ func _ensure_session() -> void:
 	if current_session:
 		if wm2_mode_check: wm2_mode_check.button_pressed = current_session.use_worldmirror
 		if wm2_target_slider: wm2_target_slider.value = float(current_session.target_size)
+		if colmap_exhaustive_check: colmap_exhaustive_check.button_pressed = current_session.exhaustive_matching
+		if dry_run_check: dry_run_check.button_pressed = current_session.dry_run
+		if mask_option and "mask_mode" in current_session:
+			for idx in range(mask_option.item_count):
+				if mask_option.get_item_text(idx) == current_session.mask_mode:
+					mask_option.selected = idx
+					break
 
 	_log("StudioTo3D Session Verified.")
 
@@ -503,15 +540,7 @@ func _on_browse_colmap_pressed() -> void:
 
 func _on_check_tools_pressed() -> void:
 	_log("Checking tools and auto-detecting...")
-	var results = manager.check_tools()
-	if ffmpeg_path_edit: ffmpeg_path_edit.text = manager.ffmpeg_path
-	if colmap_path_edit: colmap_path_edit.text = manager.colmap_path
-	
-	if results["ffmpeg"] and results["colmap"]:
-		_log("✅ All tools found and verified.")
-	else:
-		if not results["ffmpeg"]: _log("❌ FFmpeg NOT FOUND.")
-		if not results["colmap"]: _log("❌ COLMAP NOT FOUND.")
+	_check_tools_and_popup(false)
 
 func _on_ffmpeg_path_changed(new_text: String) -> void:
 	manager.ffmpeg_path = new_text
@@ -540,6 +569,12 @@ func _on_wm2_target_changed(value: float) -> void:
 		current_session.target_size = int(value)
 		if wm2_target_label:
 			wm2_target_label.text = "Target: %dpx" % int(value)
+
+func _on_exhaustive_check_toggled(checked: bool) -> void:
+	_ensure_session()
+	if current_session:
+		current_session.exhaustive_matching = checked
+		_log("🔄 COLMAP Matcher: %s" % ("Exhaustive" if checked else "Sequential (Video)"))
 
 func _update_wm2_status() -> void:
 	if not wm2_status:
@@ -593,14 +628,71 @@ func _on_preview_pressed() -> void:
 		_log("Failed to generate preview.")
 
 func _on_progress_updated(progress: float) -> void:
-	if progress_bar: progress_bar.value = progress
-	if status_label: status_label.text = "Status: " + current_session.status
+	if progress_bar: 
+		progress_bar.value = progress
+		
+	var phase_prefix := ""
+	if progress < 33.0:
+		phase_prefix = "[Phase 1/3] "
+	elif progress >= 33.0 and progress < 66.0:
+		phase_prefix = "[Phase 2/3] "
+	elif progress >= 66.0 and progress < 100.0:
+		phase_prefix = "[Phase 3/3] "
+	else:
+		phase_prefix = "[Terminé] "
+
+	if status_label: 
+		status_label.text = phase_prefix + current_session.status
+		
 	_log("Progress: %.1f%% - %s" % [progress, current_session.status])
+	
+	# Afficher des messages informatifs lors de la transition des phases
+	if progress >= 33.0 and progress < 35.0:
+		_log("Phase 1 (Extraction & Masquage) terminée avec succès.")
+	elif progress >= 66.0 and progress < 70.0:
+		_log("Phase 2 (Géométrie/SfM) terminée avec succès.")
+	elif progress >= 100.0:
+		_log("Pipeline complet terminé avec succès !")
 
 func _on_session_completed(_session: ReconstructionSession) -> void:
 	_log("✅ Reconstruction terminée avec succès !")
-	if status_label: status_label.text = "Status: Finished"
+	if status_label: status_label.text = "[Terminé] Finished"
 	if progress_bar: progress_bar.value = 100.0
+	
+	# Ouvrir le dossier sur le système de fichiers (Task 34)
+	var global_dir := ProjectSettings.globalize_path(_session.output_directory)
+	_log("Ouverture du dossier de sortie : " + global_dir)
+	OS.shell_open(global_dir)
+	
+	# Insertion automatique dans la scène active de l'éditeur
+	if Engine.is_editor_hint():
+		var scene_root = EditorInterface.get_edited_scene_root()
+		if scene_root:
+			var splat_path := _session.splat_data_path
+			if splat_path.is_empty():
+				splat_path = _session.output_directory.path_join("output/" + _session.session_name + ".ply")
+				
+			var splattable_script = load("res://addons/foveacore/scripts/fovea_splattable.gd")
+			var node_name = "Splat_" + _session.session_name
+			
+			# Vérifier si un nœud porte déjà ce nom pour éviter les doublons
+			var existing_node = scene_root.find_child(node_name, true, false)
+			if not existing_node:
+				var node = Node3D.new()
+				node.name = node_name
+				node.set_script(splattable_script)
+				node.splat_file_path = splat_path
+				scene_root.add_child(node)
+				
+				# Très important dans l'éditeur Godot : définir l'owner sur la racine de la scène
+				# pour que le nœud apparaisse dans l'arborescence et soit sauvegardé dans la scène (.tscn)
+				node.owner = scene_root
+				_log("✅ Nœud FoveaSplattable ajouté automatiquement à la scène active : " + node_name)
+			else:
+				existing_node.splat_file_path = splat_path
+				_log("✅ Chemin du nœud FoveaSplattable existant mis à jour : " + node_name)
+		else:
+			_log("⚠️ Aucun nœud racine de scène active trouvé dans l'éditeur. Ouvrez une scène 3D pour ajouter automatiquement le nœud.")
 	
 	# Chargement automatique du résultat
 	_log("Ouverture automatique de la prévisualisation 3D...")
@@ -616,16 +708,6 @@ func _log(message: String) -> void:
 		# Forcer le scroll vers le bas en déplaçant le curseur
 		log_text.set_caret_line(log_text.get_line_count())
 		log_text.scroll_vertical = log_text.get_line_count() * 20.0 # Approximation
-
-func _on_session_progress_updated(progress: float) -> void:
-	if progress_bar:
-		progress_bar.value = progress
-	if progress >= 33.0 and progress < 40.0:
-		_log("Phase 1 (Extraction & Masquage) terminée successfully.")
-	elif progress >= 55.0 and progress < 70.0:
-		_log("Phase 2 (Géométrie/SfM) terminée.")
-	elif progress >= 100.0:
-		_log("Pipeline complet terminé avec succès !")
 
 func _on_clean_floaters_pressed() -> void:
 	if current_session == null:
@@ -722,6 +804,92 @@ func _input(event: InputEvent) -> void:
 			KEY_T:
 				if toggle_renderer_btn and toggle_renderer_btn.visible and is_instance_valid(toggle_renderer_btn):
 					_on_toggle_renderer_pressed()
+
+func _on_open_folder_pressed() -> void:
+	_ensure_session()
+	if current_session:
+		var global_dir := ProjectSettings.globalize_path(current_session.output_directory)
+		if not DirAccess.dir_exists_absolute(global_dir):
+			DirAccess.make_dir_recursive_absolute(global_dir)
+		_log("Opening workspace folder: " + global_dir)
+		OS.shell_open(global_dir)
+
+func _on_dry_run_toggled(checked: bool) -> void:
+	_ensure_session()
+	if current_session:
+		current_session.dry_run = checked
+		_log("Dry Run mode: %s" % ("Enabled" if checked else "Disabled"))
+
+func _on_log_line_received(line: String) -> void:
+	if log_text:
+		log_text.text += line + "\n"
+		# Force scroll down
+		log_text.set_caret_line(log_text.get_line_count())
+		log_text.scroll_vertical = log_text.get_line_count() * 20.0
+
+func _check_tools_and_popup(at_startup: bool = false) -> void:
+	var results = manager.check_tools()
+	
+	if ffmpeg_path_edit: ffmpeg_path_edit.text = manager.ffmpeg_path
+	if colmap_path_edit: colmap_path_edit.text = manager.colmap_path
+	
+	var ffmpeg_info = results.get("ffmpeg", {})
+	var colmap_info = results.get("colmap", {})
+	
+	var ffmpeg_ok: bool = ffmpeg_info.get("found", false) if ffmpeg_info is Dictionary else false
+	var colmap_ok: bool = colmap_info.get("found", false) if colmap_info is Dictionary else false
+	
+	if ffmpeg_ok and colmap_ok:
+		if not at_startup:
+			_log("✅ All tools found and verified.")
+		return
+	
+	# Show AcceptDialog popup
+	var dialog = AcceptDialog.new()
+	dialog.title = "Warning: Missing External Tools"
+	dialog.custom_minimum_size = Vector2i(550, 200)
+	
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 10)
+	
+	var label = Label.new()
+	label.text = "Some required external tools could not be found. Please check paths in Settings."
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(label)
+	
+	if not ffmpeg_ok:
+		var row = HBoxContainer.new()
+		var tool_lbl = Label.new()
+		tool_lbl.text = "• FFmpeg is missing"
+		tool_lbl.size_flags_horizontal = SIZE_EXPAND_FILL
+		row.add_child(tool_lbl)
+		
+		var download_btn = Button.new()
+		download_btn.text = "Download FFmpeg"
+		download_btn.pressed.connect(func(): OS.shell_open("https://ffmpeg.org/download.html"))
+		row.add_child(download_btn)
+		vbox.add_child(row)
+		_log("❌ FFmpeg NOT FOUND. Download from: https://ffmpeg.org/download.html")
+		
+	if not colmap_ok:
+		var row = HBoxContainer.new()
+		var tool_lbl = Label.new()
+		tool_lbl.text = "• COLMAP is missing"
+		tool_lbl.size_flags_horizontal = SIZE_EXPAND_FILL
+		row.add_child(tool_lbl)
+		
+		var download_btn = Button.new()
+		download_btn.text = "Download COLMAP"
+		download_btn.pressed.connect(func(): OS.shell_open("https://colmap.github.io/install.html"))
+		row.add_child(download_btn)
+		vbox.add_child(row)
+		_log("❌ COLMAP NOT FOUND. Download from: https://colmap.github.io/install.html")
+		
+	dialog.add_child(vbox)
+	dialog.confirmed.connect(func(): dialog.queue_free())
+	dialog.canceled.connect(func(): dialog.queue_free())
+	add_child(dialog)
+	dialog.popup_centered()
 
 func _update_stats_label(text: String) -> void:
 	if stats_label:

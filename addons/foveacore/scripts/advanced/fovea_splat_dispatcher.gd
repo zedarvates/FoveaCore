@@ -45,11 +45,25 @@ class AssetEntry:
 	var cached_bytes: PackedByteArray
 	## Cache des blocs spatiaux avec leurs AABB pré-calculées
 	var cached_blocks: Array  # Array[BlockData]
+	## Cache des chunks spatiaux
+	var cached_chunks: Array = [] # Array[SpatialChunk]
 
 class BlockData:
 	var start_index: int
 	var end_index: int
 	var aabb: AABB
+
+class SpatialChunk:
+	var index: int
+	var aabb: AABB
+	var raw_bytes: PackedByteArray
+	var is_loaded: bool = false
+
+signal chunk_loaded(asset_id: int, chunk_index: int)
+signal chunk_unloaded(asset_id: int, chunk_index: int)
+
+var chunk_load_radius: float = 20.0
+var _previously_loaded_chunks: Dictionary = {} # asset_id -> Array[int]
 
 # ── État interne ──────────────────────────────────────────────────────────────
 
@@ -159,13 +173,14 @@ func process_frame(camera: Camera3D, depth_tex: RID, cull_threshold: float = 0.0
 		asset_data_bytes.encode_float(base + 24, entry.aabb_max.z)
 		asset_data_bytes.encode_float(base + 28, 0.0)  # pad1
 
-	# ── Étape 2 : CPU Frustum Cull + Concaténation du mega-buffer ─────────────
+	# ── Étape 2 : CPU Frustum Cull + Distance Load + Concaténation du mega-buffer ─────────────
 	var frustum := FrustumUtils.Frustum.new()
 	frustum.from_matrix(camera.get_camera_projection(), camera.global_transform)
 
 	var mega_bytes := PackedByteArray()
-	var total_blocks_culled: int = 0
-	var total_blocks_input:  int = 0
+	var total_chunks_culled: int = 0
+	var total_chunks_input:  int = 0
+	var total_chunks_loaded: int = 0
 
 	for path: String in _entries:
 		var entry: AssetEntry = _entries[path]
@@ -177,35 +192,57 @@ func process_frame(camera: Camera3D, depth_tex: RID, cull_threshold: float = 0.0
 				push_warning("FoveaSplatDispatcher: Impossible de charger '%s'." % path)
 				continue
 
-		# Pré-calcul des blocs spatiaux (avec cache)
-		if entry.cached_blocks.is_empty():
-			entry.cached_blocks = _precompute_blocks(entry.cached_bytes, entry.aabb_min, entry.aabb_max)
+		# Pré-calcul des chunks spatiaux (avec cache)
+		if entry.cached_chunks.is_empty():
+			entry.cached_chunks = _precompute_spatial_chunks(path, entry.cached_bytes, entry.aabb_min, entry.aabb_max)
 
-		total_blocks_input += entry.cached_blocks.size()
 		var asset_id_byte: int = entry.asset_id
+		var current_loaded_indices: Array[int] = []
+		var prev_loaded_indices: Array = _previously_loaded_chunks.get(asset_id_byte, [])
 
-		for block: BlockData in entry.cached_blocks:
-			if not frustum.contains_aabb(block.aabb):
-				total_blocks_culled += 1
+		for chunk: SpatialChunk in entry.cached_chunks:
+			if chunk.raw_bytes.is_empty():
 				continue
+			total_chunks_input += 1
+			
+			var dist := _distance_to_aabb(cam_pos, chunk.aabb)
+			if dist <= chunk_load_radius:
+				chunk.is_loaded = true
+				total_chunks_loaded += 1
+				current_loaded_indices.append(chunk.index)
+				
+				# Check frustum culling
+				if frustum.contains_aabb(chunk.aabb):
+					# Tague chaque splat avec son asset_id dans le byte layer_id (offset 13)
+					var chunk_bytes := chunk.raw_bytes.duplicate()
+					var n_splats := chunk_bytes.size() / SPLAT_BYTE_SIZE
+					for i: int in range(n_splats):
+						chunk_bytes[i * SPLAT_BYTE_SIZE + 13] = asset_id_byte
+					mega_bytes.append_array(chunk_bytes)
+				else:
+					total_chunks_culled += 1
+			else:
+				chunk.is_loaded = false
 
-			# Extraire les octets de ce bloc
-			var src_off: int   = block.start_index * SPLAT_BYTE_SIZE
-			var n_splats: int  = block.end_index - block.start_index
-			var block_bytes := entry.cached_bytes.slice(src_off, src_off + n_splats * SPLAT_BYTE_SIZE)
-
-			# Taguer chaque splat avec son asset_id dans le byte layer_id (offset 13)
-			for i: int in range(n_splats):
-				block_bytes[i * SPLAT_BYTE_SIZE + 13] = asset_id_byte
-
-			mega_bytes.append_array(block_bytes)
+		# Emit signals / prints for newly loaded/unloaded chunks
+		for idx in current_loaded_indices:
+			if not prev_loaded_indices.has(idx):
+				emit_signal("chunk_loaded", asset_id_byte, idx)
+				print("FoveaSplatDispatcher: Asset %d Spatial Chunk %d loaded (distance <= %.1fm)" % [asset_id_byte, idx, chunk_load_radius])
+				
+		for idx in prev_loaded_indices:
+			if not current_loaded_indices.has(idx):
+				emit_signal("chunk_unloaded", asset_id_byte, idx)
+				print("FoveaSplatDispatcher: Asset %d Spatial Chunk %d unloaded (distance > %.1fm)" % [asset_id_byte, idx, chunk_load_radius])
+				
+		_previously_loaded_chunks[asset_id_byte] = current_loaded_indices
 
 	if mega_bytes.is_empty():
 		return {}
 
-	if total_blocks_culled > 0:
-		print("FoveaSplatDispatcher: CPU Frustum Cull : %d/%d blocs éliminés." % [
-			total_blocks_culled, total_blocks_input])
+	if total_chunks_culled > 0:
+		print("FoveaSplatDispatcher: CPU Frustum Cull : %d/%d chunks éliminés." % [
+			total_chunks_culled, total_chunks_loaded])
 
 	var total_splats: int = mega_bytes.size() / SPLAT_BYTE_SIZE
 	print("FoveaSplatDispatcher: Dispatch vectorisé — %d splats (multi-asset)." % total_splats)
@@ -243,7 +280,26 @@ func process_frame(camera: Camera3D, depth_tex: RID, cull_threshold: float = 0.0
 ## Libère toutes les ressources GPU (appeler à la destruction de la scène).
 func cleanup() -> void:
 	if rd:
+		if _cull_pipeline.is_valid():
+			rd.free_rid(_cull_pipeline)
+			_cull_pipeline = RID()
+		if _cull_shader.is_valid():
+			rd.free_rid(_cull_shader)
+			_cull_shader = RID()
+		if _depth_pipeline.is_valid():
+			rd.free_rid(_depth_pipeline)
+			_depth_pipeline = RID()
+		if _depth_shader.is_valid():
+			rd.free_rid(_depth_shader)
+			_depth_shader = RID()
+		if _sort_pipeline.is_valid():
+			rd.free_rid(_sort_pipeline)
+			_sort_pipeline = RID()
+		if _sort_shader.is_valid():
+			rd.free_rid(_sort_shader)
+			_sort_shader = RID()
 		rd.free()
+		rd = null
 
 # ── Pipeline GPU interne ──────────────────────────────────────────────────────
 
@@ -553,3 +609,78 @@ func _precompute_blocks(raw_bytes: PackedByteArray, aabb_min: Vector3, aabb_max:
 		blocks.append(block)
 
 	return blocks
+
+func _distance_to_aabb(point: Vector3, aabb: AABB) -> float:
+	var closest_point := Vector3(
+		clamp(point.x, aabb.position.x, aabb.end.x),
+		clamp(point.y, aabb.position.y, aabb.end.y),
+		clamp(point.z, aabb.position.z, aabb.end.z)
+	)
+	return point.distance_to(closest_point)
+
+func _precompute_spatial_chunks(fovea_path: String, raw_bytes: PackedByteArray, aabb_min: Vector3, aabb_max: Vector3) -> Array[SpatialChunk]:
+	var chunks: Array[SpatialChunk] = []
+	chunks.resize(4096)
+	
+	var size_cell := (aabb_max - aabb_min) / 16.0
+	for i in range(4096):
+		var chunk := SpatialChunk.new()
+		chunk.index = i
+		var cx := i & 15
+		var cy := (i >> 4) & 15
+		var cz := (i >> 8) & 15
+		var pos_cell := aabb_min + Vector3(cx, cy, cz) * size_cell
+		chunk.aabb = AABB(pos_cell, size_cell)
+		chunk.raw_bytes = PackedByteArray()
+		chunks[i] = chunk
+
+	var total_splats := raw_bytes.size() / SPLAT_BYTE_SIZE
+	var range_vec := aabb_max - aabb_min
+	
+	var buckets: Array[Array] = []
+	buckets.resize(4096)
+	for i in range(4096):
+		buckets[i] = []
+
+	# Map each splat to its chunk
+	for i in range(total_splats):
+		var offset := i * SPLAT_BYTE_SIZE
+		var qx := raw_bytes.decode_u16(offset)
+		var qy := raw_bytes.decode_u16(offset + 2)
+		var qz := raw_bytes.decode_u16(offset + 4)
+		
+		var cell_x: int = clamp(int(float(qx) / 65535.0 * 16.0), 0, 15)
+		var cell_y: int = clamp(int(float(qy) / 65535.0 * 16.0), 0, 15)
+		var cell_z: int = clamp(int(float(qz) / 65535.0 * 16.0), 0, 15)
+		
+		var chunk_idx: int = cell_x + (cell_y << 4) + (cell_z << 8)
+		buckets[chunk_idx].append(i)
+
+	# Populate raw_bytes using contiguous index slicing
+	for i in range(4096):
+		var indices: Array = buckets[i]
+		if indices.is_empty():
+			continue
+		var chunk: SpatialChunk = chunks[i]
+		var chunk_bytes := PackedByteArray()
+		
+		var start_idx: int = indices[0]
+		var count: int = 1
+		for j in range(1, indices.size()):
+			var idx: int = indices[j]
+			if idx == start_idx + count:
+				count += 1
+			else:
+				var src_offset := start_idx * SPLAT_BYTE_SIZE
+				var size := count * SPLAT_BYTE_SIZE
+				chunk_bytes.append_array(raw_bytes.slice(src_offset, src_offset + size))
+				start_idx = idx
+				count = 1
+		
+		var src_offset := start_idx * SPLAT_BYTE_SIZE
+		var size := count * SPLAT_BYTE_SIZE
+		chunk_bytes.append_array(raw_bytes.slice(src_offset, src_offset + size))
+		
+		chunk.raw_bytes = chunk_bytes
+
+	return chunks

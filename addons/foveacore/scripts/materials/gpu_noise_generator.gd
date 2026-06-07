@@ -107,9 +107,21 @@ func sample_noise(position: Vector3) -> Vector3:
 	return Vector3(fbm_val, worley_dist, 0.0)
 
 
+func _exit_tree() -> void:
+	cleanup()
+
+
 func cleanup() -> void:
 	if _rd:
+		if _pipeline.is_valid():
+			_rd.free_rid(_pipeline)
+			_pipeline = RID()
+		if _shader.is_valid():
+			_rd.free_rid(_shader)
+			_shader = RID()
 		if _noise_texture.is_valid():
 			_rd.free_rid(_noise_texture)
+			_noise_texture = RID()
 		_rd.free()
+		_rd = null
 	_initialized = false

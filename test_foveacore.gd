@@ -3,7 +3,7 @@ extends Node
 ## Affiche les statistiques de rendu en temps réel
 
 @onready var _label: Label = null
-@onready var _manager: FoveaCoreManager = null
+@onready var _manager: Node = null
 
 var _frame_count: int = 0
 var _fps: float = 0.0

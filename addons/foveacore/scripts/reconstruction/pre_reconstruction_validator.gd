@@ -176,6 +176,7 @@ func _extract_sample_frames(path: String, count: int) -> Array[Image]:
 		var output_path = temp_dir + "/frame_%d.jpg" % i
 		
 		var args = [
+			"-y",
 			"-ss", str(timestamp),
 			"-i", ProjectSettings.globalize_path(path),
 			"-frames:v", "1",

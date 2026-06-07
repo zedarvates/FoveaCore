@@ -68,6 +68,7 @@ func merge_all_sources(session: ReconstructionSession) -> bool:
 		DirAccess.make_dir_recursive_absolute(temp_dir)
 		
 		var args = [
+			"-y",
 			"-i", ProjectSettings.globalize_path(source_path),
 			"-vf", "fps=2",
 			"-q:v", "2",

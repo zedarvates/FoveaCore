@@ -134,9 +134,37 @@ static func extract_visible_surfaces_stereo(
 	var combined_result: ExtractionResult = ExtractionResult.new()
 	var seen_triangles: Dictionary = {}  # Pour éviter les doublons
 
-	# Extraire pour l'œil gauche
-	if cull_result.has("left"):
-		var left_result: ExtractionResult = extract_visible_triangles(splattable, left_camera_pos, Transform3D.IDENTITY)
+	var left_result: ExtractionResult = null
+	var right_result: ExtractionResult = null
+
+	var has_left := cull_result.has("left")
+	var has_right := cull_result.has("right")
+
+	# Exécuter l'extraction des deux yeux en parallèle si les deux sont visibles (Optimisation CPU VR)
+	if has_left and has_right:
+		var thread_left := Thread.new()
+		var thread_right := Thread.new()
+		
+		# Démarrer l'extraction de l'œil gauche
+		thread_left.start(func() -> void:
+			left_result = extract_visible_triangles(splattable, left_camera_pos, Transform3D.IDENTITY)
+		)
+		
+		# Démarrer l'extraction de l'œil droit
+		thread_right.start(func() -> void:
+			right_result = extract_visible_triangles(splattable, right_camera_pos, Transform3D.IDENTITY)
+		)
+		
+		thread_left.wait_to_finish()
+		thread_right.wait_to_finish()
+	else:
+		if has_left:
+			left_result = extract_visible_triangles(splattable, left_camera_pos, Transform3D.IDENTITY)
+		if has_right:
+			right_result = extract_visible_triangles(splattable, right_camera_pos, Transform3D.IDENTITY)
+
+	# Fusionner les résultats de l'œil gauche
+	if left_result != null:
 		for tri: VisibleTriangle in left_result.visible_triangles:
 			var key: String = _triangle_key(tri)
 			if not seen_triangles.has(key):
@@ -145,9 +173,8 @@ static func extract_visible_surfaces_stereo(
 		combined_result.total_triangles += left_result.total_triangles
 		combined_result.culled_backface += left_result.culled_backface
 
-	# Extraire pour l'œil droit (seulement les triangles uniques)
-	if cull_result.has("right"):
-		var right_result: ExtractionResult = extract_visible_triangles(splattable, right_camera_pos, Transform3D.IDENTITY)
+	# Fusionner les résultats uniques de l'œil droit
+	if right_result != null:
 		for tri: VisibleTriangle in right_result.visible_triangles:
 			var key: String = _triangle_key(tri)
 			if not seen_triangles.has(key):
@@ -157,7 +184,6 @@ static func extract_visible_surfaces_stereo(
 		combined_result.culled_backface += right_result.culled_backface
 
 	combined_result.visible_count = combined_result.visible_triangles.size()
-
 	return combined_result
 
 ## Générer une clé unique pour un triangle

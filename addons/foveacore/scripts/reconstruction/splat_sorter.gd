@@ -231,6 +231,20 @@ func is_gpu_available() -> bool:
 func get_max_supported_splats() -> int:
 	return _max_splats
 
+func _cleanup_gpu() -> void:
+	if not _rd:
+		return
+	_free_buffers()
+	if _pipeline.is_valid():
+		_rd.free_rid(_pipeline)
+		_pipeline = RID()
+	if _shader.is_valid():
+		_rd.free_rid(_shader)
+		_shader = RID()
+	_rd.free()
+	_rd = null
+	_initialized = false
+
 static func sort_by_depth(splats: Array[GaussianSplat], camera_pos: Vector3) -> Array[GaussianSplat]:
 	var indexed: Array[Dictionary] = []
 	for i in range(splats.size()):
@@ -247,11 +261,35 @@ static func sort_by_depth(splats: Array[GaussianSplat], camera_pos: Vector3) -> 
 	return sorted
 
 static func minimize_overdraw(splats: Array[GaussianSplat]) -> Array[GaussianSplat]:
-	var optimized: Array[GaussianSplat] = []
-	var last_pos: Vector3 = Vector3(INF, INF, INF)
+	if splats.is_empty():
+		return splats
 
+	var grid: Dictionary = {}
+	var grid_size := 0.02 # 2cm grid size for spatial clustering
+
+	# Pass 1: Find the dominant (highest opacity) splat for each 3D cell
 	for splat in splats:
-		if splat.position.distance_to(last_pos) > 0.005:
+		var cell = Vector3i(
+			int(floor(splat.position.x / grid_size)),
+			int(floor(splat.position.y / grid_size)),
+			int(floor(splat.position.z / grid_size))
+		)
+		if not grid.has(cell):
+			grid[cell] = splat
+		else:
+			if splat.opacity > grid[cell].opacity:
+				grid[cell] = splat
+
+	# Pass 2: Rebuild the array in original sorted order, keeping only the dominant splats
+	var optimized: Array[GaussianSplat] = []
+	for splat in splats:
+		var cell = Vector3i(
+			int(floor(splat.position.x / grid_size)),
+			int(floor(splat.position.y / grid_size)),
+			int(floor(splat.position.z / grid_size))
+		)
+		if grid.has(cell) and grid[cell] == splat:
 			optimized.append(splat)
-			last_pos = splat.position
+			grid.erase(cell) # Prevent duplicate check
+
 	return optimized

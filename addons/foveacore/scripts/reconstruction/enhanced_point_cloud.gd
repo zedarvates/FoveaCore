@@ -38,7 +38,7 @@ func load_ply_async(path: String) -> void:
 	thread.start(_thread_load_ply.bind(path))
 	
 	while thread.is_alive():
-		await get_tree().process_frame
+		await get_tree().create_timer(0.05).timeout
 	
 	var result = thread.wait()
 	_load_time = float(Time.get_ticks_msec() - start_time)

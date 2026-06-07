@@ -8,6 +8,9 @@ signal session_started(name: String)
 signal session_progress_updated(progress: float)
 signal session_completed(result: ReconstructionSession)
 signal reconstruction_failed(reason: String)
+signal log_line_received(line: String)
+
+var _current_phase: int = 1
 
 @export var processor: StudioProcessor = null
 @export var exporter: DatasetExporter = null
@@ -81,6 +84,10 @@ var _user_config_path: String = OS.get_user_data_dir() + "/fovea_engine_user_set
 
 @export var metrics: ReconstructionMetrics = null
 @export var default_output_dir: String = "res://reconstructions/"
+@export var dry_run: bool = false:
+	set(val):
+		dry_run = val
+		if backend: backend.dry_run = dry_run
 
 var active_sessions: Dictionary = {}
 
@@ -115,6 +122,7 @@ func _ready() -> void:
 		backend.gaussiantrain_script = gaussian_train_script
 		backend.star_bridge_script = star_bridge_script
 		backend.worldmirror_bridge_script = worldmirror_bridge_script
+		backend.dry_run = dry_run
 		backend.command_started.connect(_on_backend_started)
 		backend.command_progress.connect(_on_backend_progress)
 		backend.command_finished.connect(_on_backend_finished)
@@ -292,23 +300,46 @@ func create_new_session(video_path: String, name: String = "") -> Reconstruction
 
 ## Save/Load Session
 func save_session(session: ReconstructionSession) -> Error:
-	var path = session.output_directory.path_join(session.session_name + ".tres")
 	var dir = ProjectSettings.globalize_path(session.output_directory)
 	if not DirAccess.dir_exists_absolute(dir):
 		DirAccess.make_dir_recursive_absolute(dir)
-	var err = ResourceSaver.save(session, path)
-	print("Manager: Session saved to ", path, " (Error: ", err, ")")
-	return err
+		
+	var path = session.output_directory.path_join("session.json")
+	var file = FileAccess.open(path, FileAccess.WRITE)
+	if not file:
+		push_error("Manager: Failed to save session JSON to " + path)
+		return ERR_CANT_OPEN
+		
+	var json_str = JSON.stringify(session.to_dict(), "\t")
+	file.store_string(json_str)
+	file.close()
+	print("Manager: Session saved to ", path)
+	return OK
 
 func load_session(path: String) -> ReconstructionSession:
 	if not FileAccess.file_exists(path):
 		return null
-	var res = ResourceLoader.load(path)
-	if res is ReconstructionSession:
-		active_sessions[res.session_name] = res
-		print("Manager: Session loaded: ", res.session_name)
-		return res
-	return null
+	var file = FileAccess.open(path, FileAccess.READ)
+	if not file:
+		return null
+	var json_str = file.get_as_text()
+	file.close()
+	
+	var json = JSON.new()
+	var err = json.parse(json_str)
+	if err != OK:
+		push_error("Manager: Failed to parse session JSON from " + path)
+		return null
+		
+	var dict = json.get_data()
+	if not (dict is Dictionary):
+		return null
+		
+	var session = ReconstructionSession.new(dict.get("session_name", "session"))
+	session.from_dict(dict)
+	active_sessions[session.session_name] = session
+	print("Manager: Session loaded: ", session.session_name)
+	return session
 
 ## Delete active session and optional files on disk
 func delete_session(session: ReconstructionSession, delete_disk_files: bool = false) -> void:
@@ -346,6 +377,7 @@ func _delete_dir_recursive(path: String) -> void:
 
 ## Step 1: Extraction & Masking
 func run_extraction(session: ReconstructionSession, mask_mode: String = "Studio White") -> void:
+	_current_phase = 1
 	session_started.emit(session.session_name)
 	session.status = "Extracting Frames"
 	
@@ -353,13 +385,20 @@ func run_extraction(session: ReconstructionSession, mask_mode: String = "Studio 
 	exporter.prepare_workspace(session)
 	metrics = ReconstructionMetrics.new()
 	
-	# Connecter le masquage automatique pendant l'extraction
+	# Connecter le masquage automatique pendant l'extraction (utilisation d'un tableau pour le passage par référence dans la closure)
+	var exported_count = [0]
 	var masking_func = func(idx, img): 
+		var blur = processor.calculate_blur_score(img) if not session.dry_run else 1.0
 		var mask = processor.mask_background(img, mask_mode, session.background_threshold, session.roi_rect)
-		exporter.export_frame(session, idx, img, mask)
 		var coverage = _calculate_mask_coverage(mask)
-		var blur = processor.calculate_blur_score(img)
 		metrics.add_frame_metrics(idx, blur, coverage)
+		
+		if blur < session.blur_threshold:
+			print("ReconstructionManager: Frame %d skipped due to high blur (score: %.3f < threshold: %.3f)" % [idx, blur, session.blur_threshold])
+		else:
+			exporter.export_frame(session, idx, img, mask)
+			exported_count[0] += 1
+			
 		# Update progress bar incrementally (0 to 33%)
 		if session.frame_count > 0:
 			session_progress_updated.emit((float(idx) / float(session.frame_count)) * 33.0)
@@ -371,6 +410,7 @@ func run_extraction(session: ReconstructionSession, mask_mode: String = "Studio 
 	
 	# Nettoyage
 	processor.frame_extracted.disconnect(masking_func)
+	session.frame_count = exported_count[0]
 	exporter.create_metadata_json(session)
 	
 	session.status = "Pre-processed"
@@ -400,15 +440,23 @@ func run_reconstruction(session: ReconstructionSession) -> void:
 
 	session_started.emit(session.session_name)
 	print("ReconstructionManager: Démarrage du pipeline complet pour '", session.session_name, "'")
+	save_session(session) # Auto-save initiale
 
 	# Phase 1 : Extraction & Masquage
-	var mask_mode := "Smart Studio"
-	print("Manager: Starting Phase 1 (Extraction)...")
+	var mask_mode := session.mask_mode if ("mask_mode" in session and not session.mask_mode.is_empty()) else "Smart Studio"
+	print("Manager: Starting Phase 1 (Extraction) with mode: ", mask_mode)
 	await run_extraction(session, mask_mode)
 
-	if session.status == "Erreur":
-		reconstruction_failed.emit("Échec Phase 1 : Extraction")
+	if session.status == "Erreur" or session.frame_count == 0:
+		if session.frame_count == 0:
+			session.status = "Erreur"
+			reconstruction_failed.emit("Échec : Aucune image valide n'a été extraite (toutes les images ont été ignorées à cause du flou). Veuillez baisser le seuil de flou (Blur Threshold) dans les paramètres.")
+		else:
+			reconstruction_failed.emit("Échec Phase 1 : Extraction")
+		save_session(session)
 		return
+
+	save_session(session) # Auto-save après Phase 1
 
 	# WorldMirror 2.0 path: single step replaces SfM + 3DGS training
 	if session.use_worldmirror:
@@ -417,9 +465,11 @@ func run_reconstruction(session: ReconstructionSession) -> void:
 		await run_worldmirror(session)
 		if session.status == "Erreur":
 			reconstruction_failed.emit("Échec WorldMirror 2.0")
+			save_session(session)
 			return
 		session_progress_updated.emit(100.0)
 		session_completed.emit(session)
+		save_session(session) # Auto-save finale
 		print("ReconstructionManager: WorldMirror 2.0 pipeline terminé !")
 		return
 
@@ -436,7 +486,10 @@ func run_reconstruction(session: ReconstructionSession) -> void:
 
 	if session.status == "Erreur":
 		reconstruction_failed.emit("Échec Phase 2 : Géométrie")
+		save_session(session)
 		return
+
+	save_session(session) # Auto-save après Phase 2
 
 	# Phase 3 : Training 3DGS
 	session_progress_updated.emit(70.0)
@@ -444,29 +497,49 @@ func run_reconstruction(session: ReconstructionSession) -> void:
 
 	if session.status == "Erreur":
 		reconstruction_failed.emit("Échec Phase 3 : 3DGS Training")
+		save_session(session)
 		return
 
 	session_progress_updated.emit(100.0)
 	session_completed.emit(session)
+	save_session(session) # Auto-save finale
 	print("ReconstructionManager: Pipeline terminé avec succès !")
 
 ## Step 2: SfM (COLMAP)
 func run_sfm(session: ReconstructionSession) -> void:
+	if session.frame_count == 0:
+		session.status = "Erreur"
+		reconstruction_failed.emit("Échec Phase 2 : Aucune image à reconstruire. Veuillez d'abord extraire des images valides.")
+		return
 	session.status = "SfM Running"
 	session.is_processed = false # S'assurer qu'on ne lance pas le training
 	print("ReconstructionManager: Phase 2 - COLMAP SfM...")
 	backend.execute_reconstruction(session)
 	# Attendre la fin du backend
-	var finished_status = await backend.command_finished
+	var finished_result = await backend.command_finished
+	var finished_status = finished_result[0] if finished_result is Array else finished_result
 	if finished_status != 0:
 		session.status = "Erreur"
 		reconstruction_failed.emit("Échec Phase 2 : COLMAP SfM")
 		return
+	
+	# Vérification des fichiers générés
+	var output_ok = exporter.verify_reconstruction_outputs(session)
+	if not output_ok:
+		push_warning("ReconstructionManager: Output verification failed for COLMAP SfM. Required files may be missing.")
+	else:
+		print("ReconstructionManager: Output verification succeeded. All required database and camera files generated.")
+		
 	session_progress_updated.emit(55.0)
 	session.status = "SfM Finished"
 
 ## Step 2 (Alternative): STAR Path (Monocular Depth DA3)
 func run_star_sync(session: ReconstructionSession) -> void:
+	_current_phase = 2
+	if session.frame_count == 0:
+		session.status = "Erreur"
+		reconstruction_failed.emit("Échec Phase 2 : Aucune image à traiter.")
+		return
 	session.status = "STAR Syncing (DA3)"
 	session.is_processed = false
 	print("ReconstructionManager: Phase 2 - STAR Monocular Path...")
@@ -485,6 +558,11 @@ func run_star_sync(session: ReconstructionSession) -> void:
 
 ## Step 2 (WorldMirror 2.0): Feed-forward Reconstruction
 func run_worldmirror(session: ReconstructionSession) -> void:
+	_current_phase = 2
+	if session.frame_count == 0:
+		session.status = "Erreur"
+		reconstruction_failed.emit("Échec Phase 2 : Aucune image à traiter.")
+		return
 	session.status = "WorldMirror 2.0 Inference"
 	session.is_processed = false
 	print("ReconstructionManager: Phase 2 - WorldMirror 2.0 Feed-forward...")
@@ -523,6 +601,7 @@ func run_worldmirror(session: ReconstructionSession) -> void:
 
 ## Step 3: Training (3DGS)
 func run_training(session: ReconstructionSession) -> void:
+	_current_phase = 3
 	session.status = "Training Splats (Long)..."
 	session_progress_updated.emit(70.0)
 	print("ReconstructionManager: Phase 3 - 3DGS Training (This can take 5-20 mins)...")
@@ -530,7 +609,8 @@ func run_training(session: ReconstructionSession) -> void:
 	backend.execute_reconstruction(session)
 	
 	# Attendre la fin du processus réel
-	var finished_status = await backend.command_finished
+	var finished_result = await backend.command_finished
+	var finished_status = finished_result[0] if finished_result is Array else finished_result
 	if finished_status != 0:
 		session.status = "Erreur"
 		reconstruction_failed.emit("Échec Phase 3 : 3DGS Training")
@@ -557,20 +637,27 @@ func run_training(session: ReconstructionSession) -> void:
 
 func _on_backend_started(task: String) -> void:
 	print("Manager: Backend started -> ", task)
+	log_line_received.emit(">>> Starting: " + task)
 	# Logger dans la session active
 	for sess in active_sessions.values():
 		if sess.status != "Terminé":
 			sess.status = task
 
 func _on_backend_progress(line: String, percent: float) -> void:
-	# Afficher la ligne dans le log (si UI attachée)
-	# Mise à jour de la progression si pourcentage estimé
+	log_line_received.emit(line)
 	if percent >= 0:
-		session_progress_updated.emit(percent)
-	# Toujours émettre un signal de progression de ligne pour les logs
-	# (La UI peut choisir de l'afficher ou non)
+		var mapped_percent := 0.0
+		match _current_phase:
+			1:
+				mapped_percent = percent * 0.33
+			2:
+				mapped_percent = 33.0 + (percent * 0.33)
+			3:
+				mapped_percent = 66.0 + (percent * 0.34)
+		session_progress_updated.emit(mapped_percent)
 
 func _on_backend_finished(status: int, output: String) -> void:
 	print("Manager: Backend finished -> ", output)
+	log_line_received.emit(">>> Finished task with status %d" % status)
 	if status != 0:
 		push_warning("ReconstructionManager: commande terminée avec code d'erreur %d" % status)

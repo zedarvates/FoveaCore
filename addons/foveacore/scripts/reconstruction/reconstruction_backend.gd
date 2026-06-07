@@ -20,6 +20,12 @@ signal oom_detected(command: String, details: String)
 ## Timeout maximum en secondes pour chaque commande externe (0 = pas de timeout)
 @export var command_timeout_seconds: float = 1800.0  # 30 min par defaut
 
+var _stdout_thread: Thread = null
+var _stderr_thread: Thread = null
+var _current_pid: int = -1
+## Mode test (Dry Run) : affiche les commandes sans les lancer pour de vrai
+@export var dry_run: bool = false
+
 ## Run the full reconstruction pipeline using external calls
 func execute_reconstruction(session: ReconstructionSession) -> void:
 	# Choix entre WorldMirror 2.0, STAR (legacy) et COLMAP complet
@@ -36,23 +42,18 @@ func execute_reconstruction(session: ReconstructionSession) -> void:
 
 func _run_colmap_features(session: ReconstructionSession) -> void:
 	var abs_path: String = ProjectSettings.globalize_path(session.output_directory)
-	
-	# Création du dossier sparse s'il n'existe pas
-	var sparse_dir = abs_path + "/sparse"
-	if not DirAccess.dir_exists_absolute(sparse_dir):
-		DirAccess.make_dir_recursive_absolute(sparse_dir)
 		
 	# Utilisation du reconstructeur automatique de COLMAP (plus robuste)
 	var args = [
 		"automatic_reconstructor",
 		"--workspace_path", abs_path,
 		"--image_path", abs_path + "/input",
-		"--data_type", "video",
+		"--data_type", "individual" if session.exhaustive_matching else "video",
 		"--quality", "medium",
 		"--use_gpu", "1"
 	]
 	
-	_execute_command(colmap_path, args, "COLMAP: Full SfM Reconstruction")
+	_execute_command(colmap_path, args, "COLMAP: Full SfM Reconstruction", session)
 
 func _run_gaussian_training(session: ReconstructionSession) -> void:
 	var abs_path: String = ProjectSettings.globalize_path(session.output_directory)
@@ -62,37 +63,47 @@ func _run_gaussian_training(session: ReconstructionSession) -> void:
 		"-m", abs_path + "/output",
 		"--iterations", "7000"
 	]
-	_execute_command(python_path, args, "3DGS: Training Splats")
+	_execute_command(python_path, args, "3DGS: Training Splats", session)
 
 func _run_worldmirror_path(session: ReconstructionSession) -> void:
 	var abs_path: String = ProjectSettings.globalize_path(session.output_directory)
+	var script_path = ProjectSettings.globalize_path("res://addons/foveacore/scripts/reconstruction").path_join(worldmirror_bridge_script)
 	var args = [
-		worldmirror_bridge_script,
+		script_path,
 		"--input", abs_path + "/input",
 		"--output", abs_path,
 		"--device", "cuda",
 		"--target_size", str(session.target_size),
 		"--fps", str(session.extraction_fps)
 	]
-	_execute_command(python_path, args, "WorldMirror 2.0: Feed-forward Reconstruction")
+	_execute_command(python_path, args, "WorldMirror 2.0: Feed-forward Reconstruction", session)
 
 func _run_star_monocular_path(session: ReconstructionSession) -> void:
 	var abs_path: String = ProjectSettings.globalize_path(session.output_directory)
+	var script_path = ProjectSettings.globalize_path("res://addons/foveacore/scripts/reconstruction").path_join(star_bridge_script)
 	var args = [
-		star_bridge_script,
+		script_path,
 		"--input", abs_path + "/input",
 		"--output", abs_path + "/star_workspace",
 		"--device", "cuda"
 	]
-	_execute_command(python_path, args, "STAR: Fast Monocular Depth (DA3)")
+	_execute_command(python_path, args, "STAR: Fast Monocular Depth (DA3)", session)
 
-func _execute_command(executable: String, args: Array, task_name: String) -> void:
+func _execute_command(executable: String, args: Array, task_name: String, session: ReconstructionSession = null) -> void:
 	command_started.emit(task_name)
-	var cmd_str = executable + " " + " ".join(args)
+	var cmd_str: String = executable + " " + " ".join(args)
 	print("ReconstructionBackend: Executing -> ", cmd_str)
 
+	if session and session.dry_run:
+		var msg: String = "[DRY RUN] Would execute command: " + cmd_str
+		print(msg)
+		command_progress.emit(msg, 50.0)
+		await get_tree().create_timer(1.0).timeout
+		command_finished.emit(0, msg + "\n[DRY RUN] Completed successfully.")
+		return
+
 	# execute_with_pipe capture stdout+stderr séparés
-	var pipe = OS.execute_with_pipe(executable, args)
+	var pipe: Dictionary = OS.execute_with_pipe(executable, args)
 
 	var stdio = pipe.get("stdio", null)
 	var stderr = pipe.get("stderr", null)
@@ -104,109 +115,143 @@ func _execute_command(executable: String, args: Array, task_name: String) -> voi
 		command_finished.emit(1, "Failed to start")
 		return
 
-	# Lecture asynchrone des deux flux
-	_read_pipes_async(stdio, stderr, pid, task_name)
+	_current_pid = pid
 
-func _read_pipes_async(stdio: FileAccess, stderr: FileAccess, pid: int, task_name: String) -> void:
-	var full_output = ""
-	var line_count = 0
-	var oom_detected_flag = false
+	# Structure partagée et thread-safe pour suivre l'état de la commande
+	var shared_data = {
+		"full_output": "",
+		"last_output_time": Time.get_ticks_msec(),
+		"oom_detected": false,
+		"lock": Mutex.new()
+	}
+
+	# Spawn deux threads indépendants pour éviter les inter-blocages de tampons de flux (deadlocks)
+	_stdout_thread = Thread.new()
+	_stdout_thread.start(Callable(self, "_stdout_read_loop").bind(stdio, task_name, shared_data, pid))
+	
+	_stderr_thread = Thread.new()
+	_stderr_thread.start(Callable(self, "_stderr_read_loop").bind(stderr, task_name, shared_data, pid))
+
+	# Lancement de la boucle d'attente/polling asynchrone non bloquante sur le thread principal
+	_poll_process(pid, task_name, shared_data)
+
+func _stdout_read_loop(stdio: FileAccess, task_name: String, shared_data: Dictionary, pid: int) -> void:
+	if not stdio:
+		return
+	while not stdio.eof_reached():
+		var line = stdio.get_line()
+		if line.is_empty() and not OS.is_process_running(pid):
+			break
+		if not line.is_empty():
+			shared_data.lock.lock()
+			shared_data.last_output_time = Time.get_ticks_msec()
+			shared_data.full_output += line + "\n"
+			shared_data.lock.unlock()
+			
+			print("[%s] %s" % [task_name, line])
+			var progress_pct = _parse_progress_percent(line, task_name)
+			command_progress.emit.call_deferred(line, progress_pct)
+			
+			# Détection Out Of Memory (OOM)
+			var lower_line = line.to_lower()
+			for pattern in ["cuda out of memory", "out of memory", "oom", "memory allocation failed", "cannot allocate memory", "failed to allocate", "allocation failed"]:
+				if lower_line.contains(pattern):
+					shared_data.lock.lock()
+					if not shared_data.oom_detected:
+						shared_data.oom_detected = true
+						var oom_msg = "OOM détecté dans %s : %s" % [task_name, line.strip_edges()]
+						oom_detected.emit.call_deferred(task_name, oom_msg)
+						error_occurred.emit.call_deferred(oom_msg)
+					shared_data.lock.unlock()
+					break
+
+func _stderr_read_loop(stderr: FileAccess, task_name: String, shared_data: Dictionary, pid: int) -> void:
+	if not stderr:
+		return
+	while not stderr.eof_reached():
+		var line = stderr.get_line()
+		if line.is_empty() and not OS.is_process_running(pid):
+			break
+		if not line.is_empty():
+			shared_data.lock.lock()
+			shared_data.last_output_time = Time.get_ticks_msec()
+			shared_data.full_output += "[ERR] " + line + "\n"
+			shared_data.lock.unlock()
+			
+			print("[%s] [ERR] %s" % [task_name, line])
+			var progress_pct = _parse_progress_percent(line, task_name)
+			command_progress.emit.call_deferred(line, progress_pct)
+			
+			# Détection Out Of Memory (OOM)
+			var lower_line = line.to_lower()
+			for pattern in ["cuda out of memory", "out of memory", "oom", "memory allocation failed", "cannot allocate memory", "failed to allocate", "allocation failed"]:
+				if lower_line.contains(pattern):
+					shared_data.lock.lock()
+					if not shared_data.oom_detected:
+						shared_data.oom_detected = true
+						var oom_msg = "OOM détecté dans %s : %s" % [task_name, line.strip_edges()]
+						oom_detected.emit.call_deferred(task_name, oom_msg)
+						error_occurred.emit.call_deferred(oom_msg)
+					shared_data.lock.unlock()
+					break
+
+func _poll_process(pid: int, task_name: String, shared_data: Dictionary) -> void:
 	var start_time := Time.get_ticks_msec()
-	var last_output_time := Time.get_ticks_msec()
-	var oom_patterns = [
-		"CUDA out of memory",
-		"out of memory",
-		"OOM",
-		"memory allocation failed",
-		"cannot allocate memory",
-		"Failed to allocate",
-		"Allocation failed"
-	]
-
 	while OS.is_process_running(pid):
-		# Yield control to prevent main thread freeze
-		await get_tree().create_timer(0.05).timeout
-
-		# Timeout check
+		# Yield au thread principal pour garder l'UI réactive
+		await get_tree().create_timer(0.2).timeout
+		
+		# Limite de temps (timeout)
 		if command_timeout_seconds > 0:
 			var elapsed := (Time.get_ticks_msec() - start_time) / 1000.0
 			if elapsed > command_timeout_seconds:
-				push_error("Backend: Timeout (%ds) exceeded for '%s', killing process." % [int(command_timeout_seconds), task_name])
+				push_error("Backend: Timeout (%ds) dépassé pour '%s', arrêt du processus." % [int(command_timeout_seconds), task_name])
 				OS.kill(pid)
-				full_output += "[TIMEOUT] Process killed after %.0fs\n" % elapsed
-				command_finished.emit(-1, full_output)
-				return
-
-		var got_output = false
-		var lines_read := 0
-		const MAX_LINES_PER_FRAME := 50
-
-		# Lire stdout
-		if stdio and stdio.get_error() == OK:
-			while not stdio.eof_reached() and lines_read < MAX_LINES_PER_FRAME:
-				var line = stdio.get_line()
-				if not line.is_empty():
-					got_output = true
-					line_count += 1
-					lines_read += 1
-					last_output_time = Time.get_ticks_msec()
-					full_output += line + "\n"
-					print("[%s] %s" % [task_name, line])
-					var progress_pct = _parse_progress_percent(line, task_name)
-					command_progress.emit(line, progress_pct)
-
-					# Détection OOM
-					var lower_line = line.to_lower()
-					for pattern in oom_patterns:
-						if lower_line.contains(pattern.to_lower()):
-							var oom_msg = "OOM détecté dans %s : %s" % [task_name, line.strip_edges()]
-							if not oom_detected_flag:
-								oom_detected.emit(task_name, oom_msg)
-								error_occurred.emit(oom_msg)
-								oom_detected_flag = true
-							break
-
-		# Lire stderr
-		if stderr and stderr.get_error() == OK:
-			while not stderr.eof_reached() and lines_read < MAX_LINES_PER_FRAME:
-				var line = stderr.get_line()
-				if not line.is_empty():
-					got_output = true
-					line_count += 1
-					lines_read += 1
-					last_output_time = Time.get_ticks_msec()
-					full_output += "[ERR] " + line + "\n"
-					print("[%s] [ERR] %s" % [task_name, line])
-					var progress_pct = _parse_progress_percent(line, task_name)
-					command_progress.emit(line, progress_pct)
-
-					var lower_line = line.to_lower()
-					for pattern in oom_patterns:
-						if lower_line.contains(pattern.to_lower()):
-							var oom_msg = "OOM détecté dans %s : %s" % [task_name, line.strip_edges()]
-							if not oom_detected_flag:
-								oom_detected.emit(task_name, oom_msg)
-								error_occurred.emit(oom_msg)
-								oom_detected_flag = true
-							break
-
-		if not got_output:
-			# Safety: if no output for 5 min, the process is likely hung even if still "running"
-			if (Time.get_ticks_msec() - last_output_time) > 300000:
-				push_error("Backend: No output from '%s' for 5 min, process likely hung." % task_name)
-				OS.kill(pid)
-				full_output += "[HUNG] Process killed (no output for 5 min)\n"
-				command_finished.emit(-1, full_output)
-				return
-			await get_tree().create_timer(0.1).timeout
-
-	# Récupérer le code de sortie
+				shared_data.lock.lock()
+				shared_data.full_output += "[TIMEOUT] Process killed after %.0fs\n" % elapsed
+				shared_data.lock.unlock()
+				break
+				
+		# Détection de gel du processus (plus de sorties console)
+		shared_data.lock.lock()
+		var idle_time = Time.get_ticks_msec() - shared_data.last_output_time
+		shared_data.lock.unlock()
+		
+		if idle_time > 300000: # 5 min sans sortie
+			push_error("Backend: Aucun retour de '%s' depuis 5 min, processus probablement gelé." % task_name)
+			OS.kill(pid)
+			shared_data.lock.lock()
+			shared_data.full_output += "[HUNG] Process killed (no output for 5 min)\n"
+			shared_data.lock.unlock()
+			break
+			
+	# Attente propre de l'arrêt des threads de lecture
+	if _stdout_thread and _stdout_thread.is_started():
+		_stdout_thread.wait_to_finish()
+	if _stderr_thread and _stderr_thread.is_started():
+		_stderr_thread.wait_to_finish()
+		
+	_current_pid = -1
 	var exit_code = OS.get_process_exit_code(pid)
-	if exit_code != 0 and not oom_detected_flag:
+	
+	shared_data.lock.lock()
+	var out = shared_data.full_output
+	var oom = shared_data.oom_detected
+	shared_data.lock.unlock()
+	
+	if exit_code != 0 and not oom:
 		var err_msg = "Commande '%s' échouée avec code %d" % [task_name, exit_code]
 		error_occurred.emit(err_msg)
+		
+	command_finished.emit(exit_code, out)
 
-	command_finished.emit(exit_code, full_output)
+func _exit_tree() -> void:
+	if _current_pid != -1 and OS.is_process_running(_current_pid):
+		OS.kill(_current_pid)
+	if _stdout_thread and _stdout_thread.is_started():
+		_stdout_thread.wait_to_finish()
+	if _stderr_thread and _stderr_thread.is_started():
+		_stderr_thread.wait_to_finish()
 
 
 func _parse_progress_percent(line: String, task_name: String) -> float:

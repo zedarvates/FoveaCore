@@ -27,8 +27,11 @@ var splat_renderer: FoveaSplatRenderer = null
 ## Position caméra du frame précédent (pour reprojection temporelle)
 var _previous_camera_position: Vector3 = Vector3.ZERO
 
-func setup(density: float) -> void:
+var max_splats: int = 100000
+
+func setup(density: float, max_s: int = 100000) -> void:
 	global_splat_density = density
+	max_splats = max_s
 
 	splat_config = SplatGenerator.SplatConfig.new()
 	splat_config.splats_per_triangle = 3
@@ -45,18 +48,33 @@ func process_frame(visibility_result, camera: Camera3D, camera_pos: Vector3) -> 
 
 ## Génération + reprojection temporelle + occlusion
 func _generate_and_filter(visibility_result, camera: Camera3D, camera_pos: Vector3) -> void:
+	current_splats = []
+	current_splats.resize(max_splats)
+	var current_idx := 0
+
 	if temporal_reprojector:
-		current_splats = []
 		for node in visibility_result.per_node_results:
 			var extraction = visibility_result.per_node_results[node]
 			var filtered_triangles = _filter_occlusion(extraction.visible_triangles, camera)
 			var reprojected: Array[GaussianSplat] = temporal_reprojector.reproject_splats(
 				node, [], camera_pos, _previous_camera_position, filtered_triangles)
-			current_splats.append_array(reprojected)
+			for splat in reprojected:
+				if current_idx < max_splats:
+					current_splats[current_idx] = splat
+					current_idx += 1
+				else:
+					break
 	else:
-		current_splats = SplatGenerator.generate_all_splats(
+		var splats = SplatGenerator.generate_all_splats(
 			visibility_result, camera_pos, splat_config, global_splat_density)
+		for splat in splats:
+			if current_idx < max_splats:
+				current_splats[current_idx] = splat
+				current_idx += 1
+			else:
+				break
 
+	current_splats.resize(current_idx)
 	current_splats = _sort_gpu_aware(current_splats, camera, camera_pos)
 
 ## Filtre les triangles occultés via le Hi-Z culler CPU

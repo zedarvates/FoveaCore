@@ -10,24 +10,65 @@ extends MultiMeshInstance3D
 @export var use_triangle_mesh: bool = true  # Utiliser le maillage triangle optimisé
 @export var splat_subdivisions: int = 16    # Nombre de segments pour l'ellipse
 @export var sort_distance_threshold: float = 0.1  # Distance minimale de déplacement de la caméra pour recalculer le tri/culling
+@export var chunk_load_radius: float = 20.0  # Distance maximum pour charger un chunk spatial
 
 @export_group("Cleaning (FoveaSplatCleaner)")
 ## Activer le filtrage des floaters et NaN apres le GPU culling
-@export var enable_cleaning: bool = true
+@export var enable_cleaning: bool = true:
+    set(val):
+        enable_cleaning = val
+        if culler_pipeline:
+            culler_pipeline.enable_cleaning = val
+            _on_cleaning_parameter_changed()
 ## Radius de voisinage pour la detection des floaters (cellules voxel)
-@export_range(1, 4) var floater_neighbor_radius: int = 1
+@export_range(1, 4) var floater_neighbor_radius: int = 1:
+    set(val):
+        floater_neighbor_radius = val
+        if culler_pipeline:
+            culler_pipeline.floater_neighbor_radius = val
+            _on_cleaning_parameter_changed()
 ## Nombre minimum de voisins pour qu'un splat soit conserve
-@export_range(1, 10) var floater_min_neighbors: int = 2
+@export_range(1, 10) var floater_min_neighbors: int = 2:
+    set(val):
+        floater_min_neighbors = val
+        if culler_pipeline:
+            culler_pipeline.floater_min_neighbors = val
+            _on_cleaning_parameter_changed()
 ## Decimer le nuage de points apres le nettoyage
-@export var enable_decimation: bool = false
+@export var enable_decimation: bool = false:
+    set(val):
+        enable_decimation = val
+        if culler_pipeline:
+            culler_pipeline.enable_decimation = val
+            _on_cleaning_parameter_changed()
 ## Cible apres decimation (0 = desactive)
-@export var decimation_target: int = 50000
+@export var decimation_target: int = 50000:
+    set(val):
+        decimation_target = val
+        if culler_pipeline:
+            culler_pipeline.decimation_target = val
+            _on_cleaning_parameter_changed()
 ## Fusionner les splats co-planaires pour réduire le GPU overdraw (Phase 3)
-@export var enable_coplanar_merge: bool = false
+@export var enable_coplanar_merge: bool = false:
+    set(val):
+        enable_coplanar_merge = val
+        if culler_pipeline:
+            culler_pipeline.enable_coplanar_merge = val
+            _on_cleaning_parameter_changed()
 ## Taille du bucket de profondeur Z pour la fusion co-planaire (valeur plus petite = plus agressif)
-@export_range(128, 2048, 128) var coplanar_z_bucket: int = 512
+@export_range(128, 2048, 128) var coplanar_z_bucket: int = 512:
+    set(val):
+        coplanar_z_bucket = val
+        if culler_pipeline:
+            culler_pipeline.coplanar_z_bucket = val
+            _on_cleaning_parameter_changed()
 ## Nombre minimum de splats dans un groupe pour déclencher la fusion
-@export_range(2, 16) var coplanar_min_group: int = 4
+@export_range(2, 16) var coplanar_min_group: int = 4:
+    set(val):
+        coplanar_min_group = val
+        if culler_pipeline:
+            culler_pipeline.coplanar_min_group = val
+            _on_cleaning_parameter_changed()
 
 @export_group("Temporal Sorting (Phase 3)")
 ## Facteur d'entrelacement du tri GPU.
@@ -56,6 +97,18 @@ extends MultiMeshInstance3D
 ## Intensite du dithering Floyd-Steinberg
 @export_range(0.0, 2.0) var dither_strength: float = 1.0
 
+@export_group("MIP-Splatting & HLOD")
+## Activer le système de niveaux de détail hiérarchiques (HLOD)
+@export var enable_hlod := true
+## Tailles de grille de voxelisation 3D pour chaque niveau HLOD (LOD 1, 2, 3)
+@export var hlod_voxel_sizes: Array[float] = [0.2, 0.8, 3.0]
+## Seuils de distance de caméra pour transiter entre les niveaux HLOD
+@export var hlod_distances: Array[float] = [8.0, 18.0, 30.0]
+
+var hlod_levels := {}
+var _current_hlod_level := 0
+var _original_splats: Array[GaussianSplat] = []
+
 var culler_pipeline: GPUCullerPipeline
 var splat_mesh: ArrayMesh
 var triangle_mesh_generator
@@ -76,6 +129,7 @@ var _motion_lod_applied: float = 1.0  # Cache du lod_ratio courant pour éviter 
 func _ready():
     culler_pipeline = GPUCullerPipeline.new()
     culler_pipeline.interleave_factor = sort_interleave_factor
+    _propagate_cleaning_parameters()
     
     # Charger le générateur de maillage triangle
     triangle_mesh_generator = load("res://addons/foveacore/scripts/advanced/triangle_splat_mesh.gd")
@@ -127,11 +181,15 @@ func _process(_delta: float) -> void:
     if camera == null or material_override == null:
         return
 
-    # Mettre à jour le culling/tri en temps réel si la caméra bouge
+    # Mettre à jour le culling/tri en temps réel si la caméra bouge (rendu par fichier uniquement)
     var cam_pos = camera.global_position
-    if (cam_pos - _last_camera_pos).length() > sort_distance_threshold:
+    if asset_path != "" and (cam_pos - _last_camera_pos).length() > sort_distance_threshold:
         _last_camera_pos = cam_pos
         load_and_render_splats()
+
+    # Gérer la transition HLOD pour les splats procéduraux
+    if enable_hlod and not hlod_levels.is_empty():
+        _update_hlod_selection(cam_pos)
 
     var dist := global_position.distance_to(camera.global_position)
 
@@ -378,6 +436,7 @@ func load_and_render_splats():
         mat.set_shader_parameter("aabb_max", aabb_max)
 
     # 3. Exécution du Compute Shader ultra-rapide (Culling)
+    culler_pipeline.chunk_load_radius = chunk_load_radius
     var output_buffer_rid = culler_pipeline.process_splats_from_file(
         asset_path, camera, depth_tex, cull_threshold, aabb_min, aabb_max)
     if not output_buffer_rid.is_valid():
@@ -394,8 +453,9 @@ func load_and_render_splats():
     print("FoveaEngine: %d splats GPU après culling." % surviving_splats_count)
 
     # 4b. Passe de nettoyage optionnelle (FoveaSplatCleaner — P3)
-    # Opère sur les bytes bruts AVANT décodage : pas de coût supplémentaire d'allocation.
-    if enable_cleaning and surviving_splats_count > 0:
+    # Désormais appliquée de manière statique au chargement dans culler_pipeline pour de meilleures performances.
+    var statically_cleaned = (culler_pipeline and culler_pipeline.enable_cleaning)
+    if enable_cleaning and surviving_splats_count > 0 and not statically_cleaned:
         var before_clean := surviving_splats_count
         # Filtre NaN/outliers (splats quantisés à (65535,65535,65535))
         culled_bytes = FoveaSplatCleaner.filter_nan_inf(culled_bytes)
@@ -412,7 +472,8 @@ func load_and_render_splats():
 
     # Passe de fusion co-planaire (Coplanar Splat Merging, Phase 3)
     # Regroupe les splats co-surfaciques pour éliminer l'overdraw GPU.
-    if enable_coplanar_merge and surviving_splats_count > 0:
+    var statically_merged = (culler_pipeline and culler_pipeline.enable_coplanar_merge)
+    if enable_coplanar_merge and surviving_splats_count > 0 and not statically_merged:
         culled_bytes = FoveaSplatCleaner.merge_coplanar(
             culled_bytes, coplanar_z_bucket, 24, 1024, coplanar_min_group)
         surviving_splats_count = culled_bytes.size() / 16
@@ -443,8 +504,8 @@ func load_and_render_splats():
     if deformer:
         deformer.set_original_transforms(multimesh, _original_transforms)
 
-    # Libération du buffer GPU
-    culler_pipeline.rd.free_rid(output_buffer_rid)
+    # En mode persistant, la libération du buffer GPU est gérée en interne par culler_pipeline lors du cleanup.
+    pass
 
 ## Méthode pour mettre à jour dynamiquement le maillage
 func update_splat_mesh_mode(use_triangle: bool):
@@ -469,6 +530,21 @@ func update_splat_mesh_mode(use_triangle: bool):
 
 ## Rendu de splats non-quantisés passés sous forme de GaussianSplat (compatibilité avec FoveaCoreManager)
 func render_splats(splats: Array[GaussianSplat]) -> int:
+    _original_splats = splats
+    if enable_hlod and not splats.is_empty():
+        # Générer et mettre en cache la base de données HLOD
+        hlod_levels = FoveaHLODGenerator.generate_hlod_levels(splats, hlod_voxel_sizes)
+        _current_hlod_level = -1 # Forcer la transition initiale
+        var camera = get_viewport().get_camera_3d()
+        var cam_pos = camera.global_position if camera else Vector3.ZERO
+        _update_hlod_selection(cam_pos, true)
+        return _original_splats.size()
+    else:
+        hlod_levels.clear()
+        return render_splats_internal(splats)
+
+## Exécution du rendu interne pour un ensemble de splats donné
+func render_splats_internal(splats: Array[GaussianSplat]) -> int:
     var count: int = splats.size()
     multimesh.instance_count = count
 
@@ -507,6 +583,27 @@ func render_splats(splats: Array[GaussianSplat]) -> int:
 
     return count
 
+## Sélectionne et applique dynamiquement le niveau HLOD approprié
+func _update_hlod_selection(camera_pos: Vector3, force: bool = false) -> void:
+    if not enable_hlod or hlod_levels.is_empty():
+        return
+        
+    var dist := global_position.distance_to(camera_pos)
+    
+    var target_hlod := 0
+    for idx in range(hlod_distances.size()):
+        if dist >= hlod_distances[idx]:
+            target_hlod = idx + 1
+            
+    if target_hlod != _current_hlod_level or force:
+        _current_hlod_level = target_hlod
+        if hlod_levels.has(target_hlod):
+            var splats_to_render: Array[GaussianSplat] = hlod_levels[target_hlod]
+            render_splats_internal(splats_to_render)
+            print("FoveaSplatRenderer: Passage au niveau HLOD %d (%d splats) à une distance de %.2f m" % [
+                target_hlod, splats_to_render.size(), dist
+            ])
+
 ## Packs GaussianSplat objects into a raw 16-byte PackedSplat array compatible with the shader
 func pack_gaussian_splats(splats: Array[GaussianSplat], aabb_min: Vector3, aabb_max: Vector3) -> PackedByteArray:
     var bytes: PackedByteArray = PackedByteArray()
@@ -529,9 +626,11 @@ func pack_gaussian_splats(splats: Array[GaussianSplat], aabb_min: Vector3, aabb_
         bytes.encode_u16(src + 2, qy)
         bytes.encode_u16(src + 4, qz)
 
-        # Normals (default 0)
-        bytes.encode_s8(src + 6, 0)
-        bytes.encode_s8(src + 7, 0)
+        # Encodage de la direction d'écoulement (normal.x et normal.z mappés de -1..1 à 0..255)
+        var nx: int = int(clamp((s.normal.x * 0.5 + 0.5) * 255.0, 0, 255))
+        var nz: int = int(clamp((s.normal.z * 0.5 + 0.5) * 255.0, 0, 255))
+        bytes.encode_u8(src + 6, nx)
+        bytes.encode_u8(src + 7, nz)
 
         # Color index / RGB565
         var r5: int = int(clamp(s.color.r * 31.0, 0, 31))
@@ -552,3 +651,24 @@ func pack_gaussian_splats(splats: Array[GaussianSplat], aabb_min: Vector3, aabb_
         bytes.encode_u8(src + 15, 0)
 
     return bytes
+
+func _exit_tree() -> void:
+    if culler_pipeline:
+        culler_pipeline.cleanup()
+
+func _propagate_cleaning_parameters() -> void:
+    if culler_pipeline:
+        culler_pipeline.enable_cleaning = enable_cleaning
+        culler_pipeline.floater_neighbor_radius = floater_neighbor_radius
+        culler_pipeline.floater_min_neighbors = floater_min_neighbors
+        culler_pipeline.enable_decimation = enable_decimation
+        culler_pipeline.decimation_target = decimation_target
+        culler_pipeline.enable_coplanar_merge = enable_coplanar_merge
+        culler_pipeline.coplanar_z_bucket = coplanar_z_bucket
+        culler_pipeline.coplanar_min_group = coplanar_min_group
+
+func _on_cleaning_parameter_changed() -> void:
+    if culler_pipeline:
+        culler_pipeline.clear_cache()
+    if asset_path != "" and is_inside_tree():
+        load_and_render_splats()

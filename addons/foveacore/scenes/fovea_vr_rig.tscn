@@ -7,6 +7,9 @@
 
 [node name="FoveaVRRig" type="XROrigin3D"]
 script = ExtResource("1_rig")
+xr_camera = NodePath("XRCamera3D")
+left_controller = NodePath("LeftHand")
+right_controller = NodePath("RightHand")
 
 [node name="ProxyFaceRenderer" type="Node3D" parent="."]
 script = ExtResource("3_proxy_renderer")
