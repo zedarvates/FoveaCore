@@ -77,11 +77,8 @@ void vertex() {
 	uint data2 = floatBitsToUint(INSTANCE_CUSTOM.z);
 	uint data3 = floatBitsToUint(INSTANCE_CUSTOM.w);
 
-	uint qx = data0 & 0xFFFFu;
-	uint qy = (data0 >> 16) & 0xFFFFu;
-	uint qz = data1 & 0xFFFFu;
-	vec3 q_pos   = vec3(float(qx), float(qy), float(qz)) / 65535.0;
-	vec3 world_pos = aabb_min + q_pos * (aabb_max - aabb_min);
+	// Position de l'instance/splat dans le monde via MODEL_MATRIX
+	vec3 world_pos = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 
 	// Couleur
 	uint color_index = data2 & 0xFFFFu;
@@ -107,7 +104,12 @@ void vertex() {
 	vec4 rot   = vec4(tex0.w, tex1.x, tex1.y, tex1.z);
 
 	mat3 cov3d    = compute_cov3d(scale, rot);
-	vec3 center_cam = (VIEW_MATRIX * vec4(world_pos, 1.0)).xyz;
+	
+	// Transformer la covariance de l'espace local à l'espace vue (inclut rotation/échelle d'instance)
+	mat3 MV = mat3(MODELVIEW_MATRIX);
+	cov3d = MV * cov3d * transpose(MV);
+	
+	vec3 center_cam = (MODELVIEW_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 	vec3 cov2d    = compute_cov2d(center_cam, cov3d, PROJECTION_MATRIX, VIEWPORT_SIZE);
 
 	float det     = (cov2d.x * cov2d.z) - (cov2d.y * cov2d.y);

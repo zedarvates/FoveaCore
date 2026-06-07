@@ -27,64 +27,85 @@ var config: HybridConfig = HybridConfig.new()
 var current_mode: RenderMode = RenderMode.HYBRID
 
 ## Références
-var _mesh_instance: MeshInstance3D = null
+var _managed_meshes: Dictionary = {} # MeshInstance3D -> Array[Material]
 var _splat_renderer = null
-var _original_materials: Array = []
 var _hybrid_material: StandardMaterial3D = null
 
 ## Initialiser le renderer hybride pour un nœud
-func setup_for_node(mesh_node: MeshInstance3D, splat_renderer_node):
-	_mesh_instance = mesh_node
+func setup_for_node(mesh_node: MeshInstance3D, splat_renderer_node) -> void:
+	if mesh_node == null:
+		return
 	_splat_renderer = splat_renderer_node
 
-	# Sauvegarder les matériaux originaux
-	if _mesh_instance:
-		for i in range(_mesh_instance.get_surface_override_material_count()):
-			_original_materials.append(_mesh_instance.get_surface_override_material(i))
+	if not _managed_meshes.has(mesh_node):
+		var original_materials = []
+		for i in range(mesh_node.get_surface_override_material_count()):
+			original_materials.append(mesh_node.get_surface_override_material(i))
+		_managed_meshes[mesh_node] = original_materials
 
+	if _hybrid_material == null:
 		# Créer le matériau hybride (semi-transparent)
 		_hybrid_material = StandardMaterial3D.new()
 		_hybrid_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		_hybrid_material.albedo_color = Color(1, 1, 1, config.mesh_opacity)
 		_hybrid_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 
-	_apply_mode()
+	_apply_mode_for_node(mesh_node)
 
-## Appliquer le mode de rendu actuel
-func _apply_mode():
-	if _mesh_instance == null:
-		return
+## Appliquer le mode de rendu actuel à tous les nœuds
+func _apply_mode() -> void:
+	var to_remove = []
+	for mesh in _managed_meshes:
+		if not is_instance_valid(mesh):
+			to_remove.append(mesh)
+		else:
+			_apply_mode_for_node(mesh)
+	for mesh in to_remove:
+		_managed_meshes.erase(mesh)
 
+func _apply_mode_for_node(mesh_node: MeshInstance3D) -> void:
 	match current_mode:
 		RenderMode.MESH_ONLY:
-			_mesh_instance.visible = true
-			_restore_original_materials()
+			mesh_node.visible = true
+			_restore_original_materials_for_node(mesh_node)
 			if _splat_renderer:
 				_splat_renderer.visible = false
 
 		RenderMode.SPLAT_ONLY:
-			_mesh_instance.visible = false
+			# Rétablir la visibilité d'origine du mesh
+			var parent = mesh_node.get_parent()
+			if parent is FoveaSplattable:
+				mesh_node.visible = not parent.hide_mesh_when_splatting
+			else:
+				var splattable = mesh_node.get_node_or_null("FoveaSplattable")
+				if splattable and splattable is FoveaSplattable:
+					mesh_node.visible = not splattable.hide_mesh_when_splatting
+				else:
+					mesh_node.visible = true
+			_restore_original_materials_for_node(mesh_node)
 			if _splat_renderer:
 				_splat_renderer.visible = true
 
 		RenderMode.HYBRID:
-			_mesh_instance.visible = config.mesh_enabled
-			_apply_hybrid_materials()
+			mesh_node.visible = config.mesh_enabled
+			_apply_hybrid_materials_for_node(mesh_node)
 			if _splat_renderer:
 				_splat_renderer.visible = config.splat_enabled
 
 ## Appliquer les matériaux hybrides (semi-transparents)
-func _apply_hybrid_materials():
+func _apply_hybrid_materials_for_node(mesh_node: MeshInstance3D) -> void:
 	if _hybrid_material == null:
 		return
 
-	for i in range(_mesh_instance.get_surface_override_material_count()):
-		_mesh_instance.set_surface_override_material(i, _hybrid_material)
+	for i in range(mesh_node.get_surface_override_material_count()):
+		mesh_node.set_surface_override_material(i, _hybrid_material)
 
 ## Restaurer les matériaux originaux
-func _restore_original_materials():
-	for i in range(_original_materials.size()):
-		_mesh_instance.set_surface_override_material(i, _original_materials[i])
+func _restore_original_materials_for_node(mesh_node: MeshInstance3D) -> void:
+	if _managed_meshes.has(mesh_node):
+		var original_materials = _managed_meshes[mesh_node]
+		for i in range(original_materials.size()):
+			mesh_node.set_surface_override_material(i, original_materials[i])
 
 ## Générer les splats depuis la surface du mesh
 func generate_splats_from_mesh(
@@ -172,9 +193,9 @@ func toggle_splats(enabled: bool):
 	_apply_mode()
 
 ## Ajuster l'opacité du mesh
-func set_mesh_opacity(opacity: float):
+func set_mesh_opacity(opacity: float) -> void:
 	config.mesh_opacity = clamp(opacity, 0.0, 1.0)
-	if current_mode == RenderMode.HYBRID:
+	if _hybrid_material:
 		_hybrid_material.albedo_color.a = config.mesh_opacity
 
 ## Obtenir les stats

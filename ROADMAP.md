@@ -17,6 +17,7 @@ This document outlines the roadmap to transform FoveaCore into a world-class hyb
   - [x] **Format Compatibility**: Verification of PLY/depth/cameras outputs → FoveaEngine pipeline
   - [x] **Installation Script**: Setup script + CUDA 12.4 dependency checker
   - [x] **UI Mode Selector**: COLMAP vs WorldMirror 2.0 radio in panel
+- [x] **DVLT (Déjà View) Integration**: Unified multi-view unposed reconstruction backend with a configurable refinement loop (K-steps) via the DiffSynth bridge.
 - [x] **Real-time Mask Preview**: Instant feedback of cutout settings.
 - [x] **Reset & Session Management**: Facilitate iterative testing.
 
@@ -44,21 +45,22 @@ This document outlines the roadmap to transform FoveaCore into a world-class hyb
 - [x] **Temporal & Interleaved Sorting**: GPU sort distribued over N frames via `frame_mask/frame_id` + single compute-list submit (eliminates O(log²N) CPU-GPU stalls). Configurable via `sort_interleave_factor` export (1/2/4).
 - [ ] **Tile-Based Rasterization**: Divide screen into tiles (16x16) in compute shader to limit sorting and blending to purely local splats (standard 3DGS approach).
 - [x] **FP16 Compute Pipeline (Depth Keys)**: Pré-calcul des clés de profondeur (`depth_precompute.glsl`) en O(N) avant le tri bitonique. `sort_bitonic_keyed.glsl` lit 1 float/comparaison au lieu de décoder 3×uint16+10 ALU → ~4-6× réduction de bande passante sur les comparaisons non-swap (majorité dans les étapes finales du bitonic).
-- [ ] **Global Splat Instancing (Mega-Buffer)**: Render thousands of copies of same asset (e.g., forests, crowds) with single VRAM copy, via multi-transform compute shader.
+- [x] **Global Splat Instancing**: Render thousands of copies of same asset (e.g., forests, crowds) with single VRAM copy, via GPU-driven frustum culler (`FoveaInstancedCuller`).
 - [ ] **Delta-Splat Variants (Morphs & Overrides)**: Create lightweight variants of instanced objects (color tints, local deformations) by storing and computing only the "difference" (Delta).
 - [ ] **GPU-Driven Indirect Draw**: Eliminate CPU-GPU synchronizations (`rd.sync`) by letting compute shader write its own render commands (Draw indirect buffer).
 - [ ] **Out-of-Core VRAM Streaming**: Load spatial chunks directly from SSD to VRAM (DirectStorage style) for infinite open worlds without saturating RAM.
 - [x] **Motion-Adaptive Splatting (Kinematic LOD)**: Suivi de la vélocité caméra par frame dans `FoveaSplatRenderer._process()`. Au-delà du seuil `motion_speed_threshold` : (a) réduction linéaire de `lod_ratio` vers `motion_lod_minimum`, (b) étirement des splats dans la direction de vélocité vue (`motion_stretch_factor`, GLSL). Récupération progressive (decay 15%/frame) au retour à l'arrêt.
 - [x] **Artistic Shaders**: Shader `splat_render_artistic.gdshader` avec 3 modes : Oil Painting (postérisation + bords pinceau + bruit de peinture), Watercolor (falloff doux + boost saturation central + granulation aquarelle), Crosshatch (hachures doubles orientées avec densité tonale). Compatible motion-stretch + fovea LOD.
-- [ ] **MIP-Splatting & HLOD**: Dynamic LOD system (Mesh at distance, Macro-splats at mid-distance, Micro-splats up close).
+- [x] **GPU Water Splat Particles**: Shader-based simulation of volatile and recycled water splats with advection, obstacle collision/bounce, and decay. Supports local flow direction painting via `FLOW` brush mode.
+- [x] **MIP-Splatting & HLOD**: Dynamic LOD system (Mesh at distance, Macro-splats at mid-distance, Micro-splats up close).
 - [x] **Fast-Path Binary Asset Format (`.fovea`)**: Native container ready for GPU (Direct Memory Upload) without CPU parsing, implemented in Rust.
-- [ ] **Dynamic Lighting**: Dynamic shadows adapting to Godot light sources.
+- [x] **Dynamic Lighting**: Dynamic shadows adapting to Godot light sources.
 - [ ] **Static vs Dynamic Splat Separation**: Differential processing (Baking/Octree for static decor, Compute Skinning & Deformation for mobile entities).
 
 ## 🟣 Phase 4: Artificial Intelligence & Cloud
 *Objective: Automate asset creation.*
 
-- [ ] **ComfyUI Bridge**: Direct API connection for generating sources from Godot.
+- [x] **ComfyUI Bridge**: Direct API connection for generating sources from Godot.
 - [ ] **Auto-ROI**: Automatic main object detection by AI.
 - [ ] **Gaussian Compression**: Ultra-light file format for VR streaming.
 

@@ -3,7 +3,7 @@
 [sub_resource type="OpenXRActionSet" id="OpenXRActionSet_fovea"]
 resource_name = "fovea"
 localized_name = "Fovea Engine Action Set"
-actions = []
+actions = [SubResource("OpenXRAction_grip_left"), SubResource("OpenXRAction_grip_right"), SubResource("OpenXRAction_trigger_left"), SubResource("OpenXRAction_trigger_right"), SubResource("OpenXRAction_trigger_val_left"), SubResource("OpenXRAction_trigger_val_right"), SubResource("OpenXRAction_thumb_l"), SubResource("OpenXRAction_thumb_r"), SubResource("OpenXRAction_menu_l"), SubResource("OpenXRAction_menu_r")]
 
 [sub_resource type="OpenXRAction" id="OpenXRAction_grip_left"]
 resource_name = "grip_press_left"
@@ -103,4 +103,4 @@ action_sets = {
 
 [resource]
 action_sets = [SubResource("OpenXRActionSet_fovea")]
-interaction_profiles = []
+interaction_profiles = [SubResource("OpenXRProfile_khr"), SubResource("OpenXRProfile_oculus")]

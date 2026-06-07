@@ -22,7 +22,7 @@ func prepare_workspace(session: ReconstructionSession) -> bool:
 			push_error("DatasetExporter: Failed to create directory: ", absolute_path)
 			return false
 
-	var subdirs = ["input", "masks", "sparse", "stereo", "sparse/0", "output"]
+	var subdirs = ["images", "input", "masks", "stereo", "output"]
 	for subdir in subdirs:
 		var sub_path = absolute_path.path_join(subdir)
 		if not DirAccess.dir_exists_absolute(sub_path):
@@ -67,9 +67,12 @@ func export_frame(session: ReconstructionSession, index: int, image: Image, mask
 	var base_dir: String = ProjectSettings.globalize_path(session.output_directory)
 	var frame_name: String = "frame_%04d.png" % index
 	
-	# Save input frame
+	# Save input frame to both input and images directories for compatibility
 	var input_path = base_dir.path_join("input").path_join(frame_name)
 	image.save_png(input_path)
+	
+	var images_path = base_dir.path_join("images").path_join(frame_name)
+	image.save_png(images_path)
 	
 	# Save mask if provided
 	if mask:
@@ -90,3 +93,75 @@ func create_metadata_json(session: ReconstructionSession) -> void:
 	if file:
 		file.store_string(JSON.stringify(data, "\t"))
 		file.close()
+
+## Verifies that the reconstruction folder contains all expected outputs (images, masks, database.db, sparse files)
+func verify_reconstruction_outputs(session: ReconstructionSession) -> bool:
+	var base_dir: String = ProjectSettings.globalize_path(session.output_directory)
+	var ok := true
+	
+	# 1. Check input frames directory
+	var input_dir = base_dir.path_join("input")
+	if not DirAccess.dir_exists_absolute(input_dir):
+		push_error("DatasetExporter: input directory is missing.")
+		ok = false
+	else:
+		var dir = DirAccess.open(input_dir)
+		dir.list_dir_begin()
+		var file_count = 0
+		var file_name = dir.get_next()
+		while file_name != "":
+			if not dir.current_is_dir() and file_name.ends_with(".png"):
+				file_count += 1
+			file_name = dir.get_next()
+		if file_count == 0:
+			push_error("DatasetExporter: No frames found in input directory.")
+			ok = false
+			
+	# 2. Check masks directory
+	var masks_dir = base_dir.path_join("masks")
+	if DirAccess.dir_exists_absolute(masks_dir):
+		var dir = DirAccess.open(masks_dir)
+		dir.list_dir_begin()
+		var mask_count = 0
+		var file_name = dir.get_next()
+		while file_name != "":
+			if not dir.current_is_dir() and file_name.ends_with(".png"):
+				mask_count += 1
+			file_name = dir.get_next()
+		print("DatasetExporter: Found %d masks." % mask_count)
+	
+	# If running WorldMirror 2.0, SfM outputs like database.db and sparse files are not generated
+	if session.use_worldmirror:
+		var ply_path = base_dir.path_join("gaussians.ply")
+		if not FileAccess.file_exists(ply_path):
+			push_error("DatasetExporter: gaussians.ply is missing from WorldMirror 2.0 output.")
+			ok = false
+		return ok
+		
+	# 3. Check database.db (only for COLMAP path)
+	var db_path = base_dir.path_join("database.db")
+	if not FileAccess.file_exists(db_path):
+		push_error("DatasetExporter: database.db is missing.")
+		ok = false
+		
+	# 4. Check sparse files (can be .bin or .txt)
+	var sparse_0_dir = base_dir.path_join("sparse/0")
+	if not DirAccess.dir_exists_absolute(sparse_0_dir):
+		push_error("DatasetExporter: sparse/0 directory is missing.")
+		ok = false
+	else:
+		var has_cameras = FileAccess.file_exists(sparse_0_dir.path_join("cameras.bin")) or FileAccess.file_exists(sparse_0_dir.path_join("cameras.txt"))
+		var has_images = FileAccess.file_exists(sparse_0_dir.path_join("images.bin")) or FileAccess.file_exists(sparse_0_dir.path_join("images.txt"))
+		var has_points = FileAccess.file_exists(sparse_0_dir.path_join("points3D.bin")) or FileAccess.file_exists(sparse_0_dir.path_join("points3D.txt"))
+		
+		if not has_cameras:
+			push_error("DatasetExporter: cameras file is missing from sparse/0.")
+			ok = false
+		if not has_images:
+			push_error("DatasetExporter: images file is missing from sparse/0.")
+			ok = false
+		if not has_points:
+			push_error("DatasetExporter: points3D file is missing from sparse/0.")
+			ok = false
+			
+	return ok

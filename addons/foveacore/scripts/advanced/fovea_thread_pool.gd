@@ -43,8 +43,15 @@ class DecodeResult:
 ## @param num_splats    : nombre de splats valides dans le buffer
 ## @param aabb_min      : AABB min de l'asset
 ## @param aabb_max      : AABB max de l'asset
+## @param instance_transforms : transforms des instances actives pour le positionnement / rotation
 ## @returns DecodeResult prêt pour injection dans MultiMesh
-static func decode_parallel(culled_bytes: PackedByteArray, num_splats: int, aabb_min: Vector3, aabb_max: Vector3) -> DecodeResult:
+static func decode_parallel(
+	culled_bytes: PackedByteArray,
+	num_splats: int,
+	aabb_min: Vector3,
+	aabb_max: Vector3,
+	instance_transforms: Array[Transform3D] = []
+) -> DecodeResult:
 	var result: DecodeResult = DecodeResult.new()
 	result.splat_count = num_splats
 
@@ -67,7 +74,7 @@ static func decode_parallel(culled_bytes: PackedByteArray, num_splats: int, aabb
 	# Pour les petits nuages, mono-thread est plus rapide (pas de surcharge)
 	if num_splats < 4096 or thread_count <= 1:
 		_decode_chunk(culled_bytes, result.xf_array, result.cd_array,
-				result.original_transforms, 0, num_splats, aabb_min, aabb_max)
+				result.original_transforms, 0, num_splats, aabb_min, aabb_max, instance_transforms)
 		return result
 
 	# Découper en chunks et dispatcher
@@ -95,9 +102,10 @@ static func decode_parallel(culled_bytes: PackedByteArray, num_splats: int, aabb
 		var _end      := end
 		var _min      := aabb_min
 		var _max      := aabb_max
+		var _inst_xf  := instance_transforms
 
 		thread.start(func() -> void:
-			_decode_chunk(_culled, _xf, _cd, _orig, _start, _end, _min, _max)
+			_decode_chunk(_culled, _xf, _cd, _orig, _start, _end, _min, _max, _inst_xf)
 		)
 
 	# Attendre tous les threads
@@ -118,7 +126,8 @@ static func _decode_chunk(
 		start:                int,
 		end:                  int,
 		aabb_min:             Vector3,
-		aabb_max:             Vector3
+		aabb_max:             Vector3,
+		instance_transforms:  Array[Transform3D] = []
 ) -> void:
 	for i: int in range(start, end):
 		var src: int = i * SPLAT_BYTE_SIZE
@@ -132,14 +141,30 @@ static func _decode_chunk(
 		var py: float = aabb_min.y + qy * (aabb_max.y - aabb_min.y)
 		var pz: float = aabb_min.z + qz * (aabb_max.z - aabb_min.z)
 
-		# Remplir transform_array (translation pure, Basis = IDENTITY)
+		var world_pos := Vector3(px, py, pz)
+		var basis_x := Vector3.RIGHT
+		var basis_y := Vector3.UP
+		var basis_z := Vector3.BACK
+
+		if not instance_transforms.is_empty():
+			# Lire l'instance_id taggé dans les 16 bits de poids fort de data3
+			var data3: int = culled_bytes.decode_u32(src + 12)
+			var instance_id: int = (data3 >> 16) & 0xFFFF
+			if instance_id < instance_transforms.size():
+				var xf_inst: Transform3D = instance_transforms[instance_id]
+				world_pos = xf_inst * world_pos
+				basis_x = xf_inst.basis.x
+				basis_y = xf_inst.basis.y
+				basis_z = xf_inst.basis.z
+
+		# Remplir transform_array
 		# Dans Godot 4.3+, MultiMesh.transform_array est un PackedVector3Array
-		# Chaque transform est composé de 4 Vector3 : col0 (right), col1 (up), col2 (back), col3 (origin)
+		# Chaque transform est composé de 4 Vector3 : col0 (right/basis_x), col1 (up/basis_y), col2 (back/basis_z), col3 (origin/world_pos)
 		var xf_off: int = i * 4
-		xf_array[xf_off]      = Vector3.RIGHT
-		xf_array[xf_off + 1]  = Vector3.UP
-		xf_array[xf_off + 2]  = Vector3.BACK
-		xf_array[xf_off + 3]  = Vector3(px, py, pz)
+		xf_array[xf_off]      = basis_x
+		xf_array[xf_off + 1]  = basis_y
+		xf_array[xf_off + 2]  = basis_z
+		xf_array[xf_off + 3]  = world_pos
 
 		# Remplir custom_data_array avec les bits bruts des 4 mots de 32 bits (data0-data3)
 		# Re-interprétés en floats via decode_float pour correspondre aux floatBitsToUint du Shader
@@ -150,4 +175,4 @@ static func _decode_chunk(
 		cd_array[i] = Color(r, g, b, a)
 
 		# Cache des originaux pour le FoveaClayDeformer (non-destructif)
-		original_transforms[i] = Transform3D(Basis(), Vector3(px, py, pz))
+		original_transforms[i] = Transform3D(Basis(basis_x, basis_y, basis_z), world_pos)

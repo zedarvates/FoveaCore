@@ -16,6 +16,22 @@ var _pipeline: RID
 
 ## Extract frames from a video using FFmpeg
 func extract_frames(session: ReconstructionSession) -> void:
+	if session.dry_run:
+		print("[DRY RUN] Simulating frame extraction...")
+		session.status = "Extracting Frames (Simulated)"
+		await get_tree().create_timer(0.2).timeout
+		
+		for i in range(3):
+			var img = Image.create(64, 64, false, Image.FORMAT_RGBA8)
+			img.fill(Color.WHITE)
+			frame_extracted.emit(i, img)
+			await get_tree().create_timer(0.05).timeout
+			
+		session.frame_count = 3
+		session.status = "Frames Extracted"
+		processing_completed.emit(3)
+		return
+
 	if session.video_path.is_empty():
 		push_error("StudioProcessor: No video path provided.")
 		return
@@ -28,6 +44,7 @@ func extract_frames(session: ReconstructionSession) -> void:
 		DirAccess.make_dir_recursive_absolute(output_dir)
 
 	var args = [
+		"-y",
 		"-i", ProjectSettings.globalize_path(session.video_path),
 		"-vf", "fps=2", # Extraire 2 images par seconde pour le GS
 		"-q:v", "2",     # Haute qualité
@@ -71,7 +88,7 @@ func extract_frames(session: ReconstructionSession) -> void:
 			
 			# Keep UI responsive every 5 frames
 			if i % 5 == 0:
-				await get_tree().process_frame
+				await get_tree().create_timer(0.01).timeout
 	
 	session.frame_count = count
 	session.status = "Frames Extracted"
@@ -97,17 +114,22 @@ func get_preview_frame(video_path: String) -> Image:
 	
 	# Wait for FFmpeg to finish (async, yields engine control)
 	while OS.is_process_running(pid):
-		await get_tree().process_frame
+		await get_tree().create_timer(0.05).timeout
 	
 	if FileAccess.file_exists(temp_path):
 		var img = Image.load_from_file(temp_path)
-		return img if img else null
-		return img
+		if img:
+			return img
 		
 	return null
 
 ## Background masking logic (moved from manager or implemented here)
 func mask_background(image: Image, mode: String, threshold: float, roi: Rect2i) -> Image:
+	if mode == "None":
+		var mask = Image.create(image.get_width(), image.get_height(), false, Image.FORMAT_L8)
+		mask.fill(Color.WHITE)
+		return mask
+
 	# Essayer d'utiliser le GPU si disponible
 	var gpu_mask = _mask_background_gpu(image, mode, threshold, roi)
 	if gpu_mask:
@@ -144,8 +166,8 @@ func _free_gpu() -> void:
 		if _shader.is_valid():
 			_rd.free_rid(_shader)
 			_shader = RID()
-		if _rd:
-			_rd = null
+		_rd.free()
+		_rd = null
 
 
 func _notification(what: int) -> void:

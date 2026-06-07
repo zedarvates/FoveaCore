@@ -70,6 +70,9 @@ var _temporal_reprojector: TemporalReprojector = null
 var _splat_renderer: FoveaSplatRenderer = null
 var _splat_sorter: SplatSorter = null
 
+## Dictionnaire des renderers d'instances multiples par chemin d'asset
+var _instanced_renderers: Dictionary = {} # String -> FoveaInstancedSplatRenderer
+
 ## État global
 var renderer_initialized := false
 var hybrid_mode_enabled: bool = false
@@ -114,6 +117,7 @@ func _init_subsystems() -> void:
 	## 1. Sous-système VR
 	_vr = FoveaVRSubsystem.new()
 	add_child(_vr)
+	_vr.xr_unavailable.connect(_on_xr_unavailable)
 	_vr.setup(vr_enabled, xr_shader_enabled)
 
 	## 2. Sous-système Foveated
@@ -129,7 +133,7 @@ func _init_subsystems() -> void:
 	## 3. Pipeline Splat
 	_splat_pipeline = FoveaSplatSubsystem.new()
 	add_child(_splat_pipeline)
-	_splat_pipeline.setup(global_splat_density)
+	_splat_pipeline.setup(global_splat_density, max_splats_per_frame)
 	# Injecter les dépendances
 	_splat_pipeline.temporal_reprojector = _temporal_reprojector
 	_splat_pipeline.occlusion_culler     = _occlusion_culler
@@ -158,10 +162,10 @@ func _run_culling_pass() -> void:
 	var camera_pos := _get_main_camera_position()
 
 	# Hybrid setup (optionnel)
-	if hybrid_mode_enabled and _hybrid_renderer:
+	if _hybrid_renderer:
 		for node in visibility_result.per_node_results:
-			if node is MeshInstance3D:
-				_hybrid_renderer.setup_for_node(node, _splat_renderer)
+			if node is FoveaSplattable and node._mesh_instance_ref != null:
+				_hybrid_renderer.setup_for_node(node._mesh_instance_ref, _splat_renderer)
 
 	# Génération + tri via le sous-système splat
 	_splat_pipeline.process_frame(visibility_result, camera, camera_pos)
@@ -183,12 +187,26 @@ func register_splattable(node: FoveaSplattable) -> void:
 		_eye_culler.register_splattable(node)
 	if _visibility_manager:
 		_visibility_manager.register_splattable(node)
-	# Attacher un LOD proxy pour les grandes distances
-	var proxy := _ProxyFaceRendererScript.new()
-	proxy.name = "ProxyFace_" + node.name
-	proxy.target_splattable = node
-	proxy.switch_distance = 30.0
-	node.add_child(proxy)
+	
+	# Gestion de l'instanciation globale pour les fichiers .fovea
+	if node.splat_file_path.ends_with(".fovea") and node.enable_instancing:
+		var path := node.splat_file_path
+		if not _instanced_renderers.has(path):
+			var instanced_renderer = FoveaInstancedSplatRenderer.new()
+			instanced_renderer.name = "InstancedRenderer_" + path.get_file().get_basename()
+			instanced_renderer.asset_path = path
+			instanced_renderer.sort_distance_threshold = 0.1
+			add_child(instanced_renderer)
+			_instanced_renderers[path] = instanced_renderer
+			print("FoveaCoreManager: Création du FoveaInstancedSplatRenderer pour '%s'" % path.get_file())
+	
+	# Attacher un LOD proxy pour les grandes distances (seulement pour le mode non-instancié)
+	if not node.enable_instancing:
+		var proxy := _ProxyFaceRendererScript.new()
+		proxy.name = "ProxyFace_" + node.name
+		proxy.target_splattable = node
+		proxy.switch_distance = 30.0
+		node.add_child(proxy)
 
 ## Désenregistrer un FoveaSplattable
 func unregister_splattable(node: FoveaSplattable) -> void:
@@ -196,9 +214,33 @@ func unregister_splattable(node: FoveaSplattable) -> void:
 		_eye_culler.unregister_splattable(node)
 	if _visibility_manager:
 		_visibility_manager.unregister_splattable(node)
-	for child in node.get_children():
-		if child.get_script() == _ProxyFaceRendererScript:
-			child.queue_free()
+	
+	if not node.enable_instancing:
+		for child in node.get_children():
+			if child.get_script() == _ProxyFaceRendererScript:
+				child.queue_free()
+	else:
+		call_deferred("_check_and_cleanup_unused_instanced_renderers")
+
+func _check_and_cleanup_unused_instanced_renderers() -> void:
+	var active_nodes = get_tree().get_nodes_in_group("splattables")
+	var active_paths := []
+	for n in active_nodes:
+		if n is FoveaSplattable and n.enable_instancing and n.splat_file_path.ends_with(".fovea"):
+			if not active_paths.has(n.splat_file_path):
+				active_paths.append(n.splat_file_path)
+	
+	var paths_to_remove := []
+	for path in _instanced_renderers:
+		if not active_paths.has(path):
+			paths_to_remove.append(path)
+			
+	for path in paths_to_remove:
+		var renderer = _instanced_renderers[path]
+		if is_instance_valid(renderer):
+			renderer.queue_free()
+		_instanced_renderers.erase(path)
+		print("FoveaCoreManager: Libération du FoveaInstancedSplatRenderer inutilisé pour '%s'" % path.get_file())
 
 ## Changer le style global de rendu
 func set_style(style: FoveaStyle) -> void:
@@ -235,3 +277,14 @@ func toggle_hybrid_mode() -> void:
 func _get_main_camera_position() -> Vector3:
 	var camera := get_viewport().get_camera_3d()
 	return camera.global_position if camera else Vector3.ZERO
+
+func _on_xr_unavailable(reason: String) -> void:
+	print("FoveaCoreManager: OpenXR non disponible (%s). Repli sur le mode Desktop." % reason)
+	vr_enabled = false
+	foveated_enabled = false
+	if _foveated:
+		_foveated.disable()
+
+func _exit_tree() -> void:
+	if _splat_sorter:
+		_splat_sorter._cleanup_gpu()

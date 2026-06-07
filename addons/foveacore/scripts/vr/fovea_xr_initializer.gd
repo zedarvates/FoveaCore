@@ -83,8 +83,13 @@ func _setup_viewport() -> void:
         print("OpenXR: Refresh rate set to 72Hz.")
 
 func _apply_foveation_settings() -> void:
+    var viewport = get_viewport()
+    if viewport and "vrs_mode" in viewport:
+        viewport.vrs_mode = 2 # Viewport.VRS_XR
+        print("FoveaXRInitializer: Viewport VRS mode set to VRS_XR.")
+
     # OpenXR Fixed Foveated Rendering (if supported by hardware/driver)
-    if xr_interface.get("vrs_mode") != null:
+    if xr_interface and xr_interface.get("vrs_mode") != null:
         xr_interface.vrs_mode = foveation_level
         print("OpenXR: VRS Foveation set to level ", foveation_level)
 

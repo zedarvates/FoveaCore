@@ -1,4 +1,4 @@
-extends Node
+extends SceneTree
 
 ## Unit tests for StyleEngine
 ## Validates procedural material computation: colors, roughness, specular, bump, noise functions
@@ -12,14 +12,14 @@ signal test_failed(test_name: String, error: String)
 signal all_complete(passed: int, failed: int)
 
 
-func _ready() -> void:
+func _init() -> void:
 	print("\n" + "=".repeat(70))
 	print("StyleEngine Unit Tests")
 	print("=".repeat(70))
 
 	_config = _make_config()
 
-	await get_tree().create_timer(0.3).timeout
+	await create_timer(0.3).timeout
 	_run_all()
 
 
@@ -88,7 +88,8 @@ func _run_all() -> void:
 	_assert("bump perturbed from normal", bump != normal, "Bump should differ from input normal")
 
 	print("\n--- Glass specifics ---")
-	var glass_color = StyleEngine.compute_color(pos, normal, StyleEngine.MaterialType.GLASS, _config, light)
+	var glass_normal := Vector3(0, 0, 1)
+	var glass_color = StyleEngine.compute_color(pos, glass_normal, StyleEngine.MaterialType.GLASS, _config, light)
 	_assert("Glass has alpha < 1.0", glass_color.a < 1.0, "Glass should be translucent")
 	_assert("Glass has alpha > 0.0", glass_color.a > 0.0, "Glass should not be invisible")
 
@@ -119,6 +120,11 @@ func _run_all() -> void:
 	])
 	print("=".repeat(70))
 	all_complete.emit(_passed, _failed)
+	
+	if _failed > 0:
+		quit(1)
+	else:
+		quit(0)
 
 
 func _assert_valid_color(name: String, c: Color) -> void:

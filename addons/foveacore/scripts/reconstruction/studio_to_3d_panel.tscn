@@ -191,6 +191,20 @@ placeholder_text = "colmap (or full path to colmap.exe)"
 layout_mode = 2
 text = "..."
 
+[node name="ColmapOptsRow" type="HBoxContainer" parent="VSplit/TopScroll/VBoxTop/Settings"]
+layout_mode = 2
+
+[node name="ExhaustiveLabel" type="Label" parent="VSplit/TopScroll/VBoxTop/Settings/ColmapOptsRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "Exhaustive Match:"
+
+[node name="ExhaustiveCheck" type="CheckBox" parent="VSplit/TopScroll/VBoxTop/Settings/ColmapOptsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Enable Exhaustive Matcher"
+button_pressed = false
+
 [node name="WM2Row" type="VBoxContainer" parent="VSplit/TopScroll/VBoxTop/Settings"]
 layout_mode = 2
 
@@ -442,3 +456,4 @@ scroll_past_end_of_file = true
 [connection signal="pressed" from="VSplit/TopScroll/VBoxTop/Pipeline/ExportPLY" to="." method="_on_export_ply_pressed"]
 [connection signal="toggled" from="VSplit/TopScroll/VBoxTop/Settings/WM2Row/WM2ModeCheck" to="." method="_on_wm2_mode_changed"]
 [connection signal="value_changed" from="VSplit/TopScroll/VBoxTop/Settings/WM2Row/WM2TargetRow/WM2TargetSlider" to="." method="_on_wm2_target_changed"]
+[connection signal="toggled" from="VSplit/TopScroll/VBoxTop/Settings/ColmapOptsRow/ExhaustiveCheck" to="." method="_on_exhaustive_check_toggled"]

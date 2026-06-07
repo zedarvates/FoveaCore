@@ -4,12 +4,13 @@ class_name SplatBrushEngine
 ## Moteur d'interaction physique et creatif avec les Gaussian Splats
 ## Applique des modifications de couleur / opacite par zone spherique
 
-enum BrushMode { PAINT, ERASE, RESTORE }
+enum BrushMode { PAINT, ERASE, RESTORE, FLOW }
 
 @export var brush_radius: float = 0.5
 @export var brush_color: Color = Color(1.0, 0.0, 0.0)
 @export var brush_mode: BrushMode = BrushMode.PAINT
 @export var brush_opacity: float = 1.0
+@export var brush_flow_direction := Vector3(1.0, 0.0, 0.0)
 
 
 func apply_brush(node: Node3D, global_hit_position: Vector3) -> bool:
@@ -23,8 +24,15 @@ func apply_brush(node: Node3D, global_hit_position: Vector3) -> bool:
     var local_hit := splattable.to_local(global_hit_position)
     var modified := false
 
-    for splat in splattable.loaded_splats:
-        var splat_pos := splat.position
+    # Initialiser ou mettre à jour la grille spatiale
+    if splattable.spatial_grid == null or not is_equal_approx(splattable.spatial_grid.cell_size, brush_radius):
+        splattable.spatial_grid = FoveaSplattable.SplatSpatialHashGrid.new(brush_radius, splattable.loaded_splats)
+
+    var indices: Array = splattable.spatial_grid.get_indices_in_radius(local_hit, brush_radius)
+
+    for idx in indices:
+        var splat: GaussianSplat = splattable.loaded_splats[idx]
+        var splat_pos: Vector3 = splat.position
         if splat_pos.distance_to(local_hit) <= brush_radius:
             modified = true
             match brush_mode:
@@ -35,5 +43,9 @@ func apply_brush(node: Node3D, global_hit_position: Vector3) -> bool:
                     splat.opacity = 0.0
                 BrushMode.RESTORE:
                     splat.opacity = clamp(brush_opacity, 0.0, 1.0)
+                BrushMode.FLOW:
+                    # Stocker le courant de la rivière dans la propriété normal du splat
+                    splat.normal = brush_flow_direction.normalized()
 
     return modified
+

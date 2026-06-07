@@ -14,7 +14,7 @@
 
 FoveaCore est un plugin Godot GDExtension (Rust 🦀) qui remplace le pipeline de rendu standard par un pipeline hybride low-poly + Gaussian Splatting avec foveated rendering et style procédural. Le choix de Rust garantit la sécurité mémoire lors du chargement de scènes massives.
 
-### 1.2 Diagramme des 4 Modules Principaux
+### 1.2 Diagramme des Modules Principaux
 
 ```mermaid
 graph TB
@@ -25,25 +25,33 @@ graph TB
 	end
 
 	subgraph FoveaCore Plugin
-		subgraph SceneCore[Scene Core]
-			FrustumCull[Frustum Culling par oeil]
+		subgraph SceneCore[Scene Core & Spatial Subsystem]
+			FrustumCull[Frustum Culling CPU/GPU]
 			VisExtract[Visible-Only Surface Extraction]
-			LODMgr[LOD Manager QEM]
+			SpatialChunk[Spatial Hash Grid / 16³ Chunking]
 		end
 
-		subgraph SplatEngine[Visible-Only Splatting]
+		subgraph SplatEngine[Splat Subsystem]
 			SplatGen[Dynamic Splat Generator]
-			SplatSort[Splat Sort GPU]
-			SplatRender[Splat Rendering Pass]
+			HLODMgr[HLOD Voxel Centroid Simplifier]
+			SplatSort[Splat Sort GPU Bitonic]
+			SplatRender[Splat Rendering Pass MultiMesh]
 		end
 
-		subgraph StyleEngine[Style Engine]
+		subgraph StyleEngine[Style Subsystem]
 			ProcGen[Procedural Generator FBM/Worley]
-			NeuralOpt[Neural Style LoRA]
+			NeuralBridge[NeuralStyleBridge / ComfyUI API]
 			MatCache[Material Cache]
 		end
 
-		subgraph VRComposite[VR Composite]
+		subgraph Reconstruction[StudioTo3D Pipeline]
+			StudioUI[StudioTo3D Panel]
+			ReconMgr[Reconstruction Manager]
+			WM2[WorldMirror 2.0 Fast Path]
+			Colmap[COLMAP SfM Fallback]
+		end
+
+		subgraph VRComposite[VR Composite Subsystem]
 			FovRender[Foveated Renderer 3 zones]
 			TempReproj[Temporal Reprojection]
 			VRDistort[VR Distortion + Timewarp]
@@ -51,9 +59,13 @@ graph TB
 	end
 
 	subgraph GPU Pipeline
-		ComputeShaders[Compute Shaders]
-		RenderPass[Custom Render Passes]
+		ComputeShaders[Compute Shaders Culling & Sort]
+		RenderPass[MultiMeshInstance3D Render Pass]
 		PostFX[Post-Processing]
+	end
+
+	subgraph External API
+		ComfyUI[ComfyUI Server :8188]
 	end
 
 	Scene --> SceneCore
@@ -62,73 +74,81 @@ graph TB
 
 	SceneCore --> SplatEngine
 	SceneCore --> StyleEngine
-	SplatEngine --> VRComposite
 	StyleEngine --> SplatEngine
+	
+	StudioUI --> ReconMgr
+	ReconMgr --> WM2
+	ReconMgr --> Colmap
+	WM2 --> SplatGen
+	Colmap --> SplatGen
+	NeuralBridge <--> ComfyUI
 
 	VRComposite --> GPU Pipeline
 	SplatEngine --> GPU Pipeline
 	StyleEngine --> GPU Pipeline
 ```
 
-### 1.3 Flux de Données
+### 1.3 Flux de Données Réel
 
 ```mermaid
 sequenceDiagram
 	participant G as Godot Scene
-	participant SC as Scene Core
-	participant SE as Style Engine
-	participant SP as Splat Engine
-	participant VR as VR Composite
-	participant GPU as GPU
+	participant SC as Scene Core (Spatial Chunking)
+	participant SE as Style Engine (Proc + ComfyUI)
+	participant SP as Splat Engine (HLOD)
+	participant GPU as GPU (Compute Culling/Bitonic Sort)
+	participant HMD as HMD / VR Viewport
 
-	G->>SC: Scene graph + transforms
-	SC->>SC: Frustum culling par oeil
-	SC->>SC: Visible-only extraction
-	SC->>SE: Material requests (surfaces visibles)
-	SE->>SE: Procedural texture generation
-	SE-->>SC: Styled materials
-	SC->>SP: Visible geometry + materials
-	SP->>SP: Splat generation + sorting
-	SP->>GPU: Splat render pass
-	SP->>VR: Rendered eye buffers
-	VR->>VR: Foveated upscale
-	VR->>VR: Temporal reprojection
-	VR->>GPU: Final composite
-	GPU-->>G: HMD output
+	G->>SC: Node transforms & camera pos
+	SC->>SC: Spatial AABB frustum culling
+	SC->>SP: Node geometries (LOD level selection)
+	SP->>SP: HLOD Voxel centroid selection (LOD 0-3)
+	SC->>SE: Material request
+	alt Procedural Style
+		SE->>SE: Generate FBM / Worley textures
+	else Neural Style (Async)
+		SE->>SE: Dispatch HTTP/WS to ComfyUI API
+		SE-->>SE: Receive generated styled texture
+	end
+	SE-->>SP: Styled materials & textures
+	SP->>GPU: Upload MultiMesh buffers & texture cache
+	GPU->>GPU: Run Compute Shader: Culling (Backface, Occlusion Hi-Z)
+	GPU->>GPU: Run Compute Shader: Bitonic Sort
+	GPU->>GPU: Rasterize Splats (MultiMeshInstance3D)
+	GPU->>HMD: Output rendered left/right eye buffers
 ```
 
-### 1.4 Interface GDScript ↔ GDExtension
+### 1.4 Interface GDScript ↔ Subsystems API
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    GDScript API Layer                        │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
-│  FoveaCoreManager (singleton)                               │
+│  FoveaCoreManager (autoload singleton)                      │
 │  ├── initialize(config: FoveaConfig) -> bool                │
 │  ├── set_foveation_params(center_ratio, mid_ratio, edge)    │
-│  ├── set_style_mode(mode: Procedural | Neural | Hybrid)     │
 │  ├── update_eye_tracking(left_gaze, right_gaze)             │
-│  ├── get_performance_metrics() -> FoveaMetrics              │
-│  └── shutdown()                                             │
+│  └── Subsystems: VRSubsystem, SplatSubsystem, Foveated      │
 │                                                              │
 │  FoveaSplattable (node component)                           │
 │  ├── splat_density: float                                   │
-│  ├── splat_quality: float                                   │
-│  ├── is_visible: bool (read-only)                           │
+│  ├── SplatSpatialHashGrid (floater culling & painting)      │
+│  ├── lod_level: int                                         │
 │  └── rebuild_splats()                                       │
 │                                                              │
-│  FoveaStyle (resource)                                      │
-│  ├── style_preset: enum (Stone, Wood, Metal, Skin, Other)   │
-│  ├── procedural_params: Dictionary                          │
-│  ├── neural_model_path: String                              │
-│  └── generate_texture(size) -> Image                        │
+│  FoveaHLODGenerator (voxel centroid clustering)             │
+│  ├── generate_hlod_levels(splats: Array) -> Dictionary      │
+│  └── lod_distances: Array[float] = [8.0, 18.0, 30.0]        │
 │                                                              │
-│  FoveaMaterial (resource)                                   │
-│  ├── base_style: FoveaStyle                                 │
-│  ├── roughness_override: float                              │
-│  ├── metallic_override: float                               │
-│  └── apply_to_node(node: Node3D)                            │
+│  NeuralStyleBridge (ComfyUI API adapter)                    │
+│  ├── send_style_request(image: Image, prompt: String)       │
+│  └── poll_generation_status(prompt_id: String)              │
+│                                                              │
+│  ReconstructionManager (StudioTo3D orchestration)           │
+│  ├── run_reconstruction(session: ReconstructionSession)      │
+│  ├── dry_run: bool                                           │
+│  └── auto_save_session(session: ReconstructionSession)      │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```

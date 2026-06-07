@@ -10,11 +10,38 @@ class BlockData:
     var end_index: int
     var aabb: AABB
 
+class SpatialChunk:
+    var index: int
+    var aabb: AABB
+    var raw_bytes: PackedByteArray
+    var is_loaded: bool = false
+
+signal chunk_loaded(chunk_index: int)
+signal chunk_unloaded(chunk_index: int)
+
+var chunk_load_radius: float = 20.0
+var _cached_chunks: Dictionary = {} # fovea_path -> Array[SpatialChunk]
+var _previously_loaded_chunks: Dictionary = {} # fovea_path -> Array[int]
+
 var rd: RenderingDevice
 var shader_rid: RID
 var pipeline_rid: RID
 var sort_shader_rid: RID
 var sort_pipeline_rid: RID
+
+# Persistent Vulkan buffer cache to avoid per-frame allocation stalls
+# Structure: { fovea_path: { "input": RID, "output": RID, "counter": RID, "camera_ubo": RID, "uniform_set": RID, "size": int } }
+var _gpu_buffers: Dictionary = {}
+
+# Configuration du nettoyage (appliqué une seule fois au chargement pour éviter la surcharge CPU par frame)
+var enable_cleaning: bool = true
+var floater_neighbor_radius: int = 1
+var floater_min_neighbors: int = 2
+var enable_decimation: bool = false
+var decimation_target: int = 50000
+var enable_coplanar_merge: bool = false
+var coplanar_z_bucket: int = 512
+var coplanar_min_group: int = 4
 
 const SPLAT_BYTE_SIZE: int = 16 # Format Fast-Path (FoveaPackedSplat)
 
@@ -52,68 +79,132 @@ func _load_compute_shader() -> void:
 ## Charge le fichier via Rust et exécute le Culling sur le GPU
 func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_texture: RID, cull_threshold: float = 0.0,
     aabb_min: Vector3 = Vector3(-5, -5, -5), aabb_max: Vector3 = Vector3(5, 5, 5)) -> RID:
+    if not rd:
+        push_error("GPU Culler: RenderingDevice is not available. Skipping culling.")
+        return RID()
     # 1. Chargement des octets bruts (via GDExtension si disponible, sinon fallback GDScript)
     var raw_bytes: PackedByteArray = _load_fovea_bytes(fovea_path)
     if raw_bytes.is_empty():
         push_error("FoveaEngine: Échec du chargement du fichier Fast-Path.")
         return RID()
         
-    # 1.5. Culling de frustum CPU par bloc spatial (Phase 3: Spatial Chunking)
-    # Puisque les splats sont ordonnés par code de Morton, les blocs consécutifs de 4096
-    # splats sont très compacts spatialement. On peut éliminer les blocs hors frustum
-    # sur le CPU pour éviter d'uploader et de traiter des millions de points sur le GPU.
-    var blocks := _precompute_blocks(fovea_path, raw_bytes, aabb_min, aabb_max)
+    var cam_pos = camera.global_position
+    # 1.5. Culling de frustum CPU par bloc spatial + Chargement à la distance (Phase 3: Spatial Chunking)
+    var chunks := _precompute_spatial_chunks(fovea_path, raw_bytes, aabb_min, aabb_max)
     var frustum = FrustumUtils.Frustum.new()
     frustum.from_matrix(camera.get_camera_projection(), camera.global_transform)
     
-    var visible_blocks: Array[BlockData] = []
-    for block in blocks:
-        if frustum.contains_aabb(block.aabb):
-            visible_blocks.append(block)
-            
-    var culled_blocks_count := blocks.size() - visible_blocks.size()
-    if culled_blocks_count > 0:
-        print("FoveaEngine: CPU Frustum Culling: %d/%d blocs rejetes." % [culled_blocks_count, blocks.size()])
+    var current_loaded_indices: Array[int] = []
+    var prev_loaded_indices: Array = _previously_loaded_chunks.get(fovea_path, [])
+    
+    var visible_bytes := PackedByteArray()
+    var loaded_count := 0
+    var visible_count := 0
+    var non_empty_chunks := 0
+    
+    for chunk in chunks:
+        if chunk.raw_bytes.is_empty():
+            continue
+        non_empty_chunks += 1
         
-    if visible_blocks.is_empty():
+        var dist := _distance_to_aabb(cam_pos, chunk.aabb)
+        if dist <= chunk_load_radius:
+            chunk.is_loaded = true
+            loaded_count += 1
+            current_loaded_indices.append(chunk.index)
+            
+            # Check frustum culling
+            if frustum.contains_aabb(chunk.aabb):
+                visible_count += 1
+                visible_bytes.append_array(chunk.raw_bytes)
+        else:
+            chunk.is_loaded = false
+
+    # Emit signals / prints for newly loaded/unloaded chunks
+    for idx in current_loaded_indices:
+        if not prev_loaded_indices.has(idx):
+            emit_signal("chunk_loaded", idx)
+            print("FoveaEngine: Spatial Chunk %d loaded (distance <= %.1fm)" % [idx, chunk_load_radius])
+            
+    for idx in prev_loaded_indices:
+        if not current_loaded_indices.has(idx):
+            emit_signal("chunk_unloaded", idx)
+            print("FoveaEngine: Spatial Chunk %d unloaded (distance > %.1fm)" % [idx, chunk_load_radius])
+            
+    _previously_loaded_chunks[fovea_path] = current_loaded_indices
+    
+    if loaded_count > 0:
+        print("FoveaEngine: Spatial Chunking: %d/%d active chunks loaded, %d/%d chunks visible." % [
+            loaded_count, non_empty_chunks, visible_count, loaded_count])
+            
+    if visible_bytes.is_empty():
         print("FoveaEngine: Aucun bloc visible sur le CPU, skip complet GPU.")
         return RID()
-        
-    var visible_bytes := PackedByteArray()
-    for block in visible_blocks:
-        var size := (block.end_index - block.start_index) * SPLAT_BYTE_SIZE
-        var src_offset := block.start_index * SPLAT_BYTE_SIZE
-        var block_slice = raw_bytes.slice(src_offset, src_offset + size)
-        visible_bytes.append_array(block_slice)
         
     var total_splats = visible_bytes.size() / SPLAT_BYTE_SIZE
     print("FoveaEngine: Dispatching Compute Shader pour %d splats visibles..." % total_splats)
 
-    # 2. Création des Buffers GPU
-    var input_buffer = rd.storage_buffer_create(visible_bytes.size(), visible_bytes)
-    var output_buffer = rd.storage_buffer_create(visible_bytes.size())
+    # 2. Caching des Buffers GPU persistants
+    var max_buffer_size = raw_bytes.size()
+    var cache: Dictionary = _gpu_buffers.get(fovea_path, {})
+    var needs_recreation = cache.is_empty() or cache.get("size", 0) < max_buffer_size
     
-    var counter_bytes = PackedByteArray()
-    counter_bytes.resize(4) 
-    var counter_buffer = rd.storage_buffer_create(4, counter_bytes)
+    if needs_recreation:
+        # Libérer l'ancien cache s'il existait
+        if not cache.is_empty():
+            if cache.get("input", RID()).is_valid(): rd.free_rid(cache["input"])
+            if cache.get("output", RID()).is_valid(): rd.free_rid(cache["output"])
+            if cache.get("counter", RID()).is_valid(): rd.free_rid(cache["counter"])
+            if cache.get("camera_ubo", RID()).is_valid(): rd.free_rid(cache["camera_ubo"])
+            if cache.get("uniform_set", RID()).is_valid(): rd.free_rid(cache["uniform_set"])
+        
+        # Créer les nouveaux buffers persistants à la taille maximale
+        var input_buf = rd.storage_buffer_create(max_buffer_size)
+        var output_buf = rd.storage_buffer_create(max_buffer_size)
+        
+        var zero_counter := PackedByteArray([0,0,0,0])
+        var counter_buf = rd.storage_buffer_create(4, zero_counter)
+        var camera_ubo_buf = rd.storage_buffer_create(128)
+        
+        # Créer le uniform set persistant 0
+        var uniform_input = RDUniform.new()
+        uniform_input.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+        uniform_input.binding = 0
+        uniform_input.add_id(input_buf)
+        
+        var uniform_output = RDUniform.new()
+        uniform_output.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+        uniform_output.binding = 1
+        uniform_output.add_id(output_buf)
+        
+        var uniform_counter = RDUniform.new()
+        uniform_counter.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+        uniform_counter.binding = 2
+        uniform_counter.add_id(counter_buf)
+        
+        var uniform_set_0 = rd.uniform_set_create([uniform_input, uniform_output, uniform_counter], shader_rid, 0)
+        
+        cache = {
+            "input": input_buf,
+            "output": output_buf,
+            "counter": counter_buf,
+            "camera_ubo": camera_ubo_buf,
+            "uniform_set": uniform_set_0,
+            "size": max_buffer_size
+        }
+        _gpu_buffers[fovea_path] = cache
 
-    # 3. Set 0: Buffers (input, output, counter)
-    var uniform_input = RDUniform.new()
-    uniform_input.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
-    uniform_input.binding = 0
-    uniform_input.add_id(input_buffer)
+    var input_buffer = cache["input"]
+    var output_buffer = cache["output"]
+    var counter_buffer = cache["counter"]
+    var camera_ubo = cache["camera_ubo"]
+    var uniform_set = cache["uniform_set"]
+
+    # Mettre à jour les buffers persistants pour cette frame
+    rd.buffer_update(input_buffer, 0, visible_bytes.size(), visible_bytes)
     
-    var uniform_output = RDUniform.new()
-    uniform_output.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
-    uniform_output.binding = 1
-    uniform_output.add_id(output_buffer)
-    
-    var uniform_counter = RDUniform.new()
-    uniform_counter.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
-    uniform_counter.binding = 2
-    uniform_counter.add_id(counter_buffer)
-    
-    var uniform_set = rd.uniform_set_create([uniform_input, uniform_output, uniform_counter], shader_rid, 0)
+    var zero_bytes := PackedByteArray([0,0,0,0])
+    rd.buffer_update(counter_buffer, 0, 4, zero_bytes)
     
     # 4. Set 1, binding 0: Depth texture
     var sampler_state = RDSamplerState.new()
@@ -128,7 +219,7 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
     uniform_depth.add_id(depth_texture)
     
     # 4.5. Set 1, binding 1: CameraData UBO (stereo view-projection matrices)
-    var cam_pos = camera.global_position
+    cam_pos = camera.global_position
     var view_matrix = camera.get_camera_transform().affine_inverse()
     var proj_matrix = camera.get_camera_projection()
     var view_proj = proj_matrix * view_matrix
@@ -136,15 +227,15 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
     var camera_data_bytes = PackedByteArray()
     camera_data_bytes.resize(128) # 2 x mat4 (std140)
     var vp_data = view_proj
-    for row in 4:
-        for col in 4:
-            camera_data_bytes.encode_float((row * 16) + (col * 4), vp_data[row][col])
+    for col_idx in 4:
+        for row_idx in 4:
+            camera_data_bytes.encode_float((col_idx * 16) + (row_idx * 4), vp_data[col_idx][row_idx])
     # Copy same matrix for right eye (single-view fallback)
-    for row in 4:
-        for col in 4:
-            camera_data_bytes.encode_float(64 + (row * 16) + (col * 4), vp_data[row][col])
+    for col_idx in 4:
+        for row_idx in 4:
+            camera_data_bytes.encode_float(64 + (col_idx * 16) + (row_idx * 4), vp_data[col_idx][row_idx])
     
-    var camera_ubo = rd.storage_buffer_create(128, camera_data_bytes)
+    rd.buffer_update(camera_ubo, 0, 128, camera_data_bytes)
     var uniform_camera = RDUniform.new()
     uniform_camera.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
     uniform_camera.binding = 1
@@ -203,13 +294,12 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
         )
         print("FoveaEngine: GPU Bitonic Sort temporel termine (frame %d, facteur %d)." % \
             [_frame_counter, interleave_factor])
-
+ 
     _frame_counter += 1
-
-    # Liberation (input et counter, output_buffer reste valide pour le renderer)
-    rd.free_rid(input_buffer)
-    rd.free_rid(counter_buffer)
-
+ 
+    # Libération du sampler temporaire
+    rd.free_rid(sampler_rid)
+ 
     return output_buffer
 
 ## Tri bitonique GPU en UNE SEULE compute list non-bloquante.
@@ -298,8 +388,38 @@ func _load_fovea_bytes(fovea_path: String) -> PackedByteArray:
         var file = FileAccess.open(fovea_path, FileAccess.READ)
         if not file:
             return PackedByteArray()
-        bytes = file.get_buffer(file.get_length())
+        var all_bytes = file.get_buffer(file.get_length())
         file.close()
+        
+        if all_bytes.size() >= 48 and all_bytes.slice(0, 8).get_string_from_ascii() == "FOVEA_3D":
+            var color_k = all_bytes.decode_u32(16)
+            var covar_k = all_bytes.decode_u32(20)
+            var header_size = 48
+            var palette_size = color_k * 12
+            var covar_size = covar_k * 32
+            var splats_start = header_size + palette_size + covar_size
+            if all_bytes.size() >= splats_start:
+                bytes = all_bytes.slice(splats_start)
+        elif all_bytes.size() >= 16:
+            bytes = all_bytes.slice(16)
+        else:
+            bytes = all_bytes
+        
+    if not bytes.is_empty():
+        var before_size = bytes.size() / SPLAT_BYTE_SIZE
+        if enable_cleaning:
+            bytes = FoveaSplatCleaner.filter_nan_inf(bytes)
+            bytes = FoveaSplatCleaner.filter_floaters(bytes, floater_neighbor_radius, floater_min_neighbors)
+            if enable_decimation and decimation_target > 0:
+                bytes = FoveaSplatCleaner.decimate(bytes, decimation_target)
+        if enable_coplanar_merge:
+            bytes = FoveaSplatCleaner.merge_coplanar(bytes, coplanar_z_bucket, 24, 1024, coplanar_min_group)
+        
+        var after_size = bytes.size() / SPLAT_BYTE_SIZE
+        if before_size != after_size:
+            print("GPUCullerPipeline: Nettoyage statique au chargement de '%s' : %d -> %d splats (-%d)." % [
+                fovea_path.get_file(), before_size, after_size, before_size - after_size
+            ])
         
     _cached_bytes[fovea_path] = bytes
     return bytes
@@ -352,6 +472,119 @@ func _precompute_blocks(fovea_path: String, raw_bytes: PackedByteArray, aabb_min
     _cached_blocks[fovea_path] = blocks
     return blocks
 
-func cleanup():
+func cleanup() -> void:
     if rd:
+        if pipeline_rid.is_valid():
+            rd.free_rid(pipeline_rid)
+            pipeline_rid = RID()
+        if shader_rid.is_valid():
+            rd.free_rid(shader_rid)
+            shader_rid = RID()
+        if sort_pipeline_rid.is_valid():
+            rd.free_rid(sort_pipeline_rid)
+            sort_pipeline_rid = RID()
+        if sort_shader_rid.is_valid():
+            rd.free_rid(sort_shader_rid)
+            sort_shader_rid = RID()
+        
+        # Libérer les buffers GPU persistants en cache
+        for path in _gpu_buffers:
+            var cache = _gpu_buffers[path]
+            if cache.get("input", RID()).is_valid():
+                rd.free_rid(cache["input"])
+            if cache.get("output", RID()).is_valid():
+                rd.free_rid(cache["output"])
+            if cache.get("counter", RID()).is_valid():
+                rd.free_rid(cache["counter"])
+            if cache.get("camera_ubo", RID()).is_valid():
+                rd.free_rid(cache["camera_ubo"])
+            if cache.get("uniform_set", RID()).is_valid():
+                rd.free_rid(cache["uniform_set"])
+        _gpu_buffers.clear()
+        
         rd.free()
+        rd = null
+
+func clear_cache() -> void:
+    _cached_bytes.clear()
+    _cached_blocks.clear()
+    _cached_chunks.clear()
+
+func _distance_to_aabb(point: Vector3, aabb: AABB) -> float:
+    var closest_point := Vector3(
+        clamp(point.x, aabb.position.x, aabb.end.x),
+        clamp(point.y, aabb.position.y, aabb.end.y),
+        clamp(point.z, aabb.position.z, aabb.end.z)
+    )
+    return point.distance_to(closest_point)
+
+func _precompute_spatial_chunks(fovea_path: String, raw_bytes: PackedByteArray, aabb_min: Vector3, aabb_max: Vector3) -> Array[SpatialChunk]:
+    if _cached_chunks.has(fovea_path):
+        return _cached_chunks[fovea_path]
+
+    var chunks: Array[SpatialChunk] = []
+    chunks.resize(4096)
+    
+    var size_cell := (aabb_max - aabb_min) / 16.0
+    for i in range(4096):
+        var chunk := SpatialChunk.new()
+        chunk.index = i
+        var cx := i & 15
+        var cy := (i >> 4) & 15
+        var cz := (i >> 8) & 15
+        var pos_cell := aabb_min + Vector3(cx, cy, cz) * size_cell
+        chunk.aabb = AABB(pos_cell, size_cell)
+        chunk.raw_bytes = PackedByteArray()
+        chunks[i] = chunk
+
+    var total_splats := raw_bytes.size() / SPLAT_BYTE_SIZE
+    var range_vec := aabb_max - aabb_min
+    
+    var buckets: Array[Array] = []
+    buckets.resize(4096)
+    for i in range(4096):
+        buckets[i] = []
+
+    # Map each splat to its chunk
+    for i in range(total_splats):
+        var offset: int = i * SPLAT_BYTE_SIZE
+        var qx: int = raw_bytes.decode_u16(offset)
+        var qy: int = raw_bytes.decode_u16(offset + 2)
+        var qz: int = raw_bytes.decode_u16(offset + 4)
+        
+        var cell_x: int = int(clamp(float(qx) / 65535.0 * 16.0, 0.0, 15.0))
+        var cell_y: int = int(clamp(float(qy) / 65535.0 * 16.0, 0.0, 15.0))
+        var cell_z: int = int(clamp(float(qz) / 65535.0 * 16.0, 0.0, 15.0))
+        
+        var chunk_idx: int = cell_x + (cell_y << 4) + (cell_z << 8)
+        buckets[chunk_idx].append(i)
+
+    # Populate raw_bytes using contiguous index slicing
+    for i in range(4096):
+        var indices: Array = buckets[i]
+        if indices.is_empty():
+            continue
+        var chunk: SpatialChunk = chunks[i]
+        var chunk_bytes := PackedByteArray()
+        
+        var start_idx: int = indices[0]
+        var count: int = 1
+        for j in range(1, indices.size()):
+            var idx: int = indices[j]
+            if idx == start_idx + count:
+                count += 1
+            else:
+                var src_offset := start_idx * SPLAT_BYTE_SIZE
+                var size := count * SPLAT_BYTE_SIZE
+                chunk_bytes.append_array(raw_bytes.slice(src_offset, src_offset + size))
+                start_idx = idx
+                count = 1
+        
+        var src_offset := start_idx * SPLAT_BYTE_SIZE
+        var size := count * SPLAT_BYTE_SIZE
+        chunk_bytes.append_array(raw_bytes.slice(src_offset, src_offset + size))
+        
+        chunk.raw_bytes = chunk_bytes
+
+    _cached_chunks[fovea_path] = chunks
+    return chunks

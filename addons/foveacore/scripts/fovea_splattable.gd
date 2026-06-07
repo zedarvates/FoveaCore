@@ -33,6 +33,10 @@ const _PlyLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/
 ## Activer/désactiver le splatting pour cet objet
 @export var splatting_enabled := true
 
+## Activer le rendu d'instances partagées (Global Splat Instancing)
+## Évite de dupliquer les maillages et shaders en VRAM pour le même fichier .fovea
+@export var enable_instancing: bool = true
+
 ## Masquer le mesh original (pour ne voir que le nuage de points/splats)
 @export var hide_mesh_when_splatting := true
 
@@ -48,6 +52,9 @@ var _mesh_instance_ref: MeshInstance3D = null
 ## Splats chargés depuis un fichier PLY (si ply_file_path est défini)
 var loaded_splats: Array[GaussianSplat] = []
 
+## Grille spatiale pour les requêtes de proximité (ex: SplatBrushEngine)
+var spatial_grid: RefCounted = null
+
 ## Indique si les splats ont été chargés depuis un PLY
 var has_ply_splats: bool = false
 
@@ -56,12 +63,14 @@ var splat_buffer_rid: RID = RID()
 
 
 func _enter_tree() -> void:
+	add_to_group("splattables")
 	var manager = get_node_or_null("/root/FoveaCoreManager")
 	if manager:
 		manager.register_splattable(self)
 
 
 func _exit_tree() -> void:
+	remove_from_group("splattables")
 	var manager = get_node_or_null("/root/FoveaCoreManager")
 	if manager:
 		manager.unregister_splattable(self)
@@ -83,13 +92,16 @@ func _ready() -> void:
 		if splat_file_path.ends_with(".ply"):
 			_load_splats_from_ply()
 		elif splat_file_path.ends_with(".fovea"):
-			print("FoveaSplattable: Rendu natif détecté pour ", splat_file_path)
-			# Instancier dynamiquement FoveaSplatRenderer pour les assets natifs
-			var renderer = FoveaSplatRenderer.new()
-			renderer.name = "FoveaSplatRenderer"
-			renderer.asset_path = splat_file_path
-			renderer.sort_distance_threshold = 0.1
-			add_child(renderer)
+			if enable_instancing:
+				print("FoveaSplattable: Rendu instancié global activé pour ", splat_file_path)
+			else:
+				print("FoveaSplattable: Rendu natif local détecté pour ", splat_file_path)
+				# Instancier dynamiquement FoveaSplatRenderer pour les assets natifs
+				var renderer = FoveaSplatRenderer.new()
+				renderer.name = "FoveaSplatRenderer"
+				renderer.asset_path = splat_file_path
+				renderer.sort_distance_threshold = 0.1
+				add_child(renderer)
 		else:
 			print("FoveaSplattable: Format de fichier non géré pour le rendu direct: ", splat_file_path)
 			
@@ -187,3 +199,42 @@ func is_visible_to_camera(camera: Camera3D) -> bool:
 		return false
 	# Pas de mesh — tester juste la position du nœud
 	return camera.is_position_in_frustum(global_position)
+
+
+class SplatSpatialHashGrid extends RefCounted:
+	var cell_size: float
+	var grid: Dictionary = {} # Vector3i -> Array[int]
+
+	func _init(p_cell_size: float, splats: Array[GaussianSplat]) -> void:
+		cell_size = p_cell_size
+		for i in range(splats.size()):
+			var pos = splats[i].position
+			var cell = Vector3i(
+				int(floor(pos.x / cell_size)),
+				int(floor(pos.y / cell_size)),
+				int(floor(pos.z / cell_size))
+			)
+			if not grid.has(cell):
+				grid[cell] = []
+			grid[cell].append(i)
+
+	func get_indices_in_radius(center: Vector3, radius: float) -> Array[int]:
+		var results: Array[int] = []
+		var min_cell = Vector3i(
+			int(floor((center.x - radius) / cell_size)),
+			int(floor((center.y - radius) / cell_size)),
+			int(floor((center.z - radius) / cell_size))
+		)
+		var max_cell = Vector3i(
+			int(floor((center.x + radius) / cell_size)),
+			int(floor((center.y + radius) / cell_size)),
+			int(floor((center.z + radius) / cell_size))
+		)
+		for x in range(min_cell.x, max_cell.x + 1):
+			for y in range(min_cell.y, max_cell.y + 1):
+				for z in range(min_cell.z, max_cell.z + 1):
+					var cell = Vector3i(x, y, z)
+					if grid.has(cell):
+						results.append_array(grid[cell])
+		return results
+

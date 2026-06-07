@@ -45,8 +45,21 @@ static func generate_splats_from_triangles(
 		if tri_area < 0.001:
 			continue
 
+		# --- MIP-Splatting basic (LOD à la génération) ---
+		var dist: float = triangle.distance_to_camera
+		var splats_count := 3
+		var radius_mult := 1.0
+		
+		if dist < 2.0:
+			splats_count = 5       # Micro-splats de près pour haute densité de détails
+		elif dist > 10.0:
+			splats_count = 1       # Macro-splats au loin pour économiser le GPU
+			radius_mult = 3.0      # Agrandir le splat pour boucher les trous
+		else:
+			splats_count = 3       # Rendu normal à moyenne distance
+
 		# Générer des points d'échantillonnage sur le triangle
-		var points: Array = _sample_triangle(triangle, config.splats_per_triangle)
+		var points: Array = _sample_triangle(triangle, splats_count)
 
 		for point_data in points:
 			var pos: Vector3 = point_data["position"] as Vector3
@@ -67,8 +80,11 @@ static func generate_splats_from_triangles(
 				pos, normal, splat_color, tri_area, camera_position, splat_density
 			)
 
+			# Appliquer l'échelle de rayon LOD
+			splat.radius *= radius_mult
+
 			# Appliquer les limites de rayon
-			splat.radius = clamp(splat.radius, config.min_radius, config.max_radius)
+			splat.radius = clamp(splat.radius, config.min_radius, config.max_radius * radius_mult)
 
 			# Depth-aware blending
 			if config.depth_aware_blending:

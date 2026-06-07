@@ -26,10 +26,14 @@ var _dirty: bool = true
 
 func _ready() -> void:
 	# S'assurer que les uniforms shader globaux sont déclarés
-	var existing = RenderingServer.global_shader_parameter_get_list()
-	if not existing.has("fovea_gaze_left"):
+	if Engine.is_editor_hint():
+		var existing = RenderingServer.global_shader_parameter_get_list()
+		if not existing.has("fovea_gaze_left"):
+			RenderingServer.global_shader_parameter_add("fovea_gaze_left", RenderingServer.GLOBAL_VAR_TYPE_VEC2, Vector2(0.5, 0.5))
+		if not existing.has("fovea_gaze_right"):
+			RenderingServer.global_shader_parameter_add("fovea_gaze_right", RenderingServer.GLOBAL_VAR_TYPE_VEC2, Vector2(0.5, 0.5))
+	else:
 		RenderingServer.global_shader_parameter_add("fovea_gaze_left", RenderingServer.GLOBAL_VAR_TYPE_VEC2, Vector2(0.5, 0.5))
-	if not existing.has("fovea_gaze_right"):
 		RenderingServer.global_shader_parameter_add("fovea_gaze_right", RenderingServer.GLOBAL_VAR_TYPE_VEC2, Vector2(0.5, 0.5))
 
 func setup(r: float, foveal: float, parafoveal: float, peripheral: float) -> void:
