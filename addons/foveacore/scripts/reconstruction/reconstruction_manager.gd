@@ -9,8 +9,27 @@ signal session_progress_updated(progress: float)
 signal session_completed(result: ReconstructionSession)
 signal reconstruction_failed(reason: String)
 signal log_line_received(line: String)
+signal pipeline_state_changed(is_active: bool)
 
+var is_active: bool = false:
+	set(val):
+		if is_active != val:
+			is_active = val
+			pipeline_state_changed.emit(is_active)
+
+var _active_tasks: int = 0
 var _current_phase: int = 1
+
+func _start_task() -> void:
+	_active_tasks += 1
+	if _active_tasks == 1:
+		is_active = true
+
+func _end_task() -> void:
+	_active_tasks = max(0, _active_tasks - 1)
+	if _active_tasks == 0:
+		is_active = false
+
 
 @export var processor: StudioProcessor = null
 @export var exporter: DatasetExporter = null
@@ -103,6 +122,14 @@ func _ready() -> void:
 		ffmpeg_path = ProjectSettings.get_setting("fovea/tools/ffmpeg_path")
 	if ProjectSettings.has_setting("fovea/tools/colmap_path"):
 		colmap_path = ProjectSettings.get_setting("fovea/tools/colmap_path")
+	if ProjectSettings.has_setting("fovea/tools/python_path"):
+		python_path = ProjectSettings.get_setting("fovea/tools/python_path")
+	if ProjectSettings.has_setting("fovea/tools/gaussian_train_script"):
+		gaussian_train_script = ProjectSettings.get_setting("fovea/tools/gaussian_train_script")
+	if ProjectSettings.has_setting("fovea/tools/star_bridge_script"):
+		star_bridge_script = ProjectSettings.get_setting("fovea/tools/star_bridge_script")
+	if ProjectSettings.has_setting("fovea/tools/worldmirror_bridge_script"):
+		worldmirror_bridge_script = ProjectSettings.get_setting("fovea/tools/worldmirror_bridge_script")
 
 	if processor == null:
 		processor = StudioProcessor.new()
@@ -132,7 +159,8 @@ func _ready() -> void:
 func check_tools() -> Dictionary:
 	var results = {
 		"ffmpeg": {"found": false, "version": "", "error": ""},
-		"colmap": {"found": false, "version": "", "error": ""}
+		"colmap": {"found": false, "version": "", "error": ""},
+		"python": {"found": false, "version": "", "error": ""}
 	}
 
 	# Vérification FFmpeg
@@ -155,6 +183,16 @@ func check_tools() -> Dictionary:
 		cm_info = _validate_tool_version(colmap_path, "--help")
 		results["colmap"] = cm_info
 
+	# Vérification Python
+	if not _is_tool_available(python_path, ["--version"]):
+		_auto_detect_python()
+	var py_info = _validate_tool_version(python_path, "--version")
+	results["python"] = py_info
+	if not py_info.found:
+		_auto_detect_python()
+		py_info = _validate_tool_version(python_path, "--version")
+		results["python"] = py_info
+
 	# Logging
 	if results["ffmpeg"].found:
 		print("FoveaManager: FFmpeg OK - ", results["ffmpeg"].version.split("\n")[0])
@@ -165,6 +203,11 @@ func check_tools() -> Dictionary:
 		print("FoveaManager: COLMAP OK")
 	else:
 		push_warning("FoveaManager: COLMAP NOT FOUND")
+
+	if results["python"].found:
+		print("FoveaManager: Python OK - ", results["python"].version.split("\n")[0])
+	else:
+		push_warning("FoveaManager: Python NOT FOUND")
 
 	return results
 
@@ -220,6 +263,14 @@ func _auto_detect_ffmpeg() -> void:
 			return
 
 func _auto_detect_colmap() -> void:
+	var cmd = "where" if OS.has_feature("windows") else "which"
+	var out = []
+	var err = OS.execute(cmd, ["colmap"], out)
+	if err == 0 and not out.is_empty():
+		colmap_path = out[0].strip_edges().split("\n")[0]
+		print("FoveaManager: COLMAP détecté automatiquement via PATH : ", colmap_path)
+		return
+
 	var home_path = OS.get_environment("HOME") if OS.has_feature("unix") else OS.get_environment("USERPROFILE")
 	var is_windows = OS.has_feature("windows")
 	var bin_name = "colmap.exe" if is_windows else "colmap"
@@ -241,6 +292,28 @@ func _auto_detect_colmap() -> void:
 		if _is_tool_available(p, ["--help"]):
 			print("FoveaManager: COLMAP détecté automatiquement à : ", p)
 			colmap_path = p
+			return
+
+func _auto_detect_python() -> void:
+	var cmd = "where" if OS.has_feature("windows") else "which"
+	var out = []
+	var err = OS.execute(cmd, ["python"], out)
+	if err == 0 and not out.is_empty():
+		python_path = out[0].strip_edges().split("\n")[0]
+		print("FoveaManager: Python détecté automatiquement via PATH : ", python_path)
+		return
+
+	# Fallback sur chemins communs si non dans PATH
+	var possible_paths = [
+		"python",
+		"/usr/bin/python3",
+		"/usr/local/bin/python3"
+	]
+
+	for p in possible_paths:
+		if _is_tool_available(p, ["--version"]):
+			print("FoveaManager: Python détecté automatiquement à : ", p)
+			python_path = p
 			return
 
 # --- Persistence des Settings Utilisateur ---
@@ -378,6 +451,7 @@ func _delete_dir_recursive(path: String) -> void:
 ## Step 1: Extraction & Masking
 func run_extraction(session: ReconstructionSession, mask_mode: String = "Studio White") -> void:
 	_current_phase = 1
+	_start_task()
 	session_started.emit(session.session_name)
 	session.status = "Extracting Frames"
 	
@@ -419,6 +493,7 @@ func run_extraction(session: ReconstructionSession, mask_mode: String = "Studio 
 	session.status = "Pre-processed"
 	print(metrics.get_quality_report())
 	session_progress_updated.emit(33.0)
+	_end_task()
 
 func _calculate_mask_coverage(mask: Image) -> float:
 	# Estimate surface covered by non-transparent pixels
@@ -441,6 +516,7 @@ func run_reconstruction(session: ReconstructionSession) -> void:
 		push_error("ReconstructionManager: session est null")
 		return
 
+	_start_task()
 	session_started.emit(session.session_name)
 	print("ReconstructionManager: Démarrage du pipeline complet pour '", session.session_name, "'")
 	save_session(session) # Auto-save initiale
@@ -457,6 +533,7 @@ func run_reconstruction(session: ReconstructionSession) -> void:
 		else:
 			reconstruction_failed.emit("Échec Phase 1 : Extraction")
 		save_session(session)
+		_end_task()
 		return
 
 	save_session(session) # Auto-save après Phase 1
@@ -469,11 +546,13 @@ func run_reconstruction(session: ReconstructionSession) -> void:
 		if session.status == "Erreur":
 			reconstruction_failed.emit("Échec WorldMirror 2.0")
 			save_session(session)
+			_end_task()
 			return
 		session_progress_updated.emit(100.0)
 		session_completed.emit(session)
 		save_session(session) # Auto-save finale
 		print("ReconstructionManager: WorldMirror 2.0 pipeline terminé !")
+		_end_task()
 		return
 
 	# Phase 2 : SfM (COLMAP) ou STAR (InSpatio) — legacy paths
@@ -490,6 +569,7 @@ func run_reconstruction(session: ReconstructionSession) -> void:
 	if session.status == "Erreur":
 		reconstruction_failed.emit("Échec Phase 2 : Géométrie")
 		save_session(session)
+		_end_task()
 		return
 
 	save_session(session) # Auto-save après Phase 2
@@ -501,18 +581,22 @@ func run_reconstruction(session: ReconstructionSession) -> void:
 	if session.status == "Erreur":
 		reconstruction_failed.emit("Échec Phase 3 : 3DGS Training")
 		save_session(session)
+		_end_task()
 		return
 
 	session_progress_updated.emit(100.0)
 	session_completed.emit(session)
 	save_session(session) # Auto-save finale
 	print("ReconstructionManager: Pipeline terminé avec succès !")
+	_end_task()
 
 ## Step 2: SfM (COLMAP)
 func run_sfm(session: ReconstructionSession) -> void:
+	_start_task()
 	if session.frame_count == 0:
 		session.status = "Erreur"
 		reconstruction_failed.emit("Échec Phase 2 : Aucune image à reconstruire. Veuillez d'abord extraire des images valides.")
+		_end_task()
 		return
 	session.status = "SfM Running"
 	session.is_processed = false # S'assurer qu'on ne lance pas le training
@@ -524,6 +608,7 @@ func run_sfm(session: ReconstructionSession) -> void:
 	if finished_status != 0:
 		session.status = "Erreur"
 		reconstruction_failed.emit("Échec Phase 2 : COLMAP SfM")
+		_end_task()
 		return
 	
 	# Vérification des fichiers générés
@@ -535,13 +620,16 @@ func run_sfm(session: ReconstructionSession) -> void:
 		
 	session_progress_updated.emit(55.0)
 	session.status = "SfM Finished"
+	_end_task()
 
 ## Step 2 (Alternative): STAR Path (Monocular Depth DA3)
 func run_star_sync(session: ReconstructionSession) -> void:
 	_current_phase = 2
+	_start_task()
 	if session.frame_count == 0:
 		session.status = "Erreur"
 		reconstruction_failed.emit("Échec Phase 2 : Aucune image à traiter.")
+		_end_task()
 		return
 	session.status = "STAR Syncing (DA3)"
 	session.is_processed = false
@@ -558,13 +646,16 @@ func run_star_sync(session: ReconstructionSession) -> void:
 	else:
 		session.status = "Erreur"
 		reconstruction_failed.emit("Le STAR Workspace n'a pas été généré.")
+	_end_task()
 
 ## Step 2 (WorldMirror 2.0): Feed-forward Reconstruction
 func run_worldmirror(session: ReconstructionSession) -> void:
 	_current_phase = 2
+	_start_task()
 	if session.frame_count == 0:
 		session.status = "Erreur"
 		reconstruction_failed.emit("Échec Phase 2 : Aucune image à traiter.")
+		_end_task()
 		return
 	session.status = "WorldMirror 2.0 Inference"
 	session.is_processed = false
@@ -578,6 +669,7 @@ func run_worldmirror(session: ReconstructionSession) -> void:
 	if not FileAccess.file_exists(marker_path):
 		session.status = "Erreur"
 		reconstruction_failed.emit("WorldMirror 2.0: aucun marqueur de complétion trouvé.")
+		_end_task()
 		return
 
 	var marker = FileAccess.open(marker_path, FileAccess.READ)
@@ -601,10 +693,12 @@ func run_worldmirror(session: ReconstructionSession) -> void:
 	else:
 		session.status = "Erreur"
 		push_error("ReconstructionManager: gaussians.ply not found at " + global_ply)
+	_end_task()
 
 ## Step 3: Training (3DGS)
 func run_training(session: ReconstructionSession) -> void:
 	_current_phase = 3
+	_start_task()
 	session.status = "Training Splats (Long)..."
 	session_progress_updated.emit(70.0)
 	print("ReconstructionManager: Phase 3 - 3DGS Training (This can take 5-20 mins)...")
@@ -617,6 +711,7 @@ func run_training(session: ReconstructionSession) -> void:
 	if finished_status != 0:
 		session.status = "Erreur"
 		reconstruction_failed.emit("Échec Phase 3 : 3DGS Training")
+		_end_task()
 		return
 	session_progress_updated.emit(85.0)
 	if session.status != "Erreur":
@@ -637,6 +732,7 @@ func run_training(session: ReconstructionSession) -> void:
 				push_error("ReconstructionManager: PLY loaded but empty or PLYLoader unavailable")
 		else:
 			session.status = "Terminé (PLY non trouvé)"
+	_end_task()
 
 func _on_backend_started(task: String) -> void:
 	print("Manager: Backend started -> ", task)
