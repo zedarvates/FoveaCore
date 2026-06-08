@@ -54,16 +54,40 @@ func _generate_and_filter(visibility_result, camera: Camera3D, camera_pos: Vecto
 
 	if temporal_reprojector:
 		for node in visibility_result.per_node_results:
-			var extraction = visibility_result.per_node_results[node]
-			var filtered_triangles = _filter_occlusion(extraction.visible_triangles, camera)
-			var reprojected: Array[GaussianSplat] = temporal_reprojector.reproject_splats(
-				node, [], camera_pos, _previous_camera_position, filtered_triangles)
-			for splat in reprojected:
-				if current_idx < max_splats:
-					current_splats[current_idx] = splat
-					current_idx += 1
-				else:
-					break
+			if node is FoveaSplattable and node.has_ply_splats and not node.loaded_splats.is_empty():
+				var gtr: Transform3D = node.global_transform
+				var gtr_rot: Quaternion = gtr.basis.get_rotation_quaternion()
+				var gtr_scale: Vector3 = gtr.basis.get_scale()
+				for local_splat in node.loaded_splats:
+					if current_idx < max_splats:
+						var splat: GaussianSplat = GaussianSplat.new()
+						splat.position = gtr * local_splat.position
+						splat.rotation = (gtr_rot * local_splat.rotation).normalized()
+						splat.scale = gtr_scale * local_splat.scale
+						splat.opacity = local_splat.opacity * node.alpha_override
+						splat.color = local_splat.color * node.color_override
+						splat.normal = (gtr.basis * local_splat.normal).normalized()
+						splat.depth = splat.position.distance_to(camera_pos)
+						splat.radius = local_splat.radius * node.scale_override
+						splat.covariance = local_splat.covariance
+						splat.layer_type = local_splat.layer_type
+						splat.brush_type = local_splat.brush_type
+						splat.dither_seed = local_splat.dither_seed
+						current_splats[current_idx] = splat
+						current_idx += 1
+					else:
+						break
+			else:
+				var extraction = visibility_result.per_node_results[node]
+				var filtered_triangles = _filter_occlusion(extraction.visible_triangles, camera)
+				var reprojected: Array[GaussianSplat] = temporal_reprojector.reproject_splats(
+					node, [], camera_pos, _previous_camera_position, filtered_triangles)
+				for splat in reprojected:
+					if current_idx < max_splats:
+						current_splats[current_idx] = splat
+						current_idx += 1
+					else:
+						break
 	else:
 		var splats = SplatGenerator.generate_all_splats(
 			visibility_result, camera_pos, splat_config, global_splat_density)
