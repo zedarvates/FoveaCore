@@ -20,62 +20,66 @@ var _last_known_phase_prefix: String = ""
 var _spinner_idx: int = 0
 const SPINNERS: Array[String] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 
-@onready var video_path_edit: LineEdit = get_node_or_null("VSplit/TopScroll/VBoxTop/VideoSource/PathEdit")
-@onready var session_name_edit: LineEdit = get_node_or_null("VSplit/TopScroll/VBoxTop/SessionName/NameEdit")
-@onready var mask_option: OptionButton = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/MaskingRow/MaskOption")
-@onready var threshold_slider: HSlider = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/ThresholdRow/ThresholdSlider")
-@onready var status_label: Label = get_node_or_null("VSplit/TopScroll/VBoxTop/Status/StatusLabel")
-@onready var progress_bar: ProgressBar = get_node_or_null("VSplit/TopScroll/VBoxTop/Progress/ProgressBar")
-@onready var log_text: TextEdit = get_node_or_null("VSplit/Logs/LogEdit")
-@onready var stats_label: Label = get_node_or_null("VSplit/TopScroll/VBoxTop/Stats/StatsLabel")
+@onready var video_path_edit: LineEdit = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/VideoSource/PathEdit")
+@onready var session_name_edit: LineEdit = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/SessionName/NameEdit")
+@onready var mask_option: OptionButton = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/MaskingRow/MaskOption")
+@onready var threshold_slider: HSlider = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ThresholdRow/ThresholdSlider")
+@onready var status_label: Label = get_node_or_null("VBoxMain/StatusArea/Status/StatusLabel")
+@onready var progress_bar: ProgressBar = get_node_or_null("VBoxMain/StatusArea/Progress/ProgressBar")
+@onready var log_text: TextEdit = get_node_or_null("VBoxMain/Tabs/Logs/LogEdit")
+@onready var stats_label: Label = get_node_or_null("VBoxMain/StatusArea/Stats/StatsLabel")
 
 # Preview controls
-@onready var show_mask_toggle: CheckBox = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/MaskingRow/ShowMaskToggle")
-@onready var roi_toggle: CheckBox = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/ROIRow/ShowROIToggle")
+@onready var show_mask_toggle: CheckBox = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/MaskingRow/ShowMaskToggle")
+@onready var roi_toggle: CheckBox = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ROIRow/ShowROIToggle")
 
 # Render options
-@onready var aniso_toggle: CheckBox = get_node_or_null("VSplit/TopScroll/VBoxTop/RenderOptions/AnisotropicRow/AnisoToggle")
-@onready var lod_toggle: CheckBox = get_node_or_null("VSplit/TopScroll/VBoxTop/RenderOptions/LODRow/LODToggle")
-@onready var point_size_slider: HSlider = get_node_or_null("VSplit/TopScroll/VBoxTop/RenderOptions/PointSizeRow/PointSizeSlider")
+@onready var aniso_toggle: CheckBox = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/RenderOptions/AnisotropicRow/AnisoToggle")
+@onready var lod_toggle: CheckBox = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/RenderOptions/LODRow/LODToggle")
+@onready var point_size_slider: HSlider = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/RenderOptions/PointSizeRow/PointSizeSlider")
 
 # Boutons (optionnels via get_node_or_null pour éviter les crashs si la scène change)
-@onready var browse_button: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/VideoSource/Browse")
-@onready var extract_button: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/Extract")
-@onready var sfm_button: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/Sfm")
-@onready var train_button: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/Train")
-@onready var preview_button: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/Preview")
-@onready var run_button: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/Run")
-@onready var auto_run_check: CheckBox = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/AutoRun")
-@onready var roi_button: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/ROIRow/ROIButton")
-@onready var save_button: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/HeaderBox/Save")
-@onready var load_button: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/HeaderBox/Load")
-@onready var reset_button: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/HeaderBox/Reset")
+@onready var browse_button: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/VideoSource/Browse")
+@onready var extract_button: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Pipeline/Extract")
+@onready var sfm_button: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Pipeline/Sfm")
+@onready var train_button: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Pipeline/Train")
+@onready var preview_button: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Pipeline/Preview")
+@onready var run_button: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Pipeline/Run")
+@onready var auto_run_check: CheckBox = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Pipeline/AutoRun")
+@onready var roi_button: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ROIRow/ROIButton")
+@onready var save_button: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/HeaderBox/Save")
+@onready var load_button: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/HeaderBox/Load")
+@onready var reset_button: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/HeaderBox/Reset")
 
 # Nouveaux champs pour les chemins
-@onready var ffmpeg_path_edit: LineEdit = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/FFmpegRow/FFmpegPath")
-@onready var browse_ffmpeg_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/FFmpegRow/BrowseFFmpeg")
-@onready var colmap_path_edit: LineEdit = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/ColmapRow/ColmapPath")
-@onready var browse_colmap_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/ColmapRow/BrowseColmap")
-@onready var check_tools_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/CheckTools")
+@onready var ffmpeg_path_edit: LineEdit = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/FFmpegRow/FFmpegPath")
+@onready var browse_ffmpeg_btn: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/FFmpegRow/BrowseFFmpeg")
+@onready var colmap_path_edit: LineEdit = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ColmapRow/ColmapPath")
+@onready var browse_colmap_btn: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ColmapRow/BrowseColmap")
+@onready var check_tools_btn: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/CheckTools")
 
-@onready var preview_rect: TextureRect = get_node_or_null("VSplit/TopScroll/VBoxTop/PreviewCenter/PreviewRect")
+@onready var preview_rect: TextureRect = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/PreviewCenter/PreviewRect")
 
 var floaters_detector: FloatersDetector = null
-@onready var debug_mode_option: OptionButton = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/DebugRow/DebugMode")
-@onready var clean_floaters_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/CleanRow/CleanFloaters")
+@onready var debug_mode_option: OptionButton = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/DebugRow/DebugMode")
+@onready var clean_floaters_btn: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/CleanRow/CleanFloaters")
 
 # WorldMirror 2.0 controls
-@onready var wm2_mode_check: CheckBox = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/WM2Row/WM2ModeCheck")
-@onready var wm2_target_slider: HSlider = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/WM2Row/WM2TargetSlider")
-@onready var wm2_target_label: Label = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/WM2Row/WM2TargetLabel")
-@onready var wm2_status: Label = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/WM2Row/WM2Status")
+@onready var wm2_mode_check: CheckBox = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/WM2Row/WM2ModeCheck")
+@onready var wm2_target_slider: HSlider = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/WM2Row/WM2TargetRow/WM2TargetSlider")
+@onready var wm2_target_label: Label = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/WM2Row/WM2TargetRow/WM2TargetLabel")
+@onready var wm2_status: Label = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/WM2Row/WM2Status")
 
 # COLMAP controls
-@onready var colmap_exhaustive_check: CheckBox = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/ColmapOptsRow/ExhaustiveCheck")
+@onready var colmap_exhaustive_check: CheckBox = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ColmapOptsRow/ExhaustiveCheck")
 
-@onready var reload_ply_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/ReloadPLY")
-@onready var export_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/ExportPLY")
-@onready var toggle_renderer_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/ToggleRenderer")
+@onready var reload_ply_btn: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Pipeline/ReloadPLY")
+@onready var export_btn: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Pipeline/ExportPLY")
+@onready var toggle_renderer_btn: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Pipeline/ToggleRenderer")
+
+# Log actions
+@onready var clear_logs_btn: Button = get_node_or_null("VBoxMain/Tabs/Logs/HBoxLogButtons/Clear")
+@onready var popout_logs_btn: Button = get_node_or_null("VBoxMain/Tabs/Logs/HBoxLogButtons/Popout")
 
 var current_renderer: _SplatRendererScript = null  # Référence au renderer 3D actuel
 var dry_run_check: CheckBox = null
@@ -107,6 +111,8 @@ func _ready() -> void:
 	_safe_connect(manager.session_completed, _on_session_completed)
 	_safe_connect(manager.reconstruction_failed, _on_reconstruction_failed)
 	_safe_connect(manager.log_line_received, _on_log_line_received)
+	if manager.has_signal("pipeline_state_changed"):
+		_safe_connect(manager.pipeline_state_changed, _on_pipeline_state_changed)
 	
 	# 3. Connecter l'UI manuellement
 	_safe_connect_btn(browse_button, _on_browse_pressed)
@@ -126,6 +132,9 @@ func _ready() -> void:
 	_safe_connect_btn(check_tools_btn, _on_check_tools_pressed)
 	_safe_connect_btn(clean_floaters_btn, _on_clean_floaters_pressed)
 	
+	_safe_connect_btn(clear_logs_btn, _on_clear_logs_pressed)
+	_safe_connect_btn(popout_logs_btn, _on_popout_logs_pressed)
+	
 	if threshold_slider:
 		threshold_slider.value_changed.connect(_on_threshold_changed)
 	if mask_option:
@@ -144,7 +153,7 @@ func _ready() -> void:
 		point_size_slider.value_changed.connect(_on_point_size_changed)
 
 	# Dynamic UI injection
-	var header_box = get_node_or_null("VSplit/TopScroll/VBoxTop/HeaderBox")
+	var header_box = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/HeaderBox")
 	if header_box:
 		var open_folder_btn = Button.new()
 		open_folder_btn.name = "OpenFolder"
@@ -152,7 +161,7 @@ func _ready() -> void:
 		open_folder_btn.pressed.connect(_on_open_folder_pressed)
 		header_box.add_child(open_folder_btn)
 		
-	var pipeline_container = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline")
+	var pipeline_container = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Pipeline")
 	if pipeline_container:
 		dry_run_check = CheckBox.new()
 		dry_run_check.name = "DryRunCheck"
@@ -694,7 +703,6 @@ func _on_progress_updated(progress: float) -> void:
 	var status_str := current_session.status if current_session else "Running..."
 	_last_known_status = status_str
 	_last_known_phase_prefix = phase_prefix
-	_is_running = progress < 100.0
 
 	if not _is_running:
 		if status_label: 
@@ -1037,3 +1045,49 @@ func _check_tools_and_popup(at_startup: bool = false) -> void:
 func _update_stats_label(text: String) -> void:
 	if stats_label:
 		stats_label.text = "Stats: " + text
+
+
+func _on_clear_logs_pressed() -> void:
+	if log_text:
+		log_text.text = ""
+
+
+func _on_popout_logs_pressed() -> void:
+	_on_popout_pressed()
+
+
+func _on_popout_pressed() -> void:
+	var window := Window.new()
+	window.title = "StudioTo3D Reconstruction Logs"
+	window.size = Vector2i(800, 600)
+	window.transient = true
+	window.always_on_top = true
+	
+	var popout_edit := TextEdit.new()
+	popout_edit.editable = false
+	popout_edit.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	popout_edit.text = log_text.text if log_text else ""
+	popout_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	popout_edit.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	window.add_child(popout_edit)
+	
+	var updater := func(line: String) -> void:
+		popout_edit.text += line + "\n"
+		popout_edit.set_caret_line(popout_edit.get_line_count())
+	
+	manager.log_line_received.connect(updater)
+	
+	window.close_requested.connect(func() -> void:
+		manager.log_line_received.disconnect(updater)
+		window.queue_free()
+	)
+	
+	add_child(window)
+	window.popup_centered()
+
+
+func _on_pipeline_state_changed(is_active: bool) -> void:
+	_is_running = is_active
+	if not _is_running:
+		if status_label:
+			status_label.text = _last_known_phase_prefix + _last_known_status
