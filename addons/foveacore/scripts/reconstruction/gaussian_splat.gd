@@ -31,6 +31,12 @@ var normal: Vector3 = Vector3.UP
 var layer_type: LayerType = LayerType.BASE
 var brush_type: BrushType = BrushType.GAUSSIAN
 
+# Dynamic physics & lighting properties
+var origin_offset: Vector3 = Vector3.ZERO
+var velocity: Vector3 = Vector3.ZERO
+var stiffness: float = 4.0
+var surface_normal: Vector3 = Vector3.UP
+
 # Données de quantification (pour rendu optimisé)
 var palette_index: int = 0  # Index dans la palette 8-bit (0-255)
 var dither_seed: int = 0    # Seed pour dithering stochastique
@@ -103,7 +109,11 @@ func to_dict() -> Dictionary:
 		"covariance": covariance,
 		"depth": depth,
 		"palette_index": palette_index,
-		"dither_seed": dither_seed
+		"dither_seed": dither_seed,
+		"layer_type": layer_type,
+		"brush_type": brush_type,
+		"surface_normal": surface_normal,
+		"origin_offset": origin_offset
 	}
 
 func from_dict(data: Dictionary) -> void:
@@ -117,6 +127,10 @@ func from_dict(data: Dictionary) -> void:
 	depth = data.get("depth", 0.0)
 	palette_index = data.get("palette_index", 0)
 	dither_seed = data.get("dither_seed", 0)
+	layer_type = data.get("layer_type", LayerType.BASE)
+	brush_type = data.get("brush_type", BrushType.GAUSSIAN)
+	surface_normal = data.get("surface_normal", Vector3.UP)
+	origin_offset = data.get("origin_offset", Vector3.ZERO)
 
 static func create_from_triangle(
 	pos: Vector3, 
@@ -131,6 +145,7 @@ static func create_from_triangle(
 	splat.opacity = 0.8 # Base opacity
 	splat.depth = pos.distance_to(camera_pos)
 	splat.normal = normal
+	splat.surface_normal = normal
 	
 	# Scale based on triangle area and density
 	var base_scale = sqrt(area) * (1.0 / density)

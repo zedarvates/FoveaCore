@@ -295,6 +295,28 @@ void fragment() {
 	float out_metallic = 0.0;
 	vec3  out_emission = vec3(0.0);
 
+	// Layer type specific customization (BASE=0u, SATURATION=1u, LIGHT=2u, SHADOW=3u, LIQUID=4u)
+	if (v_layer_type == 1u) {
+		color = boost_saturation(color, 0.5);
+	} else if (v_layer_type == 2u) {
+		color = mix(color, vec3(1.0), 0.4);
+		out_emission = color * 1.5;
+		out_specular = 0.9;
+		out_roughness = 0.1;
+	} else if (v_layer_type == 3u) {
+		color = color * 0.25;
+		out_roughness = 0.9;
+		out_specular = 0.05;
+		out_metallic = 0.0;
+	} else if (v_layer_type == 4u) {
+		vec3 view_dir = vec3(0.0, 0.0, 1.0);
+		float fresnel = pow(1.0 - max(dot(NORMAL, view_dir), 0.0), 3.0);
+		color = mix(color, vec3(0.8, 0.9, 1.0), fresnel * 0.4);
+		out_roughness = 0.05;
+		out_specular = 0.95;
+		alpha = clamp(alpha * 1.3, 0.0, 0.95);
+	}
+
 	// ── Mode 1 : Oil Painting ────────────────────────────────────────────────
 	if (art_mode == 1) {
 		// Postérisation des couleurs (effets aplats, pop-art)

@@ -61,12 +61,14 @@ func _generate_and_filter(visibility_result, camera: Camera3D, camera_pos: Vecto
 				for local_splat in node.loaded_splats:
 					if current_idx < max_splats:
 						var splat: GaussianSplat = GaussianSplat.new()
-						splat.position = gtr * local_splat.position
+						splat.position = gtr * (local_splat.position + local_splat.origin_offset)
 						splat.rotation = (gtr_rot * local_splat.rotation).normalized()
 						splat.scale = gtr_scale * local_splat.scale
 						splat.opacity = local_splat.opacity * node.alpha_override
 						splat.color = local_splat.color * node.color_override
 						splat.normal = (gtr.basis * local_splat.normal).normalized()
+						splat.surface_normal = (gtr.basis * local_splat.surface_normal).normalized()
+						splat.origin_offset = gtr.basis * local_splat.origin_offset
 						splat.depth = splat.position.distance_to(camera_pos)
 						splat.radius = local_splat.radius * node.scale_override
 						splat.covariance = local_splat.covariance
