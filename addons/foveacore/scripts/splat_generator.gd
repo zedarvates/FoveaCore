@@ -170,15 +170,20 @@ static func generate_all_splats(
 			var gtr_scale: Vector3 = gtr.basis.get_scale()
 			for local_splat in node.loaded_splats:
 				var splat = GaussianSplat.new()
-				splat.position = gtr * local_splat.position
+				splat.position = gtr * (local_splat.position + local_splat.origin_offset)
 				splat.rotation = (gtr_rot * local_splat.rotation).normalized()
 				splat.scale = gtr_scale * local_splat.scale
 				splat.opacity = local_splat.opacity * node.alpha_override
 				splat.color = local_splat.color * node.color_override
 				splat.normal = (gtr.basis * local_splat.normal).normalized()
+				splat.surface_normal = (gtr.basis * local_splat.surface_normal).normalized()
+				splat.origin_offset = gtr.basis * local_splat.origin_offset
 				splat.depth = splat.position.distance_to(camera_position)
 				splat.radius = local_splat.radius * node.scale_override
 				splat.covariance = local_splat.covariance
+				splat.layer_type = local_splat.layer_type
+				splat.brush_type = local_splat.brush_type
+				splat.dither_seed = local_splat.dither_seed
 				all_splats.append(splat)
 		else:
 			# Obtenir la densité locale du nœud

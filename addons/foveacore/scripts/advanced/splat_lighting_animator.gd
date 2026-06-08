@@ -36,11 +36,11 @@ func _animate_splat_layers(light_dir: Vector3) -> void:
 					splat.origin_offset = -offset 
 					
 				GaussianSplat.LayerType.LIGHT:
-					# Highlights intensity based on light direction
-					var alignment = clamp(splat.surface_normal.dot(light_dir), 0.0, 1.0)
+					# Highlights intensity based on light direction (Lambertian dot product using -light_dir)
+					var alignment = clamp(splat.surface_normal.dot(-light_dir), 0.0, 1.0)
 					splat.opacity = alignment * highlight_intensity
 					
 				GaussianSplat.LayerType.SATURATION:
 					# Saturation can also pop more under direct light
-					var alignment = clamp(splat.surface_normal.dot(light_dir), 0.5, 1.0)
+					var alignment = clamp(splat.surface_normal.dot(-light_dir), 0.5, 1.0)
 					splat.opacity = alignment

@@ -182,8 +182,16 @@ func _process(_delta: float) -> void:
         return
 
     # Mettre à jour le culling/tri en temps réel si la caméra bouge (rendu par fichier uniquement)
+    # ou si de nouveaux chunks ont été chargés asynchronement.
     var cam_pos = camera.global_position
-    if asset_path != "" and (cam_pos - _last_camera_pos).length() > sort_distance_threshold:
+    var camera_moved := (cam_pos - _last_camera_pos).length() > sort_distance_threshold
+    var new_chunks_loaded := false
+    if culler_pipeline and culler_pipeline.streaming_manager:
+        if culler_pipeline.streaming_manager.has_newly_loaded_chunks:
+            new_chunks_loaded = true
+            culler_pipeline.streaming_manager.has_newly_loaded_chunks = false
+
+    if asset_path != "" and (camera_moved or new_chunks_loaded):
         _last_camera_pos = cam_pos
         load_and_render_splats()
 

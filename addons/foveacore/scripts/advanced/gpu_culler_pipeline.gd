@@ -22,10 +22,13 @@ signal chunk_unloaded(chunk_index: int)
 var chunk_load_radius: float = 20.0
 var _cached_chunks: Dictionary = {} # fovea_path -> Array[SpatialChunk]
 var _previously_loaded_chunks: Dictionary = {} # fovea_path -> Array[int]
+var streaming_manager: FoveaStreamingManager
 
 var rd: RenderingDevice
 var shader_rid: RID
 var pipeline_rid: RID
+var depth_shader_rid: RID
+var depth_pipeline_rid: RID
 var sort_shader_rid: RID
 var sort_pipeline_rid: RID
 
@@ -62,6 +65,7 @@ var _cached_bytes: Dictionary = {}
 var _cached_blocks: Dictionary = {}
 
 func _init() -> void:
+    streaming_manager = FoveaStreamingManager.new()
     rd = RenderingServer.create_local_rendering_device()
     if rd:
         _load_compute_shader()
@@ -75,9 +79,13 @@ func _load_compute_shader() -> void:
     var spirv: RDShaderSPIRV = shader_file.get_spirv()
     shader_rid    = rd.shader_create_from_spirv(spirv)
     pipeline_rid  = rd.compute_pipeline_create(shader_rid)
+    # Shader de précalcul de profondeur
+    var depth_file: RDShaderFile = preload("res://addons/foveacore/shaders/depth_precompute.glsl")
+    depth_shader_rid = rd.shader_create_from_spirv(depth_file.get_spirv())
+    depth_pipeline_rid = rd.compute_pipeline_create(depth_shader_rid)
 
-    # Nouveau shader bitonique : opere directement sur PackedSplat, sans depth+indices separes
-    var sort_file: RDShaderFile = preload("res://addons/foveacore/shaders/sort_bitonic_splats.glsl")
+    # Shader bitonique keyed : utilise les clés précalculées
+    var sort_file: RDShaderFile = preload("res://addons/foveacore/shaders/sort_bitonic_keyed.glsl")
     sort_shader_rid   = rd.shader_create_from_spirv(sort_file.get_spirv())
     sort_pipeline_rid = rd.compute_pipeline_create(sort_shader_rid)
 
@@ -93,15 +101,18 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
     if not rd:
         push_error("GPU Culler: RenderingDevice is not available. Skipping culling.")
         return RID()
-    # 1. Chargement des octets bruts (via GDExtension si disponible, sinon fallback GDScript)
-    var raw_bytes: PackedByteArray = _load_fovea_bytes(fovea_path)
-    if raw_bytes.is_empty():
-        push_error("FoveaEngine: Échec du chargement du fichier Fast-Path.")
+    
+    # 1. Enregistrement de l'asset auprès du FoveaStreamingManager
+    var streaming_asset = streaming_manager.register_asset(fovea_path, aabb_min, aabb_max)
+    if streaming_asset == null:
+        push_error("FoveaEngine: Échec de l'enregistrement de l'asset de streaming.")
         return RID()
         
+    # 2. Mise à jour de l'état du streaming (calcul de priorité, chargement/éviction LRU)
+    streaming_manager.update_streaming(camera, chunk_load_radius)
+        
     var cam_pos = camera.global_position
-    # 1.5. Culling de frustum CPU par bloc spatial + Chargement à la distance (Phase 3: Spatial Chunking)
-    var chunks := _precompute_spatial_chunks(fovea_path, raw_bytes, aabb_min, aabb_max)
+    # 2.5. Culling de frustum CPU par bloc spatial chargé
     var frustum = FrustumUtils.Frustum.new()
     frustum.from_matrix(camera.get_camera_projection(), camera.global_transform)
     
@@ -113,14 +124,13 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
     var visible_count := 0
     var non_empty_chunks := 0
     
-    for chunk in chunks:
-        if chunk.raw_bytes.is_empty():
+    for chunk in streaming_asset.chunks:
+        var slices: Array = chunk.get_meta("file_slices")
+        if slices.is_empty():
             continue
         non_empty_chunks += 1
         
-        var dist := _distance_to_aabb(cam_pos, chunk.aabb)
-        if dist <= chunk_load_radius:
-            chunk.is_loaded = true
+        if chunk.is_loaded:
             loaded_count += 1
             current_loaded_indices.append(chunk.index)
             
@@ -128,8 +138,6 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
             if frustum.contains_aabb(chunk.aabb):
                 visible_count += 1
                 visible_bytes.append_array(chunk.raw_bytes)
-        else:
-            chunk.is_loaded = false
 
     # Emit signals / prints for newly loaded/unloaded chunks
     for idx in current_loaded_indices:
@@ -149,14 +157,14 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
             loaded_count, non_empty_chunks, visible_count, loaded_count])
             
     if visible_bytes.is_empty():
-        print("FoveaEngine: Aucun bloc visible sur le CPU, skip complet GPU.")
+        print("FoveaEngine: Aucun bloc visible sur le CPU (en attente de chargement ou hors vue), skip complet GPU.")
         return RID()
         
     var total_splats = visible_bytes.size() / SPLAT_BYTE_SIZE
     print("FoveaEngine: Dispatching Compute Shader pour %d splats visibles..." % total_splats)
 
-    # 2. Caching des Buffers GPU persistants
-    var max_buffer_size = raw_bytes.size()
+    # 3. Caching des Buffers GPU persistants
+    var max_buffer_size = streaming_asset.total_splats * SPLAT_BYTE_SIZE
     var cache: Dictionary = _gpu_buffers.get(fovea_path, {})
     var needs_recreation = cache.is_empty() or cache.get("size", 0) < max_buffer_size
     
@@ -168,6 +176,10 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
             if cache.get("counter", RID()).is_valid(): rd.free_rid(cache["counter"])
             if cache.get("camera_ubo", RID()).is_valid(): rd.free_rid(cache["camera_ubo"])
             if cache.get("uniform_set", RID()).is_valid(): rd.free_rid(cache["uniform_set"])
+            if cache.get("depths", RID()).is_valid(): rd.free_rid(cache["depths"])
+            if cache.get("asset_data", RID()).is_valid(): rd.free_rid(cache["asset_data"])
+            if cache.get("depth_uniform_set", RID()).is_valid(): rd.free_rid(cache["depth_uniform_set"])
+            if cache.get("sort_uniform_set", RID()).is_valid(): rd.free_rid(cache["sort_uniform_set"])
         
         # Créer les nouveaux buffers persistants à la taille maximale
         var input_buf = rd.storage_buffer_create(max_buffer_size)
@@ -177,7 +189,25 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
         var counter_buf = rd.storage_buffer_create(4, zero_counter)
         var camera_ubo_buf = rd.storage_buffer_create(320)
         
-        # Créer le uniform set persistant 0
+        var max_splats_count = max_buffer_size / SPLAT_BYTE_SIZE
+        var max_padded = 1
+        while max_padded < max_splats_count:
+            max_padded <<= 1
+        var depths_buf = rd.storage_buffer_create(max_padded * 4)
+        
+        var asset_bytes = PackedByteArray()
+        asset_bytes.resize(32)
+        asset_bytes.encode_float(0, aabb_min.x)
+        asset_bytes.encode_float(4, aabb_min.y)
+        asset_bytes.encode_float(8, aabb_min.z)
+        asset_bytes.encode_float(12, 0.0)
+        asset_bytes.encode_float(16, aabb_max.x)
+        asset_bytes.encode_float(20, aabb_max.y)
+        asset_bytes.encode_float(24, aabb_max.z)
+        asset_bytes.encode_float(28, 0.0)
+        var asset_buf = rd.storage_buffer_create(32, asset_bytes)
+        
+        # Créer le uniform set persistant 0 (culling)
         var uniform_input = RDUniform.new()
         uniform_input.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
         uniform_input.binding = 0
@@ -195,12 +225,47 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
         
         var uniform_set_0 = rd.uniform_set_create([uniform_input, uniform_output, uniform_counter], shader_rid, 0)
         
+        # Uniform set pour depth_precompute.glsl (binding 0: output_buf, binding 1: depths_buf, binding 2: asset_buf)
+        var u_depth_splats = RDUniform.new()
+        u_depth_splats.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+        u_depth_splats.binding = 0
+        u_depth_splats.add_id(output_buf)
+        
+        var u_depth_depths = RDUniform.new()
+        u_depth_depths.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+        u_depth_depths.binding = 1
+        u_depth_depths.add_id(depths_buf)
+        
+        var u_depth_assets = RDUniform.new()
+        u_depth_assets.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+        u_depth_assets.binding = 2
+        u_depth_assets.add_id(asset_buf)
+        
+        var depth_uniform_set = rd.uniform_set_create([u_depth_splats, u_depth_depths, u_depth_assets], depth_shader_rid, 0)
+        
+        # Uniform set pour sort_bitonic_keyed.glsl (binding 0: output_buf, binding 1: depths_buf)
+        var u_sort_splats = RDUniform.new()
+        u_sort_splats.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+        u_sort_splats.binding = 0
+        u_sort_splats.add_id(output_buf)
+        
+        var u_sort_depths = RDUniform.new()
+        u_sort_depths.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+        u_sort_depths.binding = 1
+        u_sort_depths.add_id(depths_buf)
+        
+        var sort_uniform_set = rd.uniform_set_create([u_sort_splats, u_sort_depths], sort_shader_rid, 0)
+        
         cache = {
             "input": input_buf,
             "output": output_buf,
             "counter": counter_buf,
             "camera_ubo": camera_ubo_buf,
             "uniform_set": uniform_set_0,
+            "depths": depths_buf,
+            "asset_data": asset_buf,
+            "depth_uniform_set": depth_uniform_set,
+            "sort_uniform_set": sort_uniform_set,
             "size": max_buffer_size
         }
         _gpu_buffers[fovea_path] = cache
@@ -323,11 +388,15 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
     # + repartition temporelle : seulement 1/interleave_factor des splats est retrie
     #   ce frame, evitant le pic GPU qui causait les frame drops VR.
     if valid_splat_count > 1:
-        _temporal_sort_bitonic(
-            output_buffer, valid_splat_count, cam_pos,
-            aabb_min, aabb_max
+        _temporal_sort_bitonic_keyed(
+            output_buffer,
+            cache["depths"],
+            cache["depth_uniform_set"],
+            cache["sort_uniform_set"],
+            valid_splat_count,
+            cam_pos
         )
-        print("FoveaEngine: GPU Bitonic Sort temporel termine (frame %d, facteur %d)." % \
+        print("FoveaEngine: GPU Bitonic Sort temporel par cles (keyed) termine (frame %d, facteur %d)." % \
             [_frame_counter, interleave_factor])
  
     _frame_counter += 1
@@ -337,75 +406,77 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
  
     return output_buffer
 
-## Tri bitonique GPU en UNE SEULE compute list non-bloquante.
-## Toutes les etapes (stage/step) sont enchainees sans submit() intermediaire.
-## Support Temporal Interleaved : seule une fraction des splats est triee ce frame.
-func _temporal_sort_bitonic(
-        buffer_rid: RID,
+## Tri bitonique par clés (keyed) GPU en une seule compute list non-bloquante.
+## 1. Passe de précalcul des profondeurs en O(N) via depth_precompute.glsl
+## 2. Passes du tri bitonique par clés via sort_bitonic_keyed.glsl
+func _temporal_sort_bitonic_keyed(
+        output_buffer: RID,
+        depths_buffer: RID,
+        depth_uniform_set: RID,
+        sort_uniform_set: RID,
         splat_count: int,
-        cam_pos:   Vector3,
-        aabb_min:  Vector3,
-        aabb_max:  Vector3
+        cam_pos: Vector3
 ) -> void:
     if not rd:
         return
-    # Puissance de 2 superieure ou egale a splat_count
+        
+    # 1. Étape de précalcul des profondeurs
+    var depth_pc := PackedByteArray()
+    depth_pc.resize(32)
+    depth_pc.encode_u32(0, splat_count)
+    depth_pc.encode_float(4, cam_pos.x)
+    depth_pc.encode_float(8, cam_pos.y)
+    depth_pc.encode_float(12, cam_pos.z)
+    depth_pc.encode_u32(16, 1) # num_assets = 1
+    depth_pc.encode_u32(20, 0)
+    depth_pc.encode_u32(24, 0)
+    depth_pc.encode_u32(28, 0)
+    
+    var depth_wg := int(ceil(float(splat_count) / 256.0))
+    var depth_cl := rd.compute_list_begin()
+    rd.compute_list_bind_compute_pipeline(depth_cl, depth_pipeline_rid)
+    rd.compute_list_bind_uniform_set(depth_cl, depth_uniform_set, 0)
+    rd.compute_list_set_push_constant(depth_cl, depth_pc, 32)
+    rd.compute_list_dispatch(depth_cl, depth_wg, 1, 1)
+    rd.compute_list_end()
+    rd.submit()
+    rd.sync()
+    
+    # 2. Étape du tri bitonique par clés
     var padded: int = 1
     while padded < splat_count:
         padded <<= 1
-
-    var sort_uniform: RDUniform = RDUniform.new()
-    sort_uniform.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
-    sort_uniform.binding      = 0
-    sort_uniform.add_id(buffer_rid)
-    var sort_set: RID = rd.uniform_set_create([sort_uniform], sort_shader_rid, 0)
-
+        
     var sort_workgroups: int = int(ceil(float(padded) / 256.0))
-    var aabb_range: float = (aabb_max - aabb_min).length()
-
-    # Calcul du masque temporel pour ce frame
-    # interleave_factor=1 => frame_mask=0 (tous les splats chaque frame)
-    # interleave_factor=2 => frame_mask=1, frame_id= 0 ou 1 alternativement
-    # interleave_factor=4 => frame_mask=3, frame_id= 0,1,2,3 en rotation
     var frame_mask: int = interleave_factor - 1  # 0, 1, ou 3
-    var frame_id:   int = _frame_counter & frame_mask
-
-    # --- Enchainage de TOUTES les passes dans une seule compute list ---
-    var compute_list: int = rd.compute_list_begin()
+    var frame_id: int = _frame_counter & frame_mask
+    
+    var compute_list := rd.compute_list_begin()
     rd.compute_list_bind_compute_pipeline(compute_list, sort_pipeline_rid)
-    rd.compute_list_bind_uniform_set(compute_list, sort_set, 0)
-
+    rd.compute_list_bind_uniform_set(compute_list, sort_uniform_set, 0)
+    
     var stage: int = 2
     while stage <= padded:
         var step_size: int = stage >> 1
         while step_size > 0:
-            var pc_bytes: PackedByteArray = PackedByteArray()
-            pc_bytes.resize(64)  # Alignement std430 sur 16 bytes
-            pc_bytes.encode_u32(0,  splat_count)
-            pc_bytes.encode_u32(4,  padded)
-            pc_bytes.encode_u32(8,  step_size)
+            var pc_bytes := PackedByteArray()
+            pc_bytes.resize(32)
+            pc_bytes.encode_u32(0, splat_count)
+            pc_bytes.encode_u32(4, padded)
+            pc_bytes.encode_u32(8, step_size)
             pc_bytes.encode_u32(12, stage)
-            pc_bytes.encode_float(16, cam_pos.x)
-            pc_bytes.encode_float(20, cam_pos.y)
-            pc_bytes.encode_float(24, cam_pos.z)
-            pc_bytes.encode_float(28, aabb_range)
-            pc_bytes.encode_u32(32,  frame_mask)
-            pc_bytes.encode_u32(36,  frame_id)
-            pc_bytes.encode_float(40, aabb_min.x)
-            pc_bytes.encode_float(44, aabb_min.y)
-            pc_bytes.encode_float(48, aabb_min.z)
-            pc_bytes.encode_float(52, 0.0)  # pad0
-            pc_bytes.encode_float(56, 0.0)  # pad1
-            pc_bytes.encode_float(60, 0.0)  # pad2
-
-            rd.compute_list_set_push_constant(compute_list, pc_bytes, 64)
+            pc_bytes.encode_u32(16, frame_mask)
+            pc_bytes.encode_u32(20, frame_id)
+            pc_bytes.encode_u32(24, 0)
+            pc_bytes.encode_u32(28, 0)
+            
+            rd.compute_list_set_push_constant(compute_list, pc_bytes, 32)
             rd.compute_list_dispatch(compute_list, sort_workgroups, 1, 1)
-
+            
             step_size >>= 1
         stage <<= 1
-
+        
     rd.compute_list_end()
-    # UN SEUL submit+sync pour toutes les passes = elimine tous les stalls intermediaires
     rd.submit()
     rd.sync()
 
@@ -537,6 +608,13 @@ func cleanup() -> void:
             hiz_texture_rid = RID()
         _last_hiz_tex = RID()
         
+        if depth_pipeline_rid.is_valid():
+            rd.free_rid(depth_pipeline_rid)
+            depth_pipeline_rid = RID()
+        if depth_shader_rid.is_valid():
+            rd.free_rid(depth_shader_rid)
+            depth_shader_rid = RID()
+        
         # Libérer les buffers GPU persistants en cache
         for path in _gpu_buffers:
             var cache = _gpu_buffers[path]
@@ -550,6 +628,14 @@ func cleanup() -> void:
                 rd.free_rid(cache["camera_ubo"])
             if cache.get("uniform_set", RID()).is_valid():
                 rd.free_rid(cache["uniform_set"])
+            if cache.get("depths", RID()).is_valid():
+                rd.free_rid(cache["depths"])
+            if cache.get("asset_data", RID()).is_valid():
+                rd.free_rid(cache["asset_data"])
+            if cache.get("depth_uniform_set", RID()).is_valid():
+                rd.free_rid(cache["depth_uniform_set"])
+            if cache.get("sort_uniform_set", RID()).is_valid():
+                rd.free_rid(cache["sort_uniform_set"])
         _gpu_buffers.clear()
         
         rd.free()
