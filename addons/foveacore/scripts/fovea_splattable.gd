@@ -96,9 +96,9 @@ func _ready() -> void:
 				print("FoveaSplattable: Rendu instancié global activé pour ", splat_file_path)
 			else:
 				print("FoveaSplattable: Rendu natif local détecté pour ", splat_file_path)
-				# Instancier dynamiquement FoveaSplatRenderer pour les assets natifs
-				var renderer = FoveaSplatRenderer.new()
-				renderer.name = "FoveaSplatRenderer"
+				# Instancier dynamiquement FoveaCoreSplatRenderer pour les assets natifs
+				var renderer = FoveaCoreSplatRenderer.new()
+				renderer.name = "FoveaCoreSplatRenderer"
 				renderer.asset_path = splat_file_path
 				renderer.sort_distance_threshold = 0.1
 				add_child(renderer)
@@ -237,4 +237,3 @@ class SplatSpatialHashGrid extends RefCounted:
 					if grid.has(cell):
 						results.append_array(grid[cell])
 		return results
-

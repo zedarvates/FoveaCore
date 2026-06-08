@@ -74,7 +74,7 @@ func _build_html_content() -> String:
 		body { font-family: Arial, sans-serif; margin: 20px; background: #1a1a1a; color: #e0e0e0; }
 		h1 { color: #4CAF50; border-bottom: 2px solid #4CAF50; padding-bottom: 10px; }
 		h2 { color: #2196F3; margin-top: 30px; }
-		table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+		table { border-collapse: collapse; width: 100%%; margin: 20px 0; }
 		th, td { border: 1px solid #444; padding: 12px; text-align: left; }
 		th { background: #333; color: #4CAF50; }
 		tr:nth-child(even) { background: #2a2a2a; }
@@ -100,7 +100,7 @@ func _build_html_content() -> String:
 		<div class="metric-label">Résolutions testées</div>
 		<div class="metric-value">%d</div>
 	</div>
-""" % (Time.get_datetime_string_from_system(), _results.size(), _results.size())
+	""" % [Time.get_datetime_string_from_system(), _results.size(), _results.size()]
 	
 	# Tableau des résultats
 	html += """
@@ -150,7 +150,7 @@ func _build_html_content() -> String:
 			<td>%.4f</td>
 			<td>%.4f</td>
 		</tr>
-""" % [
+	""" % [
 			result.test_index, result.resolution, result.resolution * 9/16,
 			result.fps_rgb565, result.avg_frame_time_rgb565_ms, result.vram_rgb565_bytes / 1024.0, result.bandwidth_rgb565_kbps,
 			psnr_class, result.avg_psnr, result.avg_ssim, result.banding_artifacts_score,
@@ -188,7 +188,7 @@ func _build_html_content() -> String:
 		
 		html += """
 		<li><strong>%dx%d:</strong> %s - %s</li>
-""" % [result.resolution, result.resolution * 9/16, recommendation, reason]
+	""" % [result.resolution, result.resolution * 9/16, recommendation, reason]
 	
 	html += """
 	</ul>
@@ -224,7 +224,7 @@ Dithering activé: %s
 ================================================================================
 RÉSULTATS DÉTAILLÉS
 ================================================================================
-""" % [Time.get_datetime_string_from_system(), _results.size(), _results.size(), "Oui" if _results[0].use_dithering else "Non"]
+	""" % [Time.get_datetime_string_from_system(), _results.size(), _results.size(), "Oui" if _results[0].use_dithering else "Non"]
 	
 	for result in _results:
 		text += """
@@ -252,7 +252,7 @@ Test #%d - Résolution: %dx%d
     PSNR:                  %.2f dB
     SSIM:                  %.4f
     Artefacts banding:     %.4f
-""" % [
+	""" % [
 			result.test_index, result.resolution, result.resolution * 9/16,
 			result.fps_rgb565, result.avg_frame_time_rgb565_ms, result.vram_rgb565_bytes / 1024.0, result.bandwidth_rgb565_kbps,
 			result.fps_palette, result.avg_frame_time_palette_ms, result.vram_palette_bytes / 1024.0, result.bandwidth_palette_kbps,
@@ -261,7 +261,7 @@ Test #%d - Résolution: %dx%d
 			result.avg_psnr, result.avg_ssim, result.banding_artifacts_score
 		]
 	
-text += """
+	text += """
 ================================================================================
 ANALYSE COMPARATIVE
 ================================================================================
@@ -278,7 +278,7 @@ ANALYSE COMPARATIVE
 	var avg_fps_rgb = total_fps_rgb / _results.size()
 	var avg_fps_pal = total_fps_pal / _results.size()
 	
-text += "%.1f (moyenne)\n" % avg_fps_rgb
+	text += "%.1f (moyenne)\n" % avg_fps_rgb
 	text += "   - Palette 8-bit: %.1f (moyenne)\n" % avg_fps_pal
 	text += "   - Différence: %+.1f%%\n" % ((avg_fps_pal - avg_fps_rgb) / avg_fps_rgb * 100.0)
 	
@@ -295,7 +295,7 @@ text += "%.1f (moyenne)\n" % avg_fps_rgb
 	var avg_vram_rgb = total_vram_rgb / _results.size()
 	var avg_vram_pal = total_vram_pal / _results.size()
 	
-text += "%.2f KB (moyenne)\n" % (avg_vram_rgb / 1024.0)
+	text += "%.2f KB (moyenne)\n" % (avg_vram_rgb / 1024.0)
 	text += "   - Palette 8-bit: %.2f KB (moyenne)\n" % (avg_vram_pal / 1024.0)
 	text += "   - Économie: %.1f%%\n" % ((avg_vram_rgb - avg_vram_pal) / avg_vram_rgb * 100.0)
 	
@@ -315,7 +315,7 @@ text += "%.2f KB (moyenne)\n" % (avg_vram_rgb / 1024.0)
 	var avg_ssim = total_ssim / _results.size()
 	var avg_banding = total_banding / _results.size()
 	
-text += "%.2f dB\n" % avg_psnr
+	text += "%.2f dB\n" % avg_psnr
 	text += "   - SSIM moyen:  %.4f\n" % avg_ssim
 	text += "   - Banding:     %.4f\n" % avg_banding
 	
@@ -331,7 +331,7 @@ RECOMMANDATIONS
 		text += "    (PSNR: %.2f dB, Gain FPS: %+.1f%%)\n" % [result.avg_psnr, (result.fps_palette - result.fps_rgb565) / result.fps_rgb565 * 100.0]
 		text += "\n"
 	
-text += """
+	text += """
 ================================================================================
 CONCLUSION
 ================================================================================

@@ -112,7 +112,7 @@ func run_demo() -> void:
 	var dithered = test_color
 	
 	for i in range(3):
-		dithered = GaussianSplat.apply_dithering_static(dithered, i, i, error_color)
+		dithered = apply_dithering_static(dithered, i, i, error_color)
 	
 	print("   Couleur originale: ", test_color)
 	print("   Après dithering:   ", dithered)

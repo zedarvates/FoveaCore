@@ -67,7 +67,7 @@ var _visibility_manager: VisibilityManager = null
 var _hybrid_renderer: HybridRenderer = null
 var _occlusion_culler: OcclusionCuller = null
 var _temporal_reprojector: TemporalReprojector = null
-var _splat_renderer: FoveaSplatRenderer = null
+var _splat_renderer: FoveaCoreSplatRenderer = null
 var _splat_sorter: SplatSorter = null
 
 ## Dictionnaire des renderers d'instances multiples par chemin d'asset
@@ -107,8 +107,8 @@ func _init_culling_nodes() -> void:
 	_hybrid_renderer = HybridRenderer.new()
 	add_child(_hybrid_renderer)
 
-	_splat_renderer = FoveaSplatRenderer.new()
-	_splat_renderer.name = "FoveaSplatRenderer"
+	_splat_renderer = FoveaCoreSplatRenderer.new()
+	_splat_renderer.name = "FoveaCoreSplatRenderer"
 	add_child(_splat_renderer)
 
 	_splat_sorter = SplatSorter.new()

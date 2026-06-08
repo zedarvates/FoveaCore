@@ -429,8 +429,7 @@ func _calculate_ssim(img1: Image, img2: Image) -> float:
 	sigma2_sq /= n
 	sigma12 /= n
 	
-	var ssim = ((2 * mu1 * mu2 + c1*c1) * (2 * sigma12 + c2*c2)) / 
-			   ((mu1*mu1 + mu2*mu2 + c1*c1) * (sigma1_sq + sigma2_sq + c2*c2))
+	var ssim = ((2 * mu1 * mu2 + c1*c1) * (2 * sigma12 + c2*c2)) / ((mu1*mu1 + mu2*mu2 + c1*c1) * (sigma1_sq + sigma2_sq + c2*c2))
 	
 	return ssim
 

@@ -75,8 +75,6 @@ func _run_benchmark() -> void:
     print("  - Pas d'overdraw")
     
     _run_single_test("triangle", triangle_mesh)
-    
-    _print_results()
 
 func _run_single_test(mode: String, mesh: ArrayMesh) -> void:
     current_test = mode

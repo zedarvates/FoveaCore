@@ -6,8 +6,8 @@ extends Node3D
 @export var test_mode: String = "triangle"  # "triangle" ou "quad" ou "both"
 @export var splat_count: int = 500
 
-var triangle_renderer: FoveaSplatRenderer
-var quad_renderer: FoveaSplatRenderer
+var triangle_renderer: FoveaCoreSplatRenderer
+var quad_renderer: FoveaCoreSplatRenderer
 
 func _ready() -> void:
     print("\n========== Validation Visuelle ==========")
@@ -23,7 +23,7 @@ func _ready() -> void:
         _setup_quad_only()
 
 func _setup_triangle_only() -> void:
-    triangle_renderer = FoveaSplatRenderer.new()
+    triangle_renderer = FoveaCoreSplatRenderer.new()
     triangle_renderer.use_triangle_mesh = true
     triangle_renderer.splat_subdivisions = 16
     triangle_renderer.name = "TriangleRenderer"
@@ -38,7 +38,7 @@ func _setup_triangle_only() -> void:
     print("  - Géométrie exacte de l'ellipse")
 
 func _setup_quad_only() -> void:
-    quad_renderer = FoveaSplatRenderer.new()
+    quad_renderer = FoveaCoreSplatRenderer.new()
     quad_renderer.use_triangle_mesh = false
     quad_renderer.name = "QuadRenderer"
     add_child(quad_renderer)
@@ -52,7 +52,7 @@ func _setup_quad_only() -> void:
 
 func _setup_side_by_side() -> void:
     # Triangle à gauche
-    triangle_renderer = FoveaSplatRenderer.new()
+    triangle_renderer = FoveaCoreSplatRenderer.new()
     triangle_renderer.use_triangle_mesh = true
     triangle_renderer.splat_subdivisions = 16
     triangle_renderer.name = "TriangleRenderer"
@@ -60,7 +60,7 @@ func _setup_side_by_side() -> void:
     triangle_renderer.global_position = Vector3(-3, 0, 0)
     
     # Quad à droite
-    quad_renderer = FoveaSplatRenderer.new()
+    quad_renderer = FoveaCoreSplatRenderer.new()
     quad_renderer.use_triangle_mesh = false
     quad_renderer.name = "QuadRenderer"
     add_child(quad_renderer)

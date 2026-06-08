@@ -126,7 +126,7 @@ FoveaCore (Godot 4 Addon)
 │   ├── setup_worldmirror.sh
 │   └── setup_diffsynth.sh
 └── tutorials/
-    └── get_started.md
+	└── get_started.md
 ```
 
 ---
