@@ -22,16 +22,20 @@ signal quality_score_updated(score: float)
 
 var _frame_metrics: Array[Dictionary] = []
 
-func add_frame_metrics(index: int, blur_score: float, mask_coverage: float) -> void:
+func add_frame_metrics(index: int, blur_score: float, mask_coverage: float, brightness: float = 0.0, variance: float = 0.0) -> void:
 	frame_count += 1
 	
 	average_blur = (average_blur * (frame_count - 1) + blur_score) / frame_count
 	background_coverage = (background_coverage * (frame_count - 1) + mask_coverage) / frame_count
+	brightness_score = (brightness_score * (frame_count - 1) + brightness) / frame_count
+	color_variance = (color_variance * (frame_count - 1) + variance) / frame_count
 	
 	_frame_metrics.append({
 		"index": index,
 		"blur": blur_score,
 		"coverage": mask_coverage,
+		"brightness": brightness,
+		"variance": variance,
 		"timestamp": Time.get_unix_time_from_system()
 	})
 	
@@ -39,12 +43,16 @@ func add_frame_metrics(index: int, blur_score: float, mask_coverage: float) -> v
 		bad_frames_indices.append(index)
 		quality_warning.emit("Frame %d has low quality (blur: %.2f, coverage: %.2f)" % [index, blur_score, mask_coverage])
 
+	reconstruction_quality_score = _calculate_quality_score()
+
 func add_depth_metrics(depth_confidence_value: float) -> void:
 	depth_confidence = depth_confidence_value
+	reconstruction_quality_score = _calculate_quality_score()
 
 func add_color_metrics(brightness: float, variance: float) -> void:
 	brightness_score = brightness
 	color_variance = variance
+	reconstruction_quality_score = _calculate_quality_score()
 
 func add_splat_metrics(density: float, count: int) -> void:
 	splat_density = density

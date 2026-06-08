@@ -1,3 +1,4 @@
+@tool
 extends Node3D
 ## FoveaSplattable - Node à attacher aux MeshInstance3D pour activer le splatting
 ## Marque un objet comme candidat au Gaussian Splatting visible-only
@@ -11,13 +12,52 @@ const _PlyLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/
 @export var splat_density := 1.0
 
 ## Chemin vers un fichier de Gaussian Splatting (.ply, .fovea, .spz)
-@export_file("*.ply", "*.fovea", "*.spz") var splat_file_path: String = ""
+@export_file("*.ply", "*.fovea", "*.spz") var splat_file_path: String = "":
+	set(val):
+		splat_file_path = val
+		if is_node_ready():
+			if splat_file_path.ends_with(".ply"):
+				_load_splats_from_ply()
+			elif splat_file_path.ends_with(".fovea"):
+				var renderer = get_node_or_null("SplatRenderer")
+				if renderer:
+					renderer.queue_free()
+				_setup_native_renderer()
 
 ## @deprecated Utiliser splat_file_path à la place.
 ## Conservé uniquement pour la compatibilité ascendante des scènes existantes.
 ## Migration : remplacer ply_file_path par splat_file_path dans l'inspecteur.
 ## Cette propriété sera supprimée dans une future version de FoveaCore.
-@export_file("*.ply") var ply_file_path: String = ""
+@export_file("*.ply") var ply_file_path: String = "":
+	set(val):
+		ply_file_path = val
+		if splat_file_path.is_empty() and not ply_file_path.is_empty():
+			splat_file_path = ply_file_path
+
+@export_group("AI Segmentation & Tagging")
+## Tag text/prompt to segment in 3D (e.g. "liquid", "wood", "cloth", "stone")
+@export var run_segmentation_prompt: String = ""
+## Click to trigger AI Segmentation using ComfyUI/Simulation
+@export var trigger_segmentation: bool = false:
+	set(val):
+		if val:
+			if run_segmentation_prompt.is_empty():
+				push_warning("FoveaSplattable: Please specify a segmentation prompt.")
+			else:
+				run_segmentation(run_segmentation_prompt)
+		trigger_segmentation = false
+
+@export_group("Format Conversion & Compression")
+## Click to convert and compress the loaded PLY splats into a .fovea asset (adjacent file)
+@export var trigger_conversion_to_fovea: bool = false:
+	set(val):
+		if val:
+			if splat_file_path.is_empty():
+				push_warning("FoveaSplattable: No splat file loaded to convert.")
+			else:
+				var default_dest = splat_file_path.get_basename() + ".fovea"
+				export_to_fovea(default_dest)
+		trigger_conversion_to_fovea = false
 
 @export_group("Physics Collisions")
 ## Activer la génération de collision physique automatique depuis les voxels
@@ -34,8 +74,15 @@ const _PlyLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/
 @export var splatting_enabled := true
 
 ## Activer le rendu d'instances partagées (Global Splat Instancing)
-## Évite de dupliquer les maillages et shaders en VRAM pour le même fichier .fovea
 @export var enable_instancing: bool = true
+
+@export_group("Delta-Splat Overrides")
+## Couleur de teinte personnalisée pour cette instance
+@export var color_override: Color = Color.WHITE
+## Multiplicateur de taille pour cette instance
+@export var scale_override: float = 1.0
+## Multiplicateur d'opacité/visibilité pour cette instance (0.0..1.0)
+@export var alpha_override: float = 1.0
 
 ## Masquer le mesh original (pour ne voir que le nuage de points/splats)
 @export var hide_mesh_when_splatting := true
@@ -92,16 +139,7 @@ func _ready() -> void:
 		if splat_file_path.ends_with(".ply"):
 			_load_splats_from_ply()
 		elif splat_file_path.ends_with(".fovea"):
-			if enable_instancing:
-				print("FoveaSplattable: Rendu instancié global activé pour ", splat_file_path)
-			else:
-				print("FoveaSplattable: Rendu natif local détecté pour ", splat_file_path)
-				# Instancier dynamiquement FoveaCoreSplatRenderer pour les assets natifs
-				var renderer = FoveaCoreSplatRenderer.new()
-				renderer.name = "FoveaCoreSplatRenderer"
-				renderer.asset_path = splat_file_path
-				renderer.sort_distance_threshold = 0.1
-				add_child(renderer)
+			_setup_native_renderer()
 		else:
 			print("FoveaSplattable: Format de fichier non géré pour le rendu direct: ", splat_file_path)
 			
@@ -112,6 +150,83 @@ func _ready() -> void:
 				call_deferred("_generate_collision_shape")
 			else:
 				push_warning("FoveaSplattable: La génération de collision physique nécessite un fichier .fovea (pas .ply). Convertir d'abord avec FoveaAssetLoader.convert_ply_to_fovea().")
+
+
+func _setup_native_renderer() -> void:
+	if not splat_file_path.ends_with(".fovea"):
+		return
+	if enable_instancing:
+		if not Engine.is_editor_hint():
+			print("FoveaSplattable: Rendu instancié global activé pour ", splat_file_path)
+		return
+	if not Engine.is_editor_hint():
+		print("FoveaSplattable: Rendu natif local détecté pour ", splat_file_path)
+	
+	# Instancier dynamiquement FoveaCoreSplatRenderer pour les assets natifs
+	var renderer = get_node_or_null("FoveaCoreSplatRenderer")
+	if not renderer:
+		renderer = FoveaCoreSplatRenderer.new()
+		renderer.name = "FoveaCoreSplatRenderer"
+		renderer.sort_distance_threshold = 0.1
+		add_child(renderer)
+	renderer.asset_path = splat_file_path
+
+
+func _update_local_renderer() -> void:
+	if Engine.is_editor_hint() or not get_node_or_null("/root/FoveaCoreManager"):
+		if has_ply_splats and not loaded_splats.is_empty():
+			var renderer = get_node_or_null("SplatRenderer")
+			if not renderer:
+				var SplatRendererScript = load("res://addons/foveacore/scripts/reconstruction/splat_renderer.gd")
+				if SplatRendererScript:
+					renderer = SplatRendererScript.new()
+					renderer.name = "SplatRenderer"
+					add_child(renderer)
+			if renderer:
+				renderer.load_splats(loaded_splats)
+
+
+func run_segmentation(prompt: String) -> void:
+	print("FoveaSplattable: Démarrage de la segmentation pour le prompt : '", prompt, "'...")
+	var SegmentationBridgeScript = load("res://addons/foveacore/scripts/advanced/fovea_segmentation_bridge.gd")
+	if not SegmentationBridgeScript:
+		push_error("FoveaSplattable: Impossible de charger le script FoveaSegmentationBridge.")
+		return
+	var bridge = SegmentationBridgeScript.new()
+	bridge.use_simulation = true # La simulation locale fonctionne de manière autonome
+	bridge.segment_splattable(self, prompt, func(success: bool):
+		if success:
+			print("FoveaSplattable: Segmentation effectuée avec succès.")
+			_update_local_renderer()
+		else:
+			push_error("FoveaSplattable: Échec de la segmentation.")
+	)
+
+
+func export_to_fovea(dest_path: String) -> bool:
+	if loaded_splats.is_empty():
+		push_error("FoveaSplattable: Aucun splat chargé à exporter.")
+		return false
+	
+	print("FoveaSplattable: Conversion et compression au format .fovea vers : ", dest_path)
+	var FoveaAssetWriterScript = load("res://addons/foveacore/scripts/fovea_asset_writer.gd")
+	if not FoveaAssetWriterScript:
+		push_error("FoveaSplattable: Script FoveaAssetWriter introuvable.")
+		return false
+		
+	var success = FoveaAssetWriterScript.write_fovea_asset(dest_path, loaded_splats, null, style_override, {
+		"session": "Imported & Compressed",
+		"exported_by": "FoveaSplattable Editor Tool",
+		"timestamp": Time.get_unix_time_from_system()
+	})
+	
+	if success:
+		print("FoveaSplattable: Asset .fovea exporté et compressé avec succès à : ", dest_path)
+		splat_file_path = dest_path
+	else:
+		push_error("FoveaSplattable: Échec de l'écriture de l'asset .fovea.")
+	
+	return success
 
 
 ## Cherche un MeshInstance3D dans le parent ou les enfants directs.
@@ -148,6 +263,7 @@ func _load_splats_from_ply() -> void:
 	loaded_splats = gaussians
 	has_ply_splats = true
 	print("FoveaSplattable: %d splats loaded from PLY" % loaded_splats.size())
+	_update_local_renderer()
 
 
 ## Génère et attache une collision physique ConcavePolygonShape3D

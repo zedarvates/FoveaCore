@@ -391,7 +391,10 @@ func run_extraction(session: ReconstructionSession, mask_mode: String = "Studio 
 		var blur = processor.calculate_blur_score(img) if not session.dry_run else 1.0
 		var mask = processor.mask_background(img, mask_mode, session.background_threshold, session.roi_rect)
 		var coverage = _calculate_mask_coverage(mask)
-		metrics.add_frame_metrics(idx, blur, coverage)
+		
+		# Calculer luminosité et variance de couleur
+		var color_metrics = processor.calculate_brightness_and_variance(img) if not session.dry_run else {"brightness": 0.5, "variance": 0.25}
+		metrics.add_frame_metrics(idx, blur, coverage, color_metrics.brightness, color_metrics.variance)
 		
 		if blur < session.blur_threshold:
 			print("ReconstructionManager: Frame %d skipped due to high blur (score: %.3f < threshold: %.3f)" % [idx, blur, session.blur_threshold])

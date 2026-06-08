@@ -5,6 +5,17 @@
 
 ---
 
+## 🛠️ v0.1.2 — Import, Export, Compression, Segmentation, & Editor Preview (June 2026)
+
+### 🚀 New Features & Enhancements
+- **Multi-Format Export & Compression**: Overhauled the export workflow to support saving reconstructed splats as standard `.ply` or highly-compressed binary `.fovea` files. File dialog now automatically handles missing extensions based on user choice.
+- **Editor 3D Viewport Preview**: Converted `fovea_splattable.gd` and `splat_renderer.gd` to `@tool` scripts, allowing direct rendering of loaded `.ply` splats inside Godot's 3D editor viewport without running the game.
+- **Splat Import & Conversion**: Exposed inspector-friendly buttons on `FoveaSplattable` to import external PLY files, apply custom `style_override` values, and batch compress/export them to `.fovea` format directly from the editor.
+- **AI-Driven Segmentation & Tags**: Wired up a trigger in the `FoveaSplattable` inspector to query `FoveaSegmentationBridge` with custom labels (e.g. "liquid", "wood", "cloth", "stone"), back-projecting the matched elements to classification layers saved inside the `.fovea` binary.
+- **Null Safety in Editor**: Guarded camera distance calculations and CPU/GPU sorting inside `splat_sorter.gd` against null cameras, preventing editor crashes when no active gameplay camera is registered.
+
+---
+
 ## 🛠️ Sprint 4 — StudioTo3D & Integration Polish (June 2026)
 
 ### 🐛 Pipeline & Integration Fixes
