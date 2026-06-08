@@ -13,6 +13,7 @@
 - **Splat Import & Conversion**: Exposed inspector-friendly buttons on `FoveaSplattable` to import external PLY files, apply custom `style_override` values, and batch compress/export them to `.fovea` format directly from the editor.
 - **AI-Driven Segmentation & Tags**: Wired up a trigger in the `FoveaSplattable` inspector to query `FoveaSegmentationBridge` with custom labels (e.g. "liquid", "wood", "cloth", "stone"), back-projecting the matched elements to classification layers saved inside the `.fovea` binary.
 - **Null Safety in Editor**: Guarded camera distance calculations and CPU/GPU sorting inside `splat_sorter.gd` against null cameras, preventing editor crashes when no active gameplay camera is registered.
+- **Splat Layer & Dither Seed Propagation**: Fixed a structural omission in `fovea_splat_subsystem.gd` and `fovea_core_splat_renderer.gd` where `layer_type` and `dither_seed` were lost during frame-by-frame packing and CPU processing. Dynamic and segmented splats now preserve their classification layers and noise seeds correctly down to the GPU shaders.
 
 ---
 

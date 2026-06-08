@@ -646,8 +646,8 @@ func pack_gaussian_splats(splats: Array[GaussianSplat], aabb_min: Vector3, aabb_
         var op: int = int(clamp(s.opacity * 255.0, 0, 255))
         bytes.encode_u8(src + 12, op)
         # layer_id, dither_seed, padding
-        bytes.encode_u8(src + 13, 0)
-        bytes.encode_u8(src + 14, 0)
+        bytes.encode_u8(src + 13, int(s.layer_type))
+        bytes.encode_u8(src + 14, s.dither_seed)
         bytes.encode_u8(src + 15, 0)
 
     return bytes
