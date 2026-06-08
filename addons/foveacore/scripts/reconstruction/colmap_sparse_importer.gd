@@ -62,24 +62,72 @@ func _cameras_file(path: String, cameras: Array[SparseCamera]) -> void:
 	if not file:
 		return
 	
-	var num_cameras = file.get_32()
+	var num_cameras = file.get_64() # COLMAP uses uint64_t
 	
-	var camera_models = ["SIMPLE_PINHOLE", "PINHOLE", "SIMPLE_RADIAL", "RADIAL", "OPENCV", "FULL_OPENCV"]
+	var camera_models = ["SIMPLE_PINHOLE", "PINHOLE", "SIMPLE_RADIAL", "RADIAL", "OPENCV", "OPENCV_FISHEYE", "FULL_OPENCV", "FOV", "THIN_PRISM_FISHEYE"]
 	
 	for i in range(num_cameras):
 		var cam = SparseCamera.new()
-		var model_id = file.get_32()
+		var camera_id = file.get_32() # Read camera_id (uint32_t)
+		var model_id = file.get_32() # Read model_id (int = int32)
 		cam.model = camera_models[model_id] if model_id < camera_models.size() else "UNKNOWN"
-		cam.width = file.get_32()
-		cam.height = file.get_32()
-		cam.fx = file.get_double()
-		cam.fy = file.get_double()
-		cam.cx = file.get_double()
-		cam.cy = file.get_double()
+		cam.width = file.get_64() # COLMAP uses uint64_t
+		cam.height = file.get_64() # COLMAP uses uint64_t
 		
-		if model_id >= 3:
-			cam.k1 = file.get_double()
-			cam.k2 = file.get_double()
+		# Read parameters according to camera model
+		# We must dynamically read parameters since models have different params count
+		var num_params = 0
+		match model_id:
+			0: # SIMPLE_PINHOLE (f, cx, cy)
+				num_params = 3
+			1: # PINHOLE (fx, fy, cx, cy)
+				num_params = 4
+			2: # SIMPLE_RADIAL (f, cx, cy, k)
+				num_params = 4
+			3: # RADIAL (f, cx, cy, k1, k2)
+				num_params = 5
+			4: # OPENCV (fx, fy, cx, cy, k1, k2, p1, p2)
+				num_params = 8
+			5: # OPENCV_FISHEYE (fx, fy, cx, cy, k1, k2, k3, k4)
+				num_params = 8
+			6: # FULL_OPENCV (fx, fy, cx, cy, k1, k2, p1, p2, k3, k4, k5, k6)
+				num_params = 12
+			7: # FOV (fx, fy, cx, cy, omega)
+				num_params = 5
+			8: # THIN_PRISM_FISHEYE (fx, fy, cx, cy, k1, k2, p1, p2, k3, k4, sx1, sy1)
+				num_params = 12
+			_:
+				num_params = 0
+				push_warning("ColmapSparseImporter: Unknown camera model id: %d" % model_id)
+		
+		var params: Array[float] = []
+		for p_idx in range(num_params):
+			params.append(file.get_double())
+			
+		# Assign basic attributes if parameters were read
+		if model_id == 0: # SIMPLE_PINHOLE
+			cam.fx = params[0]
+			cam.fy = params[0]
+			cam.cx = params[1]
+			cam.cy = params[2]
+		elif model_id in [1, 2, 3, 4, 5, 6, 7, 8] and params.size() >= 4:
+			cam.fx = params[0]
+			if model_id == 2 or model_id == 3: # SIMPLE_RADIAL, RADIAL (f, cx, cy)
+				cam.fy = params[0]
+				cam.cx = params[1]
+				cam.cy = params[2]
+				if model_id == 3 and params.size() >= 5:
+					cam.k1 = params[3]
+					cam.k2 = params[4]
+				else:
+					cam.k1 = params[3]
+			else: # PINHOLE, OPENCV, FULL_OPENCV etc (fx, fy, cx, cy)
+				cam.fy = params[1]
+				cam.cx = params[2]
+				cam.cy = params[3]
+				if num_params >= 6 and params.size() >= 6:
+					cam.k1 = params[4]
+					cam.k2 = params[5]
 		
 		cameras.append(cam)
 	
@@ -94,24 +142,40 @@ func _images_file(path: String, images: Array[SparseImage]) -> void:
 	if not file:
 		return
 	
-	var num_images = file.get_32()
+	var num_images = file.get_64() # COLMAP uses uint64_t
 	
 	for i in range(num_images):
 		var img = SparseImage.new()
+		var image_id = file.get_32() # Read image_id (uint32_t)
+		
 		var qw = file.get_double()
 		var qx = file.get_double()
 		var qy = file.get_double()
 		var qz = file.get_double()
 		img.rotation = Basis(Quaternion(qx, qy, qz, qw))
 		
-		img.translation = Vector3(file.get_double(), file.get_double(), file.get_double())
+		var tx = file.get_double()
+		var ty = file.get_double()
+		var tz = file.get_double()
+		img.translation = Vector3(tx, ty, tz)
+		
 		img.camera_id = file.get_32()
 		
-		var name_len = file.get_32()
+		# Read null-terminated string for filename
 		var filename = ""
-		for j in range(name_len):
-			filename += char(file.get_8())
+		var c = file.get_8()
+		while c != 0 and not file.eof_reached():
+			filename += char(c)
+			c = file.get_8()
 		img.filename = filename
+		
+		# Read 2D points: num_points2D (uint64_t)
+		var num_points2D = file.get_64()
+		# We must skip or read the 2D points to advance the file pointer correctly!
+		# Each 2D point consists of x (double), y (double), and point3D_id (uint64_t).
+		# Total size per point = 8 + 8 + 8 = 24 bytes.
+		var points2D_byte_size = num_points2D * 24
+		file.seek(file.get_position() + points2D_byte_size)
 		
 		images.append(img)
 	
@@ -126,22 +190,32 @@ func _points_file(path: String, points: Array[SparsePoint]) -> void:
 	if not file:
 		return
 	
-	var num_points = file.get_64()
+	var num_points = file.get_64() # uint64_t
 	
 	for i in range(num_points):
 		var pt = SparsePoint.new()
-		pt.position = Vector3(file.get_double(), file.get_double(), file.get_double())
-		pt.color = Color(
-			file.get_float() / 255.0,
-			file.get_float() / 255.0,
-			file.get_float() / 255.0
-		)
+		var point3D_id = file.get_64() # Read point3D_id (uint64_t)
 		
-		var track_len = file.get_64()
-		for j in range(track_len):
-			pt.track.append(file.get_32())
+		var x = file.get_double()
+		var y = file.get_double()
+		var z = file.get_double()
+		pt.position = Vector3(x, y, z)
 		
-		pt.error = file.get_double()
+		# Read color (3 * uint8)
+		var r = float(file.get_8()) / 255.0
+		var g = float(file.get_8()) / 255.0
+		var b = float(file.get_8()) / 255.0
+		pt.color = Color(r, g, b)
+		
+		pt.error = file.get_double() # error (double) is BEFORE the track
+		
+		var track_len = file.get_64() # track_len (uint64_t)
+		
+		# Skip or read track: each track element has image_id (uint32_t) and point2D_idx (uint32_t).
+		# Total size per track element = 8 bytes.
+		var track_byte_size = track_len * 8
+		file.seek(file.get_position() + track_byte_size)
+		
 		points.append(pt)
 	
 	file.close()

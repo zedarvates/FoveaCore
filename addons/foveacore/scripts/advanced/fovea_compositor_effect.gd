@@ -26,6 +26,9 @@ func _render_callback(effect_callback_type: int, render_data: RenderData):
     # 2. On extrait le RID de la Texture de Profondeur (Depth Map) !
     var depth_texture_rid = render_scene_buffers.get_depth_texture()
     
+    # Récupérer RenderSceneData pour avoir les vraies matrices stéréoscopiques
+    var render_scene_data = render_data.get_render_scene_data()
+    
     # 3. Exécution de notre Compute Shader avec la caméra et la depth map
     var output_buffer_rid = culler_pipeline.process_splats_from_file(
         fovea_asset_path, 
@@ -33,7 +36,8 @@ func _render_callback(effect_callback_type: int, render_data: RenderData):
         depth_texture_rid, 
         0.0,
         Vector3(-5, -5, -5),
-        Vector3(5, 5, 5)
+        Vector3(5, 5, 5),
+        render_scene_data
     )
     
     # Note : Dans une architecture 100% GPU, c'est ici que l'on déclencherait 

@@ -64,6 +64,11 @@ static func extract_visible_triangles(
 	var mesh: Mesh = splattable.original_mesh
 	var world_transform: Transform3D = splattable.global_transform
 
+	var use_native = ClassDB.can_instantiate("FoveaAssetLoader")
+	var loader = null
+	if use_native:
+		loader = ClassDB.instantiate("FoveaAssetLoader")
+
 	# Parcourir les surfaces du mesh
 	for surface_idx: int in range(mesh.get_surface_count()):
 		var mesh_data: Array = mesh.surface_get_arrays(surface_idx)
@@ -77,44 +82,86 @@ static func extract_visible_triangles(
 		if vertices.is_empty():
 			continue
 
-		result.total_triangles += indices.size() / 3
+		if use_native and loader != null:
+			var native_res = loader.extract_visible_triangles_native(
+				vertices,
+				normals,
+				indices,
+				world_transform,
+				camera_position
+			)
+			
+			result.total_triangles += native_res.get("total_triangles", 0)
+			result.culled_backface += native_res.get("culled_backface", 0)
+			
+			var native_indices: PackedInt32Array = native_res.get("indices")
+			var native_vertices: PackedVector3Array = native_res.get("vertices")
+			var native_normals: PackedVector3Array = native_res.get("normals")
+			var native_centers: PackedVector3Array = native_res.get("centers")
+			var native_areas: PackedFloat32Array = native_res.get("areas")
+			var native_distances: PackedFloat32Array = native_res.get("distances")
+			
+			var visible_tri_count = native_centers.size()
+			for t_idx in range(visible_tri_count):
+				var tri: VisibleTriangle = VisibleTriangle.new()
+				tri.indices = [
+					native_indices[t_idx * 3],
+					native_indices[t_idx * 3 + 1],
+					native_indices[t_idx * 3 + 2]
+				]
+				tri.vertices = [
+					native_vertices[t_idx * 3],
+					native_vertices[t_idx * 3 + 1],
+					native_vertices[t_idx * 3 + 2]
+				]
+				tri.normals = [
+					native_normals[t_idx * 3],
+					native_normals[t_idx * 3 + 1],
+					native_normals[t_idx * 3 + 2]
+				]
+				tri.center = native_centers[t_idx]
+				tri.area = native_areas[t_idx]
+				tri.distance_to_camera = native_distances[t_idx]
+				result.visible_triangles.append(tri)
+		else:
+			result.total_triangles += indices.size() / 3
+			
+			# Parcourir les triangles (Repli GDScript)
+			for i: int in range(0, indices.size() - 2, 3):
+				var idx0: int = indices[i]
+				var idx1: int = indices[i + 1]
+				var idx2: int = indices[i + 2]
 
-		# Parcourir les triangles
-		for i: int in range(0, indices.size() - 2, 3):
-			var idx0: int = indices[i]
-			var idx1: int = indices[i + 1]
-			var idx2: int = indices[i + 2]
+				# Transformer les vertices en espace mondial
+				var v0_world: Vector3 = world_transform * vertices[idx0]
+				var v1_world: Vector3 = world_transform * vertices[idx1]
+				var v2_world: Vector3 = world_transform * vertices[idx2]
 
-			# Transformer les vertices en espace mondial
-			var v0_world: Vector3 = world_transform * vertices[idx0]
-			var v1_world: Vector3 = world_transform * vertices[idx1]
-			var v2_world: Vector3 = world_transform * vertices[idx2]
+				var world_vertices: Array[Vector3] = [v0_world, v1_world, v2_world]
 
-			var world_vertices: Array[Vector3] = [v0_world, v1_world, v2_world]
+				# Backface culling
+				if not is_front_facing(world_vertices, camera_position):
+					result.culled_backface += 1
+					continue
 
-			# Backface culling
-			if not is_front_facing(world_vertices, camera_position):
-				result.culled_backface += 1
-				continue
+				# Occlusion approximative (test de distance simple)
+				var center: Vector3 = (v0_world + v1_world + v2_world) / 3.0
+				var distance: float = center.distance_to(camera_position)
 
-			# Occlusion approximative (test de distance simple)
-			var center: Vector3 = (v0_world + v1_world + v2_world) / 3.0
-			var distance: float = center.distance_to(camera_position)
+				# Créer le triangle visible
+				var tri: VisibleTriangle = VisibleTriangle.new()
+				tri.indices = [idx0, idx1, idx2]
+				tri.vertices = world_vertices
+				tri.normals = [
+					(world_transform.basis * normals[idx0]).normalized(),
+					(world_transform.basis * normals[idx1]).normalized(),
+					(world_transform.basis * normals[idx2]).normalized()
+				]
+				tri.center = center
+				tri.area = triangle_area(world_vertices)
+				tri.distance_to_camera = distance
 
-			# Créer le triangle visible
-			var tri: VisibleTriangle = VisibleTriangle.new()
-			tri.indices = [idx0, idx1, idx2]
-			tri.vertices = world_vertices
-			tri.normals = [
-				(world_transform.basis * normals[idx0]).normalized(),
-				(world_transform.basis * normals[idx1]).normalized(),
-				(world_transform.basis * normals[idx2]).normalized()
-			]
-			tri.center = center
-			tri.area = triangle_area(world_vertices)
-			tri.distance_to_camera = distance
-
-			result.visible_triangles.append(tri)
+				result.visible_triangles.append(tri)
 
 	result.visible_count = result.visible_triangles.size()
 	result.culled_occlusion = result.total_triangles - result.visible_count - result.culled_backface

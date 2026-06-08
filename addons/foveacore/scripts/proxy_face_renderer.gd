@@ -130,7 +130,7 @@ func create_proxy_mesh() -> void:
     
     # Create a ShaderMaterial using our fake volume shader
     var shader_mat: ShaderMaterial = ShaderMaterial.new()
-    shader_mat.shader = load("res://addons/foveacore/shaders/fake_volume_shader.gdshader")
+    shader_mat.shader = preload("res://addons/foveacore/shaders/fake_volume_shader.gdshader")
     
     # Set initial shader parameters
     shader_mat.set_shader_parameter("splat_color", splat_color)

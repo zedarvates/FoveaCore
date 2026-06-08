@@ -23,7 +23,7 @@ func setup(preview: TextureRect, sess: ReconstructionSession) -> void:
 	session = sess
 	if preview_rect:
 		var mat = ShaderMaterial.new()
-		mat.shader = load("res://addons/foveacore/shaders/mask_preview.gdshader")
+		mat.shader = preload("res://addons/foveacore/shaders/mask_preview.gdshader")
 		preview_rect.material = mat
 		_update_params()
 		

@@ -16,19 +16,17 @@ vec3 compute_sh_degree_0(vec3 f_dc) {
 // Convertit l'échelle (scale) et la rotation (quaternion) en une matrice de covariance 3D.
 mat3 compute_cov3d(vec3 scale, vec4 rot) {
     // Matrice de scale
-    mat3 S = mat3(
-        vec3(exp(scale.x), 0.0, 0.0),
-        vec3(0.0, exp(scale.y), 0.0),
-        vec3(0.0, 0.0, exp(scale.z))
-    );
+    mat3 S = mat3(1.0);
+    S[0][0] = exp(scale.x);
+    S[1][1] = exp(scale.y);
+    S[2][2] = exp(scale.z);
     
     // Matrice de rotation depuis quaternion (r, x, y, z)
     float r = rot.x, x = rot.y, y = rot.z, z = rot.w;
-    mat3 R = mat3(
-        vec3(1.0 - 2.0 * (y*y + z*z), 2.0 * (x*y - r*z),       2.0 * (x*z + r*y)),
-        vec3(2.0 * (x*y + r*z),       1.0 - 2.0 * (x*x + z*z), 2.0 * (y*z - r*x)),
-        vec3(2.0 * (x*z - r*y),       2.0 * (y*z + r*x),       1.0 - 2.0 * (x*x + y*y))
-    );
+    mat3 R;
+    R[0] = vec3(1.0 - 2.0 * (y*y + z*z), 2.0 * (x*y - r*z),       2.0 * (x*z + r*y));
+    R[1] = vec3(2.0 * (x*y + r*z),       1.0 - 2.0 * (x*x + z*z), 2.0 * (y*z - r*x));
+    R[2] = vec3(2.0 * (x*z - r*y),       2.0 * (y*z + r*x),       1.0 - 2.0 * (x*x + y*y));
     
     mat3 M = R * S;
     return M * transpose(M);
@@ -44,11 +42,10 @@ vec3 compute_cov2d(vec3 center_cam, mat3 cov3d, mat4 proj_matrix, vec2 viewport_
     float focal_x = proj_matrix[0][0] * viewport_size.x * 0.5;
     float focal_y = proj_matrix[1][1] * viewport_size.y * 0.5;
     
-    mat3 J = mat3(
-        vec3(focal_x / t, 0.0,         -(focal_x * center_cam.x) / (t * t)),
-        vec3(0.0,         -focal_y / t, (focal_y * center_cam.y) / (t * t)),
-        vec3(0.0,         0.0,         0.0)
-    );
+    mat3 J;
+    J[0] = vec3(focal_x / t, 0.0,         -(focal_x * center_cam.x) / (t * t));
+    J[1] = vec3(0.0,         -focal_y / t, (focal_y * center_cam.y) / (t * t));
+    J[2] = vec3(0.0,         0.0,         0.0);
     
     mat3 W = mat3(1.0); // Vue vers Caméra (déjà fait si cov3d est en espace vue)
     mat3 T = W * J;

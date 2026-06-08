@@ -9,12 +9,20 @@ var _frame_count: int = 0
 var _fps: float = 0.0
 var _frame_time: float = 0.0
 
+var _is_rotating: bool = false
+var _camera_rotation: Vector3 = Vector3.ZERO
+
 
 func _ready() -> void:
 	_setup_ui()
 	_setup_environment()
 	_manager = get_node_or_null("/root/FoveaCoreManager")
+	var camera := get_node_or_null("Camera3D") as Camera3D
+	if camera:
+		_camera_rotation = camera.rotation
 	print("=== FoveaCore Test Scene ===")
+	print("Press W/A/S/D/Space/Ctrl to fly")
+	print("Hold Right Click + drag to look around")
 	print("Press T to toggle foveated rendering")
 	print("Press 1-5 to change material style")
 
@@ -44,6 +52,12 @@ func _setup_environment() -> void:
 func _process(delta: float) -> void:
 	_frame_count += 1
 	_frame_time += delta
+
+	# Process camera movement on desktop if VR is disabled
+	if _manager and not _manager.get("vr_enabled"):
+		var camera := get_node_or_null("Camera3D") as Camera3D
+		if camera:
+			_process_camera_movement(camera, delta)
 
 	# Auto-quit if running headlessly or with --quit argument (for automated validation)
 	if OS.has_feature("headless") or "--quit" in OS.get_cmdline_args():
@@ -82,6 +96,11 @@ func _update_stats() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _manager and not _manager.get("vr_enabled"):
+		var camera := get_node_or_null("Camera3D") as Camera3D
+		if camera:
+			_handle_camera_input(camera, event)
+
 	if event is InputEventKey and event.pressed:
 		match event.keycode:
 			KEY_T:
@@ -154,3 +173,41 @@ func _reset_history() -> void:
 		if reprojector and reprojector.has_method("clear"):
 			reprojector.call("clear")
 			print("History cleared")
+
+
+func _handle_camera_input(camera: Camera3D, event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_RIGHT:
+			_is_rotating = event.pressed
+			if _is_rotating:
+				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+				_camera_rotation = camera.rotation
+			else:
+				Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+				
+	if event is InputEventMouseMotion and _is_rotating:
+		var look_sensitivity := 0.003
+		_camera_rotation.y -= event.relative.x * look_sensitivity
+		_camera_rotation.x -= event.relative.y * look_sensitivity
+		_camera_rotation.x = clamp(_camera_rotation.x, -deg_to_rad(85.0), deg_to_rad(85.0))
+		camera.rotation = _camera_rotation
+
+
+func _process_camera_movement(camera: Camera3D, delta: float) -> void:
+	var input_dir := Vector3.ZERO
+	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_Z): input_dir.z -= 1.0
+	if Input.is_key_pressed(KEY_S): input_dir.z += 1.0
+	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_Q): input_dir.x -= 1.0
+	if Input.is_key_pressed(KEY_D): input_dir.x += 1.0
+	if Input.is_key_pressed(KEY_SPACE): input_dir.y += 1.0
+	if Input.is_key_pressed(KEY_CTRL): input_dir.y -= 1.0
+	
+	var move_speed := 5.0
+	var fast_move_speed := 15.0
+	var speed = fast_move_speed if Input.is_key_pressed(KEY_SHIFT) else move_speed
+	var direction = (camera.global_transform.basis * input_dir).normalized()
+	if input_dir.y != 0.0:
+		direction.y = input_dir.y
+		direction = direction.normalized()
+		
+	camera.global_position += direction * speed * delta

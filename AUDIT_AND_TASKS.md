@@ -238,26 +238,26 @@ Tasks are numbered and ordered by priority. **🔴 Critical** unblock the system
 - [x] **49. Migrate sorting to GPU**
   > Replaced by `splat_sort_compute.glsl`.
 
-- [ ] **50. Migrate `SurfaceExtractor.gd` to Rust with SIMD**
+- [x] **50. Migrate `SurfaceExtractor.gd` to Rust with SIMD**
   > Triangle traversal embarrassingly parallel. `extract_visible_triangles_native()`.
 
-- [ ] **51. Create CI/CD to compile GDExtension**
+- [x] **51. Create CI/CD to compile GDExtension**
   > GitHub Actions: `foveacore.dll` (Windows), `libfoveacore.so` (Linux), `libfoveacore.dylib` (macOS).
 
 ---
 
 ### 🟡 CATEGORY 6 — `.fovea` ASSET FORMAT
 
-- [ ] **52. Define binary `.fovea` format**
+- [x] **52. Define binary `.fovea` format**
   > Specify: magic bytes, version, sections (mesh, splats, style, metadata). Doc in `plans/fovea_format_spec.md`.
 
-- [ ] **53. Implement `.fovea` serializer**
+- [x] **53. Implement `.fovea` serializer**
   > `fovea_asset_writer.gd`: Mesh + Array[GaussianSplat] + FoveaStyle → binary file.
 
-- [ ] **54. Implement `.fovea` deserializer**
+- [x] **54. Implement `.fovea` deserializer**
   > `fovea_asset_loader.gd`: Reconstruct data from file. Register via `ResourceFormatLoader`.
 
-- [ ] **55. Register `.fovea` as ResourceFormatLoader in Godot**
+- [x] **55. Register `.fovea` as ResourceFormatLoader in Godot**
   > `plugin.gd`: `ResourceLoader.add_resource_format_loader()` so Godot recognizes `.fovea`.
 
 ---

@@ -55,10 +55,10 @@ func _setup_multimesh() -> void:
 	_multimesh.instance_count = 0
 
 	# Mesh : un simple quad qui serabillboardisé
-	var mesh = QuadMesh.new()
+	var mesh: QuadMesh = QuadMesh.new()
 	mesh.size = Vector2(point_size, point_size)
 
-	var mat = StandardMaterial3D.new()
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.vertex_color_use_as_albedo = true
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -66,6 +66,21 @@ func _setup_multimesh() -> void:
 	mat.alpha_antialiasing_mode = BaseMaterial3D.ALPHA_ANTIALIASING_ALPHA_TO_COVERAGE
 	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED  # Les splats sont vus des deux côtés
+
+	# Créer un gradient radial doux pour éviter les bords carrés
+	var gradient: Gradient = Gradient.new()
+	gradient.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0)])
+	gradient.offsets = PackedFloat32Array([0.0, 1.0])
+
+	var grad_tex: GradientTexture2D = GradientTexture2D.new()
+	grad_tex.gradient = gradient
+	grad_tex.fill = GradientTexture2D.FILL_RADIAL
+	grad_tex.fill_from = Vector2(0.5, 0.5)
+	grad_tex.fill_to = Vector2(1.0, 0.5)
+	grad_tex.width = 32
+	grad_tex.height = 32
+	mat.albedo_texture = grad_tex
+
 	mesh.material = mat
 
 	_multimesh.mesh = mesh

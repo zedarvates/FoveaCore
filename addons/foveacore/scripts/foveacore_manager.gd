@@ -106,6 +106,8 @@ func _init_culling_nodes() -> void:
 
 	_hybrid_renderer = HybridRenderer.new()
 	add_child(_hybrid_renderer)
+	var hybrid_mode := HybridRenderer.RenderMode.HYBRID if hybrid_mode_enabled else HybridRenderer.RenderMode.SPLAT_ONLY
+	_hybrid_renderer.set_mode(hybrid_mode)
 
 	_splat_renderer = FoveaCoreSplatRenderer.new()
 	_splat_renderer.name = "FoveaCoreSplatRenderer"
@@ -156,6 +158,16 @@ func _process(_delta: float) -> void:
 func _run_culling_pass() -> void:
 	if _visibility_manager == null:
 		return
+
+	# Feed viewport texture to build Hi-Z depth pyramid for occlusion culling (Task 3)
+	if _occlusion_culler and visible_only_culling:
+		var vp := get_viewport()
+		if vp:
+			var vp_tex := vp.get_texture()
+			if vp_tex:
+				var img := vp_tex.get_image()
+				if img:
+					_occlusion_culler.build_hi_z_pyramid(img)
 
 	var visibility_result = _visibility_manager.extract_visible_surfaces()
 	var camera := get_viewport().get_camera_3d()

@@ -35,6 +35,13 @@ var _last_camera_pos: Vector3 = Vector3.ZERO
 var _last_transforms: Array[Transform3D] = []
 var _last_transforms_size: int = 0
 
+var instance_colors: Array[Color] = []
+var instance_scales: Array[float] = []
+var instance_alphas: Array[float] = []
+var _last_colors: Array[Color] = []
+var _last_scales: Array[float] = []
+var _last_alphas: Array[float] = []
+
 func _ready() -> void:
 	instanced_culler = FoveaInstancedCuller.new()
 	triangle_mesh_generator = load("res://addons/foveacore/scripts/advanced/triangle_splat_mesh.gd")
@@ -62,7 +69,7 @@ func _ready() -> void:
 	multimesh.mesh = splat_mesh
 
 	var material = ShaderMaterial.new()
-	material.shader = load("res://addons/foveacore/shaders/splat_render_triangle.gdshader")
+	material.shader = preload("res://addons/foveacore/shaders/splat_render_triangle.gdshader")
 	material.set_shader_parameter("splat_subdivisions", splat_subdivisions)
 	material.set_shader_parameter("use_palette", false)
 	material.set_shader_parameter("palette_size", 0)
@@ -82,12 +89,18 @@ func _process(_delta: float) -> void:
 	if camera == null or material_override == null:
 		return
 
-	# 0. Mettre à jour la liste des transforms d'instances depuis le groupe "splattables"
+	# 0. Mettre à jour la liste des transforms et overrides d'instances depuis le groupe "splattables"
 	var active_nodes = get_tree().get_nodes_in_group("splattables")
 	var transforms: Array[Transform3D] = []
+	var colors: Array[Color] = []
+	var scales: Array[float] = []
+	var alphas: Array[float] = []
 	for n in active_nodes:
 		if n is FoveaSplattable and n.splat_file_path == asset_path and n.visible and n.splatting_enabled:
 			transforms.append(n.global_transform)
+			colors.append(n.color_override)
+			scales.append(n.scale_override)
+			alphas.append(n.alpha_override)
 
 	var changed := false
 	if transforms.size() != _last_transforms_size:
@@ -97,9 +110,25 @@ func _process(_delta: float) -> void:
 			if not transforms[i].is_equal_approx(_last_transforms[i]):
 				changed = true
 				break
+			if not colors[i].is_equal_approx(_last_colors[i]):
+				changed = true
+				break
+			if not is_equal_approx(scales[i], _last_scales[i]):
+				changed = true
+				break
+			if not is_equal_approx(alphas[i], _last_alphas[i]):
+				changed = true
+				break
 
 	instance_transforms = transforms
+	instance_colors = colors
+	instance_scales = scales
+	instance_alphas = alphas
+
 	_last_transforms = transforms.duplicate()
+	_last_colors = colors.duplicate()
+	_last_scales = scales.duplicate()
+	_last_alphas = alphas.duplicate()
 	_last_transforms_size = transforms.size()
 
 	# Recalculer le culling si la caméra bouge ou si les instances ont changé
@@ -130,15 +159,17 @@ func load_and_render_splats() -> void:
 			var all_bytes = file.get_buffer(file.get_length())
 			file.close()
 			
-			if all_bytes.size() >= 48 and all_bytes.slice(0, 8).get_string_from_ascii() == "FOVEA_3D":
-				var color_k = all_bytes.decode_u32(16)
-				var covar_k = all_bytes.decode_u32(20)
-				var header_size = 48
-				var palette_size = color_k * 12
-				var covar_size = covar_k * 32
-				var splats_start = header_size + palette_size + covar_size
-				if all_bytes.size() >= splats_start:
-					raw_bytes = all_bytes.slice(splats_start)
+			if all_bytes.size() >= 8 and all_bytes.slice(0, 8).get_string_from_ascii() == "FOVEA_3D":
+				var version = all_bytes.decode_u32(8)
+				var header_size = 72 if version >= 2 else 48
+				if all_bytes.size() >= header_size:
+					var color_k = all_bytes.decode_u32(16)
+					var covar_k = all_bytes.decode_u32(20)
+					var palette_size = color_k * 12
+					var covar_size = covar_k * 32
+					var splats_start = header_size + palette_size + covar_size
+					if all_bytes.size() >= splats_start:
+						raw_bytes = all_bytes.slice(splats_start)
 			elif all_bytes.size() >= 16:
 				raw_bytes = all_bytes.slice(16)
 			else:
@@ -214,10 +245,16 @@ func load_and_render_splats() -> void:
 
 	multimesh.instance_count = surviving_splats_count
 
-	# Extraire les transforms correspondants aux instances visibles
+	# Extraire les transforms et overrides correspondants aux instances visibles
 	var active_transforms: Array[Transform3D] = []
+	var active_colors: Array[Color] = []
+	var active_scales: Array[float] = []
+	var active_alphas: Array[float] = []
 	for idx in active_instance_indices:
 		active_transforms.append(instance_transforms[idx])
+		active_colors.append(instance_colors[idx] if idx < instance_colors.size() else Color.WHITE)
+		active_scales.append(instance_scales[idx] if idx < instance_scales.size() else 1.0)
+		active_alphas.append(instance_alphas[idx] if idx < instance_alphas.size() else 1.0)
 
 	# 6. Décodage parallèle
 	var decode_result := FoveaThreadPool.decode_parallel(
@@ -225,7 +262,10 @@ func load_and_render_splats() -> void:
 		surviving_splats_count,
 		aabb_min,
 		aabb_max,
-		active_transforms
+		active_transforms,
+		active_colors,
+		active_scales,
+		active_alphas
 	)
 
 	multimesh.transform_array = decode_result.xf_array
@@ -342,11 +382,11 @@ func update_material_shader() -> void:
 			var palette_bytes: PackedByteArray = loader.load_color_palette(asset_path)
 			has_palette = not palette_bytes.is_empty()
 	if has_palette and use_dithering:
-		mat.shader = load("res://addons/foveacore/shaders/splat_render_triangle_palette.gdshader")
+		mat.shader = preload("res://addons/foveacore/shaders/splat_render_triangle_palette.gdshader")
 		mat.set_shader_parameter("use_dithering", true)
 		mat.set_shader_parameter("dither_strength", dither_strength)
 	else:
-		mat.shader = load("res://addons/foveacore/shaders/splat_render_triangle.gdshader")
+		mat.shader = preload("res://addons/foveacore/shaders/splat_render_triangle.gdshader")
 		mat.set_shader_parameter("use_palette", has_palette)
 
 func _exit_tree() -> void:

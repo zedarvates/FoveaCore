@@ -71,23 +71,25 @@ static func generate_voxel_mesh(fovea_path: String, voxel_size_meters: float = 0
 			var all_bytes = file.get_buffer(file.get_length())
 			file.close()
 			
-			if all_bytes.size() >= 48 and all_bytes.slice(0, 8).get_string_from_ascii() == "FOVEA_3D":
-				var color_k = all_bytes.decode_u32(16)
-				var covar_k = all_bytes.decode_u32(20)
-				var aabb_min_x = all_bytes.decode_float(24)
-				var aabb_min_y = all_bytes.decode_float(28)
-				var aabb_min_z = all_bytes.decode_float(32)
-				var aabb_max_x = all_bytes.decode_float(36)
-				var aabb_max_y = all_bytes.decode_float(40)
-				var aabb_max_z = all_bytes.decode_float(44)
-				aabb = AABB(Vector3(aabb_min_x, aabb_min_y, aabb_min_z), Vector3(aabb_max_x - aabb_min_x, aabb_max_y - aabb_min_y, aabb_max_z - aabb_min_z))
-				
-				var header_size = 48
-				var palette_size = color_k * 12
-				var covar_size = covar_k * 32
-				var splats_start = header_size + palette_size + covar_size
-				if all_bytes.size() >= splats_start:
-					raw_bytes = all_bytes.slice(splats_start)
+			if all_bytes.size() >= 8 and all_bytes.slice(0, 8).get_string_from_ascii() == "FOVEA_3D":
+				var version = all_bytes.decode_u32(8)
+				var header_size = 72 if version >= 2 else 48
+				if all_bytes.size() >= header_size:
+					var color_k = all_bytes.decode_u32(16)
+					var covar_k = all_bytes.decode_u32(20)
+					var aabb_min_x = all_bytes.decode_float(24)
+					var aabb_min_y = all_bytes.decode_float(28)
+					var aabb_min_z = all_bytes.decode_float(32)
+					var aabb_max_x = all_bytes.decode_float(36)
+					var aabb_max_y = all_bytes.decode_float(40)
+					var aabb_max_z = all_bytes.decode_float(44)
+					aabb = AABB(Vector3(aabb_min_x, aabb_min_y, aabb_min_z), Vector3(aabb_max_x - aabb_min_x, aabb_max_y - aabb_min_y, aabb_max_z - aabb_min_z))
+					
+					var palette_size = color_k * 12
+					var covar_size = covar_k * 32
+					var splats_start = header_size + palette_size + covar_size
+					if all_bytes.size() >= splats_start:
+						raw_bytes = all_bytes.slice(splats_start)
 			elif all_bytes.size() >= 16:
 				raw_bytes = all_bytes.slice(16)
 			else:

@@ -1,0 +1,16 @@
+[remap]
+
+importer="fovea.splat_importer"
+type="FoveaSplatResource"
+uid="uid://cqkeorq03xjgt"
+path="res://.godot/imported/demo_bonsai.ply-e57673a16bd437a44541de8a56056fee.res"
+
+[deps]
+
+source_file="res://test/demo_bonsai.ply"
+dest_files=["res://.godot/imported/demo_bonsai.ply-e57673a16bd437a44541de8a56056fee.res"]
+
+[params]
+
+decimation_ratio=1.0
+recalculate_normals=true

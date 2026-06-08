@@ -4,7 +4,22 @@ extends EditorPlugin
 # Instance du plugin d'exportation pour injecter les permissions Android
 var export_plugin: FoveaAndroidExportPlugin = null
 
+const FoveaAssetFormatLoaderScript = preload("res://addons/foveacore/scripts/fovea_asset_loader.gd")
+const FoveaAssetFormatSaverScript = preload("res://addons/foveacore/scripts/fovea_asset_saver.gd")
+
+# Custom Resource Format Loader and Saver for .fovea binary format
+var format_loader: ResourceFormatLoader = null
+var format_saver: ResourceFormatSaver = null
+
 func _enter_tree():
+	# Register .fovea custom resource format loader and saver
+	format_loader = FoveaAssetFormatLoaderScript.new()
+	format_saver = FoveaAssetFormatSaverScript.new()
+	ResourceLoader.add_resource_format_loader(format_loader)
+	ResourceSaver.add_resource_format_saver(format_saver)
+	
+	add_custom_type("FoveaAsset", "Resource", preload("res://addons/foveacore/scripts/fovea_asset.gd"), null)
+
 	# Autoloads
 	add_autoload_singleton("FoveaCoreManager", "res://addons/foveacore/scripts/foveacore_manager.gd")
 	add_autoload_singleton("ReconstructionManager", "res://addons/foveacore/scripts/reconstruction/reconstruction_manager.gd")
@@ -12,6 +27,7 @@ func _enter_tree():
 	
 	# Custom nodes
 	add_custom_type("FoveaSplattable", "Node3D", preload("res://addons/foveacore/scripts/fovea_splattable.gd"), preload("res://addons/foveacore/icons/fovea_splattable.svg"))
+
 	
 	# GDExtension - charger seulement si disponible
 	var gdextension_path = "res://addons/foveacore/gdextension/bin/foveacore.dll"
@@ -25,6 +41,7 @@ func _enter_tree():
 	add_custom_type("SplatVRBrush", "Node3D", preload("res://addons/foveacore/scripts/advanced/splat_vr_brush.gd"), null)
 	add_custom_type("PhysicsProxy", "Node3D", preload("res://addons/foveacore/scripts/advanced/physics_proxy_generator.gd"), null)
 	add_custom_type("NeuralStyle", "Resource", preload("res://addons/foveacore/scripts/advanced/neural_style_bridge.gd"), null)
+	add_custom_type("FoveaSegmentation", "Resource", preload("res://addons/foveacore/scripts/advanced/fovea_segmentation_bridge.gd"), null)
 	add_custom_type("PLYLoader", "RefCounted", preload("res://addons/foveacore/scripts/reconstruction/ply_loader.gd"), null)
 	add_custom_type("GPUCullerPipeline", "RefCounted", preload("res://addons/foveacore/scripts/advanced/gpu_culler_pipeline.gd"), null)
 	add_custom_type("GPUNoiseGenerator", "Node", preload("res://addons/foveacore/scripts/materials/gpu_noise_generator.gd"), null)
@@ -35,6 +52,7 @@ func _enter_tree():
 	
 	# Sprint 4 — Clay Deformer & Physics Tools
 	add_custom_type("FoveaClayDeformer", "Node3D",    preload("res://addons/foveacore/scripts/advanced/fovea_clay_deformer.gd"),  null)
+	add_custom_type("FoveaSplatCloth",    "Node3D",    preload("res://addons/foveacore/scripts/advanced/fovea_splat_cloth.gd"),     null)
 	add_custom_type("FoveaVoxelizer",    "RefCounted", preload("res://addons/foveacore/scripts/advanced/fovea_voxelizer.gd"),     null)
 	add_custom_type("FoveaSplatCleaner", "RefCounted", preload("res://addons/foveacore/scripts/advanced/fovea_splat_cleaner.gd"), null)
 
@@ -58,15 +76,26 @@ func _enter_tree():
 	add_control_to_dock(DOCK_SLOT_RIGHT_BL, panel)
 
 func _exit_tree():
+	# Unregister .fovea loader/saver
+	if format_loader:
+		ResourceLoader.remove_resource_format_loader(format_loader)
+		format_loader = null
+	if format_saver:
+		ResourceSaver.remove_resource_format_saver(format_saver)
+		format_saver = null
+
 	remove_autoload_singleton("FoveaCoreManager")
 	remove_autoload_singleton("ReconstructionManager")
 	remove_autoload_singleton("EyeTrackingBridge")
 	
 	remove_custom_type("FoveaSplattable")
+	remove_custom_type("FoveaAsset")
+
 	remove_custom_type("SplatBrush")
 	remove_custom_type("SplatVRBrush")
 	remove_custom_type("PhysicsProxy")
 	remove_custom_type("NeuralStyle")
+	remove_custom_type("FoveaSegmentation")
 	remove_custom_type("PLYLoader")
 	remove_custom_type("GPUCullerPipeline")
 	remove_custom_type("GPUNoiseGenerator")
@@ -75,6 +104,7 @@ func _exit_tree():
 	remove_custom_type("WorldMirrorCameraImporter")
 	remove_custom_type("WorldMirrorDepthLoader")
 	remove_custom_type("FoveaClayDeformer")
+	remove_custom_type("FoveaSplatCloth")
 	remove_custom_type("FoveaVoxelizer")
 	remove_custom_type("FoveaSplatCleaner")
 	remove_custom_type("FoveaInstancedSplatRenderer")
@@ -87,6 +117,7 @@ func _exit_tree():
 	if export_plugin:
 		remove_export_plugin(export_plugin)
 		export_plugin = null
+
 		
 	print("FoveaCore unloaded")
 

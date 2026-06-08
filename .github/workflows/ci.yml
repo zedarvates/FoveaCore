@@ -59,3 +59,41 @@ jobs:
         run: |
           python -m py_compile addons/foveacore/scripts/reconstruction/worldmirror_bridge.py
           echo "Python bridge syntax OK."
+
+  build-gdextension:
+    name: Build GDExtension (Rust)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            artifact: libfoveacore.so
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: foveacore.dll
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact: libfoveacore.dylib
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+          
+      - name: Build Rust crate
+        run: |
+          cd addons/foveacore/shaders
+          cargo build --release --target ${{ matrix.target }}
+          
+      - name: Locate and upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: foveacore-${{ matrix.target }}
+          path: |
+            addons/foveacore/shaders/target/${{ matrix.target }}/release/foveacore.dll
+            addons/foveacore/shaders/target/${{ matrix.target }}/release/libfoveacore.so
+            addons/foveacore/shaders/target/${{ matrix.target }}/release/libfoveacore.dylib
+          if-no-files-found: ignore

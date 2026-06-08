@@ -1,0 +1,128 @@
+[gd_scene load_steps=2 format=3 uid="uid://b7v4mwv2ycp8h"]
+
+[ext_resource type="Script" path="res://addons/fovea_engine/ui/FoveaSplatManagerUI.cs" id="1_ui"]
+
+[node name="SplatManager" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_ui")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="VBox"]
+layout_mode = 2
+text = "Fovea Splat Manager"
+horizontal_alignment = 1
+
+[node name="StatsPanel" type="PanelContainer" parent="VBox"]
+layout_mode = 2
+
+[node name="StatsVBox" type="VBoxContainer" parent="VBox/StatsPanel"]
+layout_mode = 2
+
+[node name="SplatCountLabel" type="Label" parent="VBox/StatsPanel/StatsVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Total Splats: 0"
+
+[node name="MemoryLabel" type="Label" parent="VBox/StatsPanel/StatsVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "VRAM Memory: 0 MB"
+
+[node name="ActiveLodLabel" type="Label" parent="VBox/StatsPanel/StatsVBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Active LOD: 100%"
+
+[node name="HSeparator1" type="HSeparator" parent="VBox"]
+layout_mode = 2
+
+[node name="InteractiveBrushLabel" type="Label" parent="VBox"]
+layout_mode = 2
+text = "Interactive Viewport Brush"
+
+[node name="EditModeDropdown" type="OptionButton" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="BrushRadiusLabel" type="Label" parent="VBox"]
+layout_mode = 2
+text = "Brush Radius"
+
+[node name="RadiusSlider" type="HSlider" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.1
+max_value = 10.0
+step = 0.1
+value = 1.0
+
+[node name="BrushStrengthLabel" type="Label" parent="VBox"]
+layout_mode = 2
+text = "Brush Strength"
+
+[node name="StrengthSlider" type="HSlider" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+min_value = 0.05
+max_value = 1.0
+step = 0.05
+value = 0.5
+
+[node name="PaintColorLabel" type="Label" parent="VBox"]
+layout_mode = 2
+text = "Paint Color"
+
+[node name="ColorPicker" type="ColorPickerButton" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Select Paint Color"
+color = Color(1, 0, 0, 1)
+
+[node name="HSeparator2" type="HSeparator" parent="VBox"]
+layout_mode = 2
+
+[node name="ActionsLabel" type="Label" parent="VBox"]
+layout_mode = 2
+text = "Quick Actions"
+
+[node name="ImportButton" type="Button" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Import Splat Asset"
+
+[node name="ConvertButton" type="Button" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Convert to Godot Resource"
+
+[node name="OptimizeButton" type="Button" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Optimize & Decimate (50%)"
+
+[node name="BakeButton" type="Button" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Bake Voxel Collisions"
+
+[node name="ExportButton" type="Button" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Export modifications"

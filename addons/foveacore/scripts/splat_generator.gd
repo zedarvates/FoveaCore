@@ -164,18 +164,35 @@ static func generate_all_splats(
 	for node in visibility_result.per_node_results:
 		var extraction = visibility_result.per_node_results[node]
 
-		# Obtenir la densité locale du nœud
-		var local_density: float = global_density
-		if node is FoveaSplattable:
-			local_density *= node.splat_density
+		if node is FoveaSplattable and node.has_ply_splats and not node.loaded_splats.is_empty():
+			var gtr: Transform3D = node.global_transform
+			var gtr_rot: Quaternion = gtr.basis.get_rotation_quaternion()
+			var gtr_scale: Vector3 = gtr.basis.get_scale()
+			for local_splat in node.loaded_splats:
+				var splat = GaussianSplat.new()
+				splat.position = gtr * local_splat.position
+				splat.rotation = (gtr_rot * local_splat.rotation).normalized()
+				splat.scale = gtr_scale * local_splat.scale
+				splat.opacity = local_splat.opacity * node.alpha_override
+				splat.color = local_splat.color * node.color_override
+				splat.normal = (gtr.basis * local_splat.normal).normalized()
+				splat.depth = splat.position.distance_to(camera_position)
+				splat.radius = local_splat.radius * node.scale_override
+				splat.covariance = local_splat.covariance
+				all_splats.append(splat)
+		else:
+			# Obtenir la densité locale du nœud
+			var local_density: float = global_density
+			if node is FoveaSplattable:
+				local_density *= node.splat_density
 
-		var node_result: SplatGenerationResult = generate_splats_from_triangles(
-			extraction.visible_triangles,
-			camera_position,
-			config,
-			local_density
-		)
+			var node_result: SplatGenerationResult = generate_splats_from_triangles(
+				extraction.visible_triangles,
+				camera_position,
+				config,
+				local_density
+			)
 
-		all_splats.append_array(node_result.splats)
+			all_splats.append_array(node_result.splats)
 
 	return all_splats

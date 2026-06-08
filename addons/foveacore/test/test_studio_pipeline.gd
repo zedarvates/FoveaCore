@@ -28,6 +28,49 @@ func _run_tests() -> void:
 	_assert("Exporter created", _manager.exporter != null)
 	_assert("Backend created", _manager.backend != null)
 
+	# Test de SplatProcessorHelper (Tagging, Shapes, Decimation)
+	print("\nRunning SplatProcessorHelper tests...")
+	var helper_script = load("res://addons/foveacore/scripts/reconstruction/splat_processor_helper.gd")
+	_assert("SplatProcessorHelper loaded", helper_script != null)
+	
+	if helper_script:
+		var green_splat = GaussianSplat.new()
+		green_splat.color = Color(0.2, 0.6, 0.1) # Vert dominant
+		
+		var brown_splat = GaussianSplat.new()
+		brown_splat.color = Color(0.5, 0.35, 0.1) # Marron
+		
+		var grey_splat = GaussianSplat.new()
+		grey_splat.color = Color(0.3, 0.3, 0.3) # Gris écorce/pierre
+		
+		var red_splat = GaussianSplat.new()
+		red_splat.color = Color(0.9, 0.1, 0.1) # Rouge standard
+		
+		var test_splats: Array[GaussianSplat] = [green_splat, brown_splat, grey_splat, red_splat]
+		
+		helper_script.auto_tag_splats_by_color(test_splats)
+		_assert("Green splat tagged as LEAVES", green_splat.layer_type == GaussianSplat.LayerType.LEAVES)
+		_assert("Brown splat tagged as TRUNK", brown_splat.layer_type == GaussianSplat.LayerType.TRUNK)
+		_assert("Grey splat tagged as TRUNK", grey_splat.layer_type == GaussianSplat.LayerType.TRUNK)
+		_assert("Red splat tagged as BASE", red_splat.layer_type == GaussianSplat.LayerType.BASE)
+		
+		var flat_splat = GaussianSplat.new()
+		flat_splat.scale = Vector3(3.0, 0.5, 0.1) # Anisotropie élevée
+		
+		var round_splat = GaussianSplat.new()
+		round_splat.scale = Vector3(1.0, 1.0, 0.9) # Quasi isotrope
+		
+		var shape_splats: Array[GaussianSplat] = [flat_splat, round_splat]
+		helper_script.assign_shapes(shape_splats, "Auto")
+		_assert("Flat splat assigned SPONGE (Triangle) shape in Auto mode", flat_splat.brush_type == GaussianSplat.BrushType.SPONGE)
+		_assert("Round splat assigned GAUSSIAN (Sphere) shape in Auto mode", round_splat.brush_type == GaussianSplat.BrushType.GAUSSIAN)
+		
+		var dec_splats: Array[GaussianSplat] = []
+		for i in range(100):
+			dec_splats.append(GaussianSplat.new())
+		var decimated = helper_script.decimate_splats(dec_splats, 0.3)
+		_assert("Decimation reduces size to 30%", decimated.size() == 30)
+
 	if _failed > 0:
 		_finish()
 		return

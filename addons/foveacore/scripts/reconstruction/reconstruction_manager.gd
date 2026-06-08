@@ -682,6 +682,7 @@ func run_worldmirror(session: ReconstructionSession) -> void:
 	var ply_path = session.output_directory.path_join("gaussians.ply")
 	var global_ply = ProjectSettings.globalize_path(ply_path)
 	if FileAccess.file_exists(global_ply):
+		_post_process_reconstruction_splats(session, global_ply)
 		print("ReconstructionManager: Loading WorldMirror PLY from ", global_ply)
 		var gaussians = PLYLoader.load_gaussians_from_ply(global_ply)
 		if gaussians and not gaussians.is_empty():
@@ -722,6 +723,7 @@ func run_training(session: ReconstructionSession) -> void:
 		var ply_path = session.output_directory.path_join("output/point_cloud/iteration_7000/point_cloud.ply")
 		var global_ply = ProjectSettings.globalize_path(ply_path)
 		if FileAccess.file_exists(global_ply):
+			_post_process_reconstruction_splats(session, global_ply)
 			print("ReconstructionManager: Loading result PLY from ", global_ply)
 			var gaussians = PLYLoader.load_gaussians_from_ply(global_ply)
 			if gaussians and not gaussians.is_empty():
@@ -760,3 +762,36 @@ func _on_backend_finished(status: int, output: String) -> void:
 	log_line_received.emit(">>> Finished task with status %d" % status)
 	if status != 0:
 		push_warning("ReconstructionManager: commande terminée avec code d'erreur %d" % status)
+
+func _post_process_reconstruction_splats(session: ReconstructionSession, global_ply: String) -> void:
+	print("ReconstructionManager: Post-processing splats...")
+	var gaussians = PLYLoader.load_gaussians_from_ply(global_ply)
+	if gaussians == null or gaussians.is_empty():
+		push_error("ReconstructionManager: Failed to load PLY for post-processing.")
+		return
+		
+	# 1. Color Auto-tagging
+	if session.auto_tag_color:
+		print("ReconstructionManager: Performing auto color tagging...")
+		SplatProcessorHelper.auto_tag_splats_by_color(gaussians)
+		
+	# 2. Shape Assignment
+	if not session.splat_shape.is_empty():
+		print("ReconstructionManager: Assigning splat shapes: ", session.splat_shape)
+		SplatProcessorHelper.assign_shapes(gaussians, session.splat_shape)
+		
+	# 3. Density Decimation
+	if session.splat_count_density < 0.99:
+		var old_size = gaussians.size()
+		gaussians = SplatProcessorHelper.decimate_splats(gaussians, session.splat_count_density)
+		print("ReconstructionManager: Decimated splats from %d to %d" % [old_size, gaussians.size()])
+		
+	# Save back to PLY
+	var temp_renderer = SplatRenderer.new()
+	temp_renderer.load_splats(gaussians)
+	var err = temp_renderer.export_to_ply(global_ply)
+	temp_renderer.queue_free()
+	if err == OK:
+		print("ReconstructionManager: Post-processed splats written back to ", global_ply)
+	else:
+		push_error("ReconstructionManager: Failed to write back post-processed splats to PLY.")

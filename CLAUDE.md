@@ -2,16 +2,19 @@
 
 ## Build & Test Commands
 - **GDExtension**: `scons target=template_debug platform=windows` (if source available)
-- **Godot Project**: Open in Godot 4.6.2 Stable
-- **Test Scene**: `godot --scene res://test/fovea_test_scene.tscn`
+- **Godot Project**: Open in Godot 4.7.dev5 Mono Official (or later 4.7 versions)
+- **Test Scene**: `godot --scene res://test/test_foveacore.tscn`
 - **Reconstruction Tools**:
+  - `python addons/foveacore/scripts/reconstruction/diffsynth_bridge.py`: Unified DiffSynth bridge (WorldMirror/DVLT/Vista4D).
+  - `python addons/foveacore/scripts/reconstruction/worldmirror_bridge.py`: WorldMirror 2.0 bridge.
   - `python addons/foveacore/scripts/reconstruction/star_bridge.py`: Monocular bridge.
   - `python addons/foveacore/scripts/reconstruction/star_simulator.py`: Logic simulator.
 
 ## External Dependencies
-- **FFmpeg**: Required for frame extraction. Path set in Project Settings.
+- **FFmpeg**: Required for frame extraction. Path set in Settings panel.
 - **COLMAP**: Required for SfM path (Standard).
-- **InSpatio-World**: Required for Fast Path (DA3/STAR).
+- **WorldMirror 2.0**: Recommended SOTA feed-forward reconstruction model.
+- **DiffSynth-Studio**: Unified inference platform for DVLT and Vista4D.
 - **Depth-Anything-3**: Model weights for precise monocular depth.
 
 ## Code Style & Architecture

@@ -1059,15 +1059,31 @@ L'eau est gérée par une superposition de splats semi-transparents avec un **Re
 
 ---
 
-## 10. Prochaines Étapes
+## 11. Bilan Technique & État Réel (Juin 2026)
 
-1. **Validation de l'architecture** — Review avec l'équipe
-2. **Setup du projet C++** — GDExtension skeleton, build system
-3. **Prototype frustum culling** — Validation technique Phase 1
-4. **Benchmark GPU** — Tests de performance sur hardware cible
-5. **Itération sur le plan** — Ajustements basés sur les résultats du prototype
+L'architecture initiale a été complétée et enrichie avec les modules avancés suivants :
+
+### 11.1 Pipeline de Rendu & Tri GPU (Phase 3)
+- **Rendu par Triangles Subdivisés** : Migration optionnelle des Quads vers des maillages circulaires de 16 subdivisions pour éliminer le `discard` et l'overdraw sur GPU.
+- **Tri Bitonique GPU & Clés FP16** : Intégration de `sort_bitonic_keyed.glsl` et `depth_precompute.glsl` réduisant drastiquement les transferts VRAM.
+- **Dispatcher Vectorisé (`FoveaSplatDispatcher`)** : Regroupement de tous les assets de splats en un seul appel compute GPU via Subgroup Ballot (32× moins de contention d'atomicAdd).
+- **Instancing Global (`FoveaInstancedSplatRenderer` / `FoveaInstancedCuller`)** : Rendu de milliers d'instances d'un asset `.fovea` avec allocation mémoire unique et culling GPU-driven.
+- **Compression & Quantification (VQ)** : Format `.fovea` compact de 16 octets/splat avec grille spatiale 16-bit et palette indexée 256 couleurs (dithering Floyd-Steinberg).
+
+### 11.2 Reconstruction & Backends StudioTo3D (Phase 4)
+- **WorldMirror 2.0 (Fast-Path)** : Intégration de la reconstruction feed-forward en ~10s via `worldmirror_bridge.py`.
+- **DVLT (Déjà View)** : Intégration du transformer récursif pour reconstruction multi-vues non posées via la passerelle `diffsynth_bridge.py`.
+- **Instanciation Auto en Éditeur** : Génération et liaison automatique des nœuds `FoveaSplattable` dans la scène active à la fin de la reconstruction.
 
 ---
 
-*Document créé le 2026-04-02. Dernière mise à jour: 2026-04-02.*  
-*Ce document est une référence pour l'implémentation de FoveaCore. Les estimations de temps sont des projections et doivent être validées par le prototypage.*
+## 12. Prochaines Étapes (Phase 5+)
+
+1. **Calculs Dynamiques CPU/GPU** : Intégrer les variations de Delta-Splat (Morphs) pour l'animation locale d'instances.
+2. **Streaming Out-of-Core** : Chargement de morceaux spatiaux directement du disque (SSD) en VRAM.
+3. **Indirect Draw GPU-Driven** : Laisser le compute shader écrire ses propres commandes de dessin.
+
+---
+
+*Document créé le 2026-04-02. Dernière mise à jour: 2026-06-08.*  
+*Ce document sert de référence technique historique et opérationnelle pour FoveaEngine.*

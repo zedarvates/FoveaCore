@@ -63,6 +63,7 @@ This document outlines the roadmap to transform FoveaCore into a world-class hyb
 - [x] **ComfyUI Bridge**: Direct API connection for generating sources from Godot.
 - [ ] **Auto-ROI**: Automatic main object detection by AI.
 - [ ] **Gaussian Compression**: Ultra-light file format for VR streaming.
+- [ ] **Pont Agents Autonomes (Hermes) & Blender** : Création d'une passerelle entre des agents autonomes (tels que Hermes) et Blender/Godot pour la génération et l'orchestration automatique d'assets 3D. *(Réflexion et conception sérieuses planifiées d'ici 2 mois)*
 
 ---
 

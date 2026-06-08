@@ -64,7 +64,7 @@ func merge_all_sources(session: ReconstructionSession) -> bool:
 		var temp_dir = OS.get_user_data_dir() + "/fovea_temp_merge_%d" % src_idx
 		
 		if DirAccess.dir_exists_absolute(temp_dir):
-			DirAccess.remove_absolute(temp_dir)
+			_delete_dir_recursive(temp_dir)
 		DirAccess.make_dir_recursive_absolute(temp_dir)
 		
 		var args = [
@@ -96,7 +96,7 @@ func merge_all_sources(session: ReconstructionSession) -> bool:
 		total_frames += source_frames
 		
 		if DirAccess.dir_exists_absolute(temp_dir):
-			DirAccess.remove_absolute(temp_dir)
+			_delete_dir_recursive(temp_dir)
 	
 	session.frame_count = total_frames
 	session.output_directory = session.output_directory.replace("/input", "/merged_input")
@@ -147,3 +147,19 @@ func get_combined_info() -> Dictionary:
 		"sources": video_sources.map(func(p): return p.get_file()),
 		"estimated_duration": estimate_combined_duration()
 	}
+
+func _delete_dir_recursive(path: String) -> void:
+	var dir = DirAccess.open(path)
+	if dir:
+		dir.list_dir_begin()
+		var file_name = dir.get_next()
+		while file_name != "":
+			if file_name != "." and file_name != "..":
+				var full_path = path.path_join(file_name)
+				if dir.current_is_dir():
+					_delete_dir_recursive(full_path)
+				else:
+					DirAccess.remove_absolute(full_path)
+			file_name = dir.get_next()
+		dir.list_dir_end()
+		DirAccess.remove_absolute(path)
