@@ -1,4 +1,4 @@
-class_name FoveaSplatRenderer
+class_name FoveaCoreSplatRenderer
 extends MultiMeshInstance3D
 
 ## FoveaEngine : Moteur de rendu MultiMesh pour les Gaussian Splats
@@ -265,7 +265,7 @@ func setup_palette(palette: FoveaColorPalette) -> void:
     material.set_shader_parameter("use_palette", true)
     material.set_shader_parameter("palette_texture", tex)
     material.set_shader_parameter("palette_size", palette.colors.size())
-    print("FoveaSplatRenderer: Palette '%s' (%d colors) applied to shader." % \
+    print("FoveaCoreSplatRenderer: Palette '%s' (%d colors) applied to shader." % \
           [palette.palette_name, palette.colors.size()])
 
 ## Upload de la texture covariance par defaut (sphere unite 1x1)
@@ -313,7 +313,7 @@ func _upload_covar_codebook() -> void:
 
     if codebook_bytes.is_empty():
         # Pas de codebook dans ce fichier .fovea : fallback sphere isotrope
-        push_warning("FoveaSplatRenderer: Pas de codebook covariance dans '%s'. Splats isotropes." % asset_path)
+        push_warning("FoveaCoreSplatRenderer: Pas de codebook covariance dans '%s'. Splats isotropes." % asset_path)
         return  # La texture par defaut (sphere unite) est deja en place
 
     # Le codebook est un tableau de K entrees de 7 floats : [sx, sy, sz, rw, rx, ry, rz]
@@ -344,12 +344,12 @@ func _upload_covar_codebook() -> void:
     var img: Image = Image.create_from_data(2, k, false, Image.FORMAT_RGBAF, tex_data)
     var tex: ImageTexture = ImageTexture.create_from_image(img)
     mat.set_shader_parameter("covar_texture", tex)
-    print("FoveaSplatRenderer: Codebook covariance charge : %d entrees (Splats anisotropes)." % k)
+    print("FoveaCoreSplatRenderer: Codebook covariance charge : %d entrees (Splats anisotropes)." % k)
 
 ## Load palette from .fovea file and apply to material
 func load_palette_from_fovea() -> void:
     if not ClassDB.can_instantiate("FoveaAssetLoader"):
-        push_warning("FoveaSplatRenderer: FoveaAssetLoader GDExtension not available for palette.")
+        push_warning("FoveaCoreSplatRenderer: FoveaAssetLoader GDExtension not available for palette.")
         return
 
     var loader := ClassDB.instantiate("FoveaAssetLoader")
@@ -394,7 +394,7 @@ func update_material_shader() -> void:
         mat.shader = load("res://addons/foveacore/shaders/splat_render_triangle_palette.gdshader")
         mat.set_shader_parameter("use_dithering", true)
         mat.set_shader_parameter("dither_strength", dither_strength)
-        print("FoveaSplatRenderer: Utilizing splat_render_triangle_palette shader with Floyd-Steinberg dithering.")
+        print("FoveaCoreSplatRenderer: Utilizing splat_render_triangle_palette shader with Floyd-Steinberg dithering.")
     else:
         mat.shader = load("res://addons/foveacore/shaders/splat_render_triangle.gdshader")
         mat.set_shader_parameter("use_palette", has_palette)
@@ -402,7 +402,7 @@ func update_material_shader() -> void:
 func load_and_render_splats():
     var camera = get_viewport().get_camera_3d()
     if not camera:
-        push_error("FoveaSplatRenderer: No camera in viewport.")
+        push_error("FoveaCoreSplatRenderer: No camera in viewport.")
         return
     var cam_pos = camera.global_position
     _last_camera_pos = cam_pos
@@ -444,7 +444,7 @@ func load_and_render_splats():
         
     # 3. Récupération des données filtrées depuis la VRAM
     if culler_pipeline == null or culler_pipeline.rd == null:
-        push_error("FoveaSplatRenderer: culler_pipeline or rd is null, skipping data readback.")
+        push_error("FoveaCoreSplatRenderer: culler_pipeline or rd is null, skipping data readback.")
         return
     var culled_bytes: PackedByteArray = culler_pipeline.rd.buffer_get_data(output_buffer_rid)
     
@@ -600,7 +600,7 @@ func _update_hlod_selection(camera_pos: Vector3, force: bool = false) -> void:
         if hlod_levels.has(target_hlod):
             var splats_to_render: Array[GaussianSplat] = hlod_levels[target_hlod]
             render_splats_internal(splats_to_render)
-            print("FoveaSplatRenderer: Passage au niveau HLOD %d (%d splats) à une distance de %.2f m" % [
+            print("FoveaCoreSplatRenderer: Passage au niveau HLOD %d (%d splats) à une distance de %.2f m" % [
                 target_hlod, splats_to_render.size(), dist
             ])
 

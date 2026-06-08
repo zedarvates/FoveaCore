@@ -418,8 +418,8 @@ func _test_rgb565_vs_palette() -> void:
 		palette_root.add_child(palette_splat)
 		
 		# Calculer erreur
-		var rgb565_error = color.distance_to(rgb565_color)
-		var palette_error = color.distance_to(palette_color)
+		var rgb565_error = _color_distance(color, rgb565_color)
+		var palette_error = _color_distance(color, palette_color)
 		
 		test_results["color_comparison_%d" % i] = {
 			"original": color,
@@ -473,9 +473,9 @@ func _test_rgb565_vs_palette() -> void:
 
 ## === Fonctions utilitaires ===
 
-func _create_splat_plane(position: Vector3, color: Color, count: int) -> FoveaSplatRenderer:
+func _create_splat_plane(position: Vector3, color: Color, count: int) -> FoveaCoreSplatRenderer:
 	"""Crée un plan de splats avec la couleur spécifiée"""
-	var splat = FoveaSplatRenderer.new()
+	var splat = FoveaCoreSplatRenderer.new()
 	splat.use_triangle_mesh = true
 	splat.splat_subdivisions = 16
 	splat.multimesh = _create_multimesh_with_color(count, color, position)
@@ -580,11 +580,14 @@ func _quantize_palette(color: Color) -> Color:
 	var best_idx = 0
 	var best_dist = 1e9
 	for i in range(palette.colors.size()):
-		var d = color.distance_to(palette.colors[i])
+		var d = _color_distance(color, palette.colors[i])
 		if d < best_dist:
 			best_dist = d
 			best_idx = i
 	return palette.colors[best_idx]
+
+func _color_distance(c1: Color, c2: Color) -> float:
+	return Vector4(c1.r, c1.g, c1.b, c1.a).distance_to(Vector4(c2.r, c2.g, c2.b, c2.a))
 
 func _print_summary() -> void:
 	print("\n" + "=".repeat(80))

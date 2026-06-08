@@ -3,7 +3,7 @@ extends Node3D
 ## Controls: P=toggle palette, 1-4=palette sizes, F=show FPS, B=benchmark
 
 @onready var _label: Label = null
-@onready var _renderer: FoveaSplatRenderer = null
+@onready var _renderer: FoveaCoreSplatRenderer = null
 
 var _frame_count: int = 0
 var _fps: float = 0.0
@@ -59,7 +59,7 @@ func _setup_environment() -> void:
 
 
 func _setup_renderer() -> void:
-	_renderer = FoveaSplatRenderer.new()
+	_renderer = FoveaCoreSplatRenderer.new()
 	_renderer.name = "PaletteRenderer"
 	add_child(_renderer)
 

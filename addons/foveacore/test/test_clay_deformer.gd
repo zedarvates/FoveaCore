@@ -2,7 +2,7 @@
 ## Script de test/démo pour FoveaClayDeformer
 ##
 ## USAGE:
-##   1. Créer une scène avec un FoveaSplatRenderer (avec un asset .fovea chargé)
+##   1. Créer une scène avec un FoveaCoreSplatRenderer (avec un asset .fovea chargé)
 ##   2. Ajouter un enfant FoveaClayDeformer (il s'auto-connecte)
 ##   3. Attacher ce script à un Node dans la même scène
 ##   4. Assigner `renderer` dans l'inspecteur
@@ -15,8 +15,8 @@
 
 extends Node
 
-## Assigner le FoveaSplatRenderer de la scène
-@export var renderer: FoveaSplatRenderer = null
+## Assigner le FoveaCoreSplatRenderer de la scène
+@export var renderer: FoveaCoreSplatRenderer = null
 
 ## Scénario actif : "wind" ou "impact"
 @export_enum("wind", "impact", "vortex") var scenario: String = "wind"

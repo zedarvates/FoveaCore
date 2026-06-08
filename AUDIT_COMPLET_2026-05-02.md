@@ -105,7 +105,7 @@ fovea-engine/
   ```gdscript
   var ffmpeg_path: String = "ffmpeg":
       set(val):
-          ffmpeg_path = val  # ← s'appelle lui-même indéfiniment!
+		  ffmpeg_path = val  # ← s'appelle lui-même indéfiniment!
   ```
   Même problème sur `colmap_path`, `python_path`, `gaussian_train_script`, `star_bridge_script` (lignes 18-52).
   Heureusement Godot détecte la récursion et stack overflow après ~1000 appels — mais c'est un bug.

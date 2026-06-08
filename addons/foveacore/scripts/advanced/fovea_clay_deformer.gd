@@ -7,7 +7,7 @@ extends Node3D
 ## qui attire, repousse, écrase ou déforme les splats environnants.
 ##
 ## Usage :
-##   1. Ajouter FoveaClayDeformer comme enfant d'un FoveaSplatRenderer.
+##   1. Ajouter FoveaClayDeformer comme enfant d'un FoveaCoreSplatRenderer.
 ##   2. Appeler add_handle() pour créer des zones d'influence.
 ##   3. Le deformer s'enregistre automatiquement sur le renderer parent.
 
@@ -125,7 +125,7 @@ var _handles: Array[ClayHandle] = []
 var _original_transforms: Dictionary = {}
 
 ## Référence au renderer parent (si FoveaClayDeformer est enfant d'un SplatRenderer)
-var _renderer: FoveaSplatRenderer = null
+var _renderer: FoveaCoreSplatRenderer = null
 
 # ─────────────────────────────────────────────
 #  Lifecycle
@@ -133,14 +133,14 @@ var _renderer: FoveaSplatRenderer = null
 
 func _ready() -> void:
 	# Tentative d'auto-connexion au renderer parent.
-	# Le FoveaSplatRenderer est le driver exclusif de deform_multimesh() :
+	# Le FoveaCoreSplatRenderer est le driver exclusif de deform_multimesh() :
 	# son _process() appelle deformer.deform_multimesh() une seule fois par frame.
 	# NE PAS ajouter de _process() ici pour éviter un double appel (BUG-01).
 	var parent := get_parent()
-	if parent is FoveaSplatRenderer:
+	if parent is FoveaCoreSplatRenderer:
 		_renderer = parent
 		_renderer.deformer = self
-		print("FoveaClayDeformer: Auto-connecté à FoveaSplatRenderer '%s'" % parent.name)
+		print("FoveaClayDeformer: Auto-connecté à FoveaCoreSplatRenderer '%s'" % parent.name)
 
 # ─────────────────────────────────────────────
 #  Public API

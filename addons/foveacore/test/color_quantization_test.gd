@@ -128,7 +128,7 @@ func test_memory_comparison() -> void:
 	print("    Nouveau format: ", struct_new, " octets/splat")
 	print("    Économie: ", savings_struct, " octets (", (savings_struct * 100.0) / (struct_old * num_splats), "%)")
 	
-test_results["memory"] = {
+	test_results["memory"] = {
 		"num_splats": num_splats,
 		"rgb565_total": rgb565_total,
 		"palette_total": palette_total,
@@ -180,7 +180,7 @@ func test_quantization_on_image() -> void:
 	print("  Temps: ", elapsed, " ms")
 	print("  Méthode: ", result.stats["method"])
 	
-test_results["image_quantization"] = {
+	test_results["image_quantization"] = {
 		"pixels": 64 * 64,
 		"colors": result.palette.size(),
 		"time_ms": elapsed
