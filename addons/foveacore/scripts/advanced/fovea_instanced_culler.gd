@@ -20,7 +20,7 @@ func _init() -> void:
 func _load_compute_shader() -> void:
     if not rd:
         return
-    var shader_file: RDShaderFile = load("res://addons/foveacore/shaders/gpu_culling_instanced.glsl")
+    var shader_file: RDShaderFile = preload("res://addons/foveacore/shaders/gpu_culling_instanced.glsl")
     var spirv: RDShaderSPIRV = shader_file.get_spirv()
     shader_rid    = rd.shader_create_from_spirv(spirv)
     pipeline_rid  = rd.compute_pipeline_create(shader_rid)
@@ -125,11 +125,11 @@ func process_instanced_splats(
 
     var camera_data_bytes = PackedByteArray()
     camera_data_bytes.resize(128)
-    for row in 4:
-        for col in 4:
-            camera_data_bytes.encode_float((row * 16) + (col * 4), view_proj[row][col])
+    for col_idx in 4:
+        for row_idx in 4:
+            camera_data_bytes.encode_float((col_idx * 16) + (row_idx * 4), view_proj[col_idx][row_idx])
             # Right eye (fallback)
-            camera_data_bytes.encode_float(64 + (row * 16) + (col * 4), view_proj[row][col])
+            camera_data_bytes.encode_float(64 + (col_idx * 16) + (row_idx * 4), view_proj[col_idx][row_idx])
 
     var camera_ubo = rd.storage_buffer_create(128, camera_data_bytes)
     var uniform_camera = RDUniform.new()

@@ -170,6 +170,135 @@ func _ready() -> void:
 		dry_run_check.toggled.connect(_on_dry_run_toggled)
 		pipeline_container.add_child(dry_run_check)
 
+	# Injecter dynamiquement les réglages de Styling & Optimization
+	var settings_box = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings")
+	if settings_box:
+		var sep = HSeparator.new()
+		settings_box.add_child(sep)
+		
+		var title_lbl = Label.new()
+		title_lbl.text = "Styling & Optimization (Fovea Engine)"
+		title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		settings_box.add_child(title_lbl)
+		
+		# 1. Visual Style Dropdown
+		var style_row = HBoxContainer.new()
+		var style_lbl = Label.new()
+		style_lbl.text = "Visual Style: "
+		style_lbl.size_flags_horizontal = SIZE_EXPAND_FILL
+		style_row.add_child(style_lbl)
+		
+		var style_opt = OptionButton.new()
+		style_opt.name = "VisualStyleOption"
+		style_opt.add_item("Realistic")
+		style_opt.add_item("Cartoon")
+		style_opt.add_item("Pixelated")
+		style_opt.add_item("Watercolor")
+		style_opt.add_item("Oil")
+		style_opt.add_item("Crosshatch")
+		style_opt.item_selected.connect(_on_visual_style_changed)
+		style_row.add_child(style_opt)
+		settings_box.add_child(style_row)
+		
+		# 2. Splat Shape Dropdown
+		var shape_row = HBoxContainer.new()
+		var shape_lbl = Label.new()
+		shape_lbl.text = "Splat Shape: "
+		shape_lbl.size_flags_horizontal = SIZE_EXPAND_FILL
+		shape_row.add_child(shape_lbl)
+		
+		var shape_opt = OptionButton.new()
+		shape_opt.name = "SplatShapeOption"
+		shape_opt.add_item("Auto")
+		shape_opt.add_item("Triangle")
+		shape_opt.add_item("Quad")
+		shape_opt.add_item("Sphere")
+		shape_opt.item_selected.connect(_on_splat_shape_changed)
+		shape_row.add_child(shape_opt)
+		settings_box.add_child(shape_row)
+		
+		# 3. Splat Count / Density Slider
+		var density_row = HBoxContainer.new()
+		var density_lbl = Label.new()
+		density_lbl.text = "Splat Density (0.1 - 1.0): "
+		density_lbl.size_flags_horizontal = SIZE_EXPAND_FILL
+		density_row.add_child(density_lbl)
+		
+		var density_slider = HSlider.new()
+		density_slider.name = "SplatDensitySlider"
+		density_slider.min_value = 0.05
+		density_slider.max_value = 1.0
+		density_slider.step = 0.05
+		density_slider.value = 1.0
+		density_slider.custom_minimum_size = Vector2(120, 0)
+		density_slider.value_changed.connect(_on_splat_density_changed)
+		density_row.add_child(density_slider)
+		settings_box.add_child(density_row)
+		
+		# 4. Auto Color-Tagging CheckBox
+		var tag_row = HBoxContainer.new()
+		var tag_lbl = Label.new()
+		tag_lbl.text = "Auto Color-Tag (Leaves/Trunk): "
+		tag_lbl.size_flags_horizontal = SIZE_EXPAND_FILL
+		tag_row.add_child(tag_lbl)
+		
+		var tag_check = CheckBox.new()
+		tag_check.name = "AutoTagCheck"
+		tag_check.button_pressed = true
+		tag_check.toggled.connect(_on_auto_tag_toggled)
+		tag_row.add_child(tag_check)
+		settings_box.add_child(tag_row)
+		
+		# 5. Wind Animation CheckBox
+		var wind_row = HBoxContainer.new()
+		var wind_lbl = Label.new()
+		wind_lbl.text = "Enable Wind Animation: "
+		wind_lbl.size_flags_horizontal = SIZE_EXPAND_FILL
+		wind_row.add_child(wind_lbl)
+		
+		var wind_check = CheckBox.new()
+		wind_check.name = "WindCheck"
+		wind_check.button_pressed = false
+		wind_check.toggled.connect(_on_wind_toggled)
+		wind_row.add_child(wind_check)
+		settings_box.add_child(wind_row)
+		
+		# 6. Wind Speed Slider
+		var wind_speed_row = HBoxContainer.new()
+		var wind_speed_lbl = Label.new()
+		wind_speed_lbl.text = "Wind Speed (0.1 - 5.0): "
+		wind_speed_lbl.size_flags_horizontal = SIZE_EXPAND_FILL
+		wind_speed_row.add_child(wind_speed_lbl)
+		
+		var wind_speed_slider = HSlider.new()
+		wind_speed_slider.name = "WindSpeedSlider"
+		wind_speed_slider.min_value = 0.1
+		wind_speed_slider.max_value = 5.0
+		wind_speed_slider.step = 0.1
+		wind_speed_slider.value = 1.0
+		wind_speed_slider.custom_minimum_size = Vector2(120, 0)
+		wind_speed_slider.value_changed.connect(_on_wind_speed_changed)
+		wind_speed_row.add_child(wind_speed_slider)
+		settings_box.add_child(wind_speed_row)
+		
+		# 7. Wind Strength Slider
+		var wind_strength_row = HBoxContainer.new()
+		var wind_strength_lbl = Label.new()
+		wind_strength_lbl.text = "Wind Strength (0.01 - 1.0): "
+		wind_strength_lbl.size_flags_horizontal = SIZE_EXPAND_FILL
+		wind_strength_row.add_child(wind_strength_lbl)
+		
+		var wind_strength_slider = HSlider.new()
+		wind_strength_slider.name = "WindStrengthSlider"
+		wind_strength_slider.min_value = 0.01
+		wind_strength_slider.max_value = 1.0
+		wind_strength_slider.step = 0.01
+		wind_strength_slider.value = 0.1
+		wind_strength_slider.custom_minimum_size = Vector2(120, 0)
+		wind_strength_slider.value_changed.connect(_on_wind_strength_changed)
+		wind_strength_row.add_child(wind_strength_slider)
+		settings_box.add_child(wind_strength_row)
+
 	_setup_preview_manager()
 
 	# Tooltips pour contrôles avancés
@@ -303,6 +432,41 @@ func _update_ui_from_session() -> void:
 	if colmap_exhaustive_check: colmap_exhaustive_check.button_pressed = current_session.exhaustive_matching
 	if dry_run_check: dry_run_check.button_pressed = current_session.dry_run
 	if _preview_manager: _preview_manager.on_threshold_changed(0)
+
+	# Update styling controls
+	var style_opt = find_child("VisualStyleOption", true, false) as OptionButton
+	if style_opt and "visual_style" in current_session:
+		for idx in range(style_opt.item_count):
+			if style_opt.get_item_text(idx) == current_session.visual_style:
+				style_opt.selected = idx
+				break
+				
+	var shape_opt = find_child("SplatShapeOption", true, false) as OptionButton
+	if shape_opt and "splat_shape" in current_session:
+		for idx in range(shape_opt.item_count):
+			if shape_opt.get_item_text(idx) == current_session.splat_shape:
+				shape_opt.selected = idx
+				break
+				
+	var density_slider = find_child("SplatDensitySlider", true, false) as HSlider
+	if density_slider and "splat_count_density" in current_session:
+		density_slider.value = current_session.splat_count_density
+		
+	var tag_check = find_child("AutoTagCheck", true, false) as CheckBox
+	if tag_check and "auto_tag_color" in current_session:
+		tag_check.button_pressed = current_session.auto_tag_color
+		
+	var wind_check = find_child("WindCheck", true, false) as CheckBox
+	if wind_check and "enable_wind" in current_session:
+		wind_check.button_pressed = current_session.enable_wind
+		
+	var wind_speed_slider = find_child("WindSpeedSlider", true, false) as HSlider
+	if wind_speed_slider and "wind_speed" in current_session:
+		wind_speed_slider.value = current_session.wind_speed
+		
+	var wind_strength_slider = find_child("WindStrengthSlider", true, false) as HSlider
+	if wind_strength_slider and "wind_strength" in current_session:
+		wind_strength_slider.value = current_session.wind_strength
 
 	# Load preview if available
 	if not current_session.video_path.is_empty():
@@ -544,6 +708,41 @@ func _ensure_session() -> void:
 				if mask_option.get_item_text(idx) == current_session.mask_mode:
 					mask_option.selected = idx
 					break
+		
+		# Sync styling parameters from session to UI
+		var style_opt = find_child("VisualStyleOption", true, false) as OptionButton
+		if style_opt and "visual_style" in current_session:
+			for idx in range(style_opt.item_count):
+				if style_opt.get_item_text(idx) == current_session.visual_style:
+					style_opt.selected = idx
+					break
+		
+		var shape_opt = find_child("SplatShapeOption", true, false) as OptionButton
+		if shape_opt and "splat_shape" in current_session:
+			for idx in range(shape_opt.item_count):
+				if shape_opt.get_item_text(idx) == current_session.splat_shape:
+					shape_opt.selected = idx
+					break
+					
+		var density_slider = find_child("SplatDensitySlider", true, false) as HSlider
+		if density_slider and "splat_count_density" in current_session:
+			density_slider.value = current_session.splat_count_density
+			
+		var tag_check = find_child("AutoTagCheck", true, false) as CheckBox
+		if tag_check and "auto_tag_color" in current_session:
+			tag_check.button_pressed = current_session.auto_tag_color
+			
+		var wind_check = find_child("WindCheck", true, false) as CheckBox
+		if wind_check and "enable_wind" in current_session:
+			wind_check.button_pressed = current_session.enable_wind
+			
+		var wind_speed_slider = find_child("WindSpeedSlider", true, false) as HSlider
+		if wind_speed_slider and "wind_speed" in current_session:
+			wind_speed_slider.value = current_session.wind_speed
+			
+		var wind_strength_slider = find_child("WindStrengthSlider", true, false) as HSlider
+		if wind_strength_slider and "wind_strength" in current_session:
+			wind_strength_slider.value = current_session.wind_strength
 
 	_log("StudioTo3D Session Verified.")
 
@@ -1091,3 +1290,104 @@ func _on_pipeline_state_changed(is_active: bool) -> void:
 	if not _is_running:
 		if status_label:
 			status_label.text = _last_known_phase_prefix + _last_known_status
+
+# --- Styling & Wind Callbacks ---
+
+func _on_visual_style_changed(index: int) -> void:
+	_ensure_session()
+	if current_session:
+		var opt = find_child("VisualStyleOption", true, false) as OptionButton
+		if opt:
+			current_session.visual_style = opt.get_item_text(index)
+			_log("Visual style set to: " + current_session.visual_style)
+			_apply_style_to_active_renderer()
+
+func _on_splat_shape_changed(index: int) -> void:
+	_ensure_session()
+	if current_session:
+		var opt = find_child("SplatShapeOption", true, false) as OptionButton
+		if opt:
+			current_session.splat_shape = opt.get_item_text(index)
+			_log("Splat shape set to: " + current_session.splat_shape)
+
+func _on_splat_density_changed(value: float) -> void:
+	_ensure_session()
+	if current_session:
+		current_session.splat_count_density = value
+
+func _on_auto_tag_toggled(checked: bool) -> void:
+	_ensure_session()
+	if current_session:
+		current_session.auto_tag_color = checked
+		_log("Auto Color-Tagging: " + ("Enabled" if checked else "Disabled"))
+
+func _on_wind_toggled(checked: bool) -> void:
+	_ensure_session()
+	if current_session:
+		current_session.enable_wind = checked
+		_log("Wind animation: " + ("Enabled" if checked else "Disabled"))
+		_apply_style_to_active_renderer()
+
+func _on_wind_speed_changed(value: float) -> void:
+	_ensure_session()
+	if current_session:
+		current_session.wind_speed = value
+		_apply_style_to_active_renderer()
+
+func _on_wind_strength_changed(value: float) -> void:
+	_ensure_session()
+	if current_session:
+		current_session.wind_strength = value
+		_apply_style_to_active_renderer()
+
+func _apply_style_to_active_renderer() -> void:
+	if current_session == null:
+		return
+	
+	# Chercher le nœud d'aperçu de splat dans la scène Godot active
+	var scene_root: Node = null
+	if Engine.is_editor_hint():
+		scene_root = EditorInterface.get_edited_scene_root()
+	else:
+		scene_root = get_tree().root
+		
+	if not scene_root:
+		return
+		
+	var node_name = "Splat_" + current_session.session_name
+	var splat_node = scene_root.find_child(node_name, true, false)
+	if splat_node:
+		var renderer = splat_node.find_child("SplatRenderer", true, false)
+		if not renderer:
+			renderer = splat_node.find_child("FoveaCoreSplatRenderer", true, false)
+			
+		if renderer and "material_override" in renderer:
+			var mat = renderer.material_override as ShaderMaterial
+			if not mat:
+				mat = ShaderMaterial.new()
+				renderer.material_override = mat
+				
+			var mode_idx = 0
+			match current_session.visual_style:
+				"Realistic": mode_idx = 0
+				"Oil": mode_idx = 1
+				"Watercolor": mode_idx = 2
+				"Crosshatch": mode_idx = 3
+				"Cartoon": mode_idx = 4
+				"Pixelated": mode_idx = 5
+				
+			# Swap shader if needed
+			if mode_idx > 0:
+				if mat.shader == null or mat.shader.resource_path != "res://addons/foveacore/shaders/splat_render_artistic.gdshader":
+					mat.shader = preload("res://addons/foveacore/shaders/splat_render_artistic.gdshader")
+				mat.set_shader_parameter("art_mode", mode_idx)
+			else:
+				if mat.shader == null or mat.shader.resource_path != "res://addons/foveacore/shaders/splat_render_triangle.gdshader":
+					mat.shader = preload("res://addons/foveacore/shaders/splat_render_triangle.gdshader")
+			
+			# Appliquer les paramètres de vent
+			mat.set_shader_parameter("enable_wind", current_session.enable_wind)
+			mat.set_shader_parameter("wind_speed", current_session.wind_speed)
+			mat.set_shader_parameter("wind_strength", current_session.wind_strength)
+			
+			_log("Applied visual style '%s' and wind settings to active renderer." % current_session.visual_style)

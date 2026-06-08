@@ -1,3 +1,5 @@
+> **"Bienvenue dans la matrice! Tsukuyomi Infini (Infinite Tsukuyomi)" C'est tout ce que vous méritez**
+
 # FoveaCore 🔷 — Advanced 3DGS & Neural Reconstruction Engine
 
 [![Godot](https://img.shields.io/badge/Godot-4.6+-478CBF?logo=godot-engine&logoColor=white)]()
@@ -88,20 +90,20 @@ FoveaCore (Godot 4 Addon)
 │   │   ├── studio_workspace.tscn
 │   │   └── splat_brush_playground.tscn
 │   ├── scripts/
-│   │   ├── foveacore_manager.gd      # High-level orchestrator (175 lines)
+│   │   ├── foveacore_manager.gd      # High-level orchestrator
 │   │   ├── fovea_vr_subsystem.gd     # OpenXR lifecycle
 │   │   ├── fovea_foveated_subsystem.gd  # Foveated rendering
 │   │   ├── fovea_splat_subsystem.gd  # Splat orchestration
-│   │   ├── fovea_splat_renderer.gd   # GPU splat rendering
-│   │   ├── fovea_splat_cleaner.gd    # NaN/Inf/floater removal
-│   │   └── ... (50+ scripts)
+│   │   └── ... (40+ scripts)
 │   ├── scripts/reconstruction/       # StudioTo3D backend
 │   │   ├── reconstruction_manager.gd
-│   │   ├── worldmirror_bridge.py     # Python backend
+│   │   ├── diffsynth_bridge.py       # Unified Python backend
+│   │   ├── worldmirror_bridge.py     # WorldMirror Python backend
 │   │   └── studio_to_3d_panel.gd    # UI panel
 │   ├── scripts/advanced/             # High-performance rendering
-│   │   ├── layered_splat_generator.gd
-│   │   ├── splat_brush_engine.gd
+│   │   ├── fovea_core_splat_renderer.gd # GPU splat rendering
+│   │   ├── fovea_splat_dispatcher.gd    # Vectorized splat dispatcher
+│   │   ├── fovea_splat_cleaner.gd       # NaN/Inf/floater & coplanar cleaning
 │   │   ├── fovea_instanced_splat_renderer.gd # Global splat instancing
 │   │   ├── fovea_instanced_culler.gd         # GPU instanced culler
 │   │   ├── neural_style_bridge.gd
@@ -126,7 +128,19 @@ FoveaCore (Godot 4 Addon)
 │   ├── setup_worldmirror.sh
 │   └── setup_diffsynth.sh
 └── tutorials/
-	└── get_started.md
+    ├── get_started.md
+    ├── reconstruction_setup.md       # Backend setup guide (WorldMirror/DVLT/COLMAP)
+    └── 3dgs_training.md              # 3DGS training, baking & SplatBrush guide
+```
+## 📚 Documentation Index
+
+- **Setup & Installation**: [reconstruction_setup.md](tutorials/reconstruction_setup.md)
+- **First Steps**: [get_started.md](tutorials/get_started.md)
+- **3DGS Optimization & Editing**: [3dgs_training.md](tutorials/3dgs_training.md)
+- **API Reference**: [developer_reference.md](docs/developer_reference.md)
+- **File Format Specifications**: [ply_format_spec.md](plans/ply_format_spec.md)
+- **System Architecture**: [foveacore-architecture.md](plans/foveacore-architecture.md)
+- **Contributing Guidelines**: [CONTRIBUTING.md](CONTRIBUTING.md)
 ```
 
 ---

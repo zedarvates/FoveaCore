@@ -1,0 +1,25 @@
+{
+	"background_threshold": 0.95,
+	"blur_threshold": 0.5,
+	"dry_run": false,
+	"exhaustive_matching": false,
+	"extraction_fps": 2,
+	"frame_count": 0,
+	"is_processed": true,
+	"low_poly_mesh_path": "",
+	"output_directory": "res://reconstructions/stylized fantasy warrior",
+	"reconstruction_progress": 0.0,
+	"roi_rect": [
+		0,
+		0,
+		0,
+		0
+	],
+	"session_name": "stylized fantasy warrior",
+	"splat_data_path": "",
+	"status": "Erreur",
+	"target_size": 902,
+	"use_fast_sync": false,
+	"use_worldmirror": false,
+	"video_path": "F:/foveaengine/fovea-engine/Videos test/stylized fantasy warrior.mp4"
+}

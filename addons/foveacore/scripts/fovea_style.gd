@@ -28,8 +28,20 @@ class_name FoveaStyle
 @export var metal_params: FoveaMaterial = null
 @export var skin_params: FoveaMaterial = null
 
+@export_group("Visual Effects & Wind")
+@export var visual_style: String = "Realistic"
+@export var splat_shape: String = "Auto"
+@export var enable_wind: bool = false
+@export var wind_speed: float = 1.0
+@export var wind_strength: float = 0.1
+
 func _init():
 	mode = "procedural"
 	detail = 1.0
 	grain = 0.5
 	light_coherence = 0.8
+	visual_style = "Realistic"
+	splat_shape = "Auto"
+	enable_wind = false
+	wind_speed = 1.0
+	wind_strength = 0.1

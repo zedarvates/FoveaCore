@@ -14,44 +14,50 @@ class_name FoveaProxyFaceRenderer
 var _proxy_mesh_instance: MeshInstance3D
 var _camera: Camera3D
 
-func _ready():
-    # 1. Création dynamique du Quad (Seulement 2 triangles !)
-    _proxy_mesh_instance = MeshInstance3D.new()
-    var quad = QuadMesh.new()
-    quad.size = proxy_scale
-    _proxy_mesh_instance.mesh = quad
-    
-    if proxy_material:
-        _proxy_mesh_instance.material_override = proxy_material
-        
-    add_child(_proxy_mesh_instance)
-    _proxy_mesh_instance.hide() # Caché par défaut si on est près
+func _ready() -> void:
+	# 1. Création dynamique du Quad (Seulement 2 triangles !)
+	_proxy_mesh_instance = MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size = proxy_scale
+	_proxy_mesh_instance.mesh = quad
+	
+	if proxy_material == null:
+		proxy_material = ShaderMaterial.new()
+		proxy_material.shader = preload("res://addons/foveacore/shaders/fake_volume.gdshader")
+		proxy_material.set_shader_parameter("splat_color", Color(1.0, 0.8, 0.6, 1.0))
+		proxy_material.set_shader_parameter("radius", 0.5)
+		proxy_material.set_shader_parameter("falloff", 2.0)
+		
+	_proxy_mesh_instance.material_override = proxy_material
+		
+	add_child(_proxy_mesh_instance)
+	_proxy_mesh_instance.hide() # Caché par défaut si on est près
 
-func _process(_delta):
-    # 2. Recherche robuste de la caméra active (Correction Tâche #44)
-    # Compatible avec le mode Desktop ET les casques VR (XRCamera3D)
-    if not _camera or not is_instance_valid(_camera):
-        var viewport = get_viewport()
-        if viewport:
-            _camera = viewport.get_camera_3d()
-            
-    if not _camera or not target_splattable:
-        return
-        
-    # 3. Calcul de la distance
-    var dist = global_position.distance_to(_camera.global_position)
-    
-    # 4. Bascule (Switch) de LOD
-    if dist > switch_distance:
-        # Trop loin : On affiche le Proxy (1 Quad) et on coupe le rendu lourd
-        if not _proxy_mesh_instance.visible:
-            _proxy_mesh_instance.show()
-            if "visible" in target_splattable:
-                target_splattable.visible = false
-                
-    else:
-        # Assez près : On affiche les Splats en haute qualité (Fovéation dynamique)
-        if _proxy_mesh_instance.visible:
-            _proxy_mesh_instance.hide()
-            if "visible" in target_splattable:
-                target_splattable.visible = true
+func _process(_delta: float) -> void:
+	# 2. Recherche robuste de la caméra active (Correction Tâche #44)
+	# Compatible avec le mode Desktop ET les casques VR (XRCamera3D)
+	if not _camera or not is_instance_valid(_camera):
+		var viewport = get_viewport()
+		if viewport:
+			_camera = viewport.get_camera_3d()
+			
+	if not _camera or not target_splattable:
+		return
+		
+	# 3. Calcul de la distance
+	var dist := global_position.distance_to(_camera.global_position)
+	
+	# 4. Bascule (Switch) de LOD
+	if dist > switch_distance:
+		# Trop loin : On affiche le Proxy (1 Quad) et on coupe le rendu lourd
+		if not _proxy_mesh_instance.visible:
+			_proxy_mesh_instance.show()
+			if "visible" in target_splattable:
+				target_splattable.visible = false
+				
+	else:
+		# Assez près : On affiche les Splats en haute qualité (Fovéation dynamique)
+		if _proxy_mesh_instance.visible:
+			_proxy_mesh_instance.hide()
+			if "visible" in target_splattable:
+				target_splattable.visible = true

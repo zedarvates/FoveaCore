@@ -159,7 +159,7 @@ func _ready():
     
     # Attribuer le shader triangle optimisé
     var material = ShaderMaterial.new()
-    material.shader = load("res://addons/foveacore/shaders/splat_render_triangle.gdshader")
+    material.shader = preload("res://addons/foveacore/shaders/splat_render_triangle.gdshader")
     material.set_shader_parameter("splat_subdivisions", splat_subdivisions)
     material.set_shader_parameter("use_palette", false)
     material.set_shader_parameter("palette_size", 0)
@@ -391,12 +391,12 @@ func update_material_shader() -> void:
             has_palette = not palette_bytes.is_empty()
             
     if has_palette and use_dithering:
-        mat.shader = load("res://addons/foveacore/shaders/splat_render_triangle_palette.gdshader")
+        mat.shader = preload("res://addons/foveacore/shaders/splat_render_triangle_palette.gdshader")
         mat.set_shader_parameter("use_dithering", true)
         mat.set_shader_parameter("dither_strength", dither_strength)
         print("FoveaCoreSplatRenderer: Utilizing splat_render_triangle_palette shader with Floyd-Steinberg dithering.")
     else:
-        mat.shader = load("res://addons/foveacore/shaders/splat_render_triangle.gdshader")
+        mat.shader = preload("res://addons/foveacore/shaders/splat_render_triangle.gdshader")
         mat.set_shader_parameter("use_palette", has_palette)
 
 func load_and_render_splats():
@@ -645,10 +645,10 @@ func pack_gaussian_splats(splats: Array[GaussianSplat], aabb_min: Vector3, aabb_
         # Opacity
         var op: int = int(clamp(s.opacity * 255.0, 0, 255))
         bytes.encode_u8(src + 12, op)
-        # layer_id, dither_seed, padding
+        # layer_id, dither_seed, brush_type (shape type)
         bytes.encode_u8(src + 13, int(s.layer_type))
         bytes.encode_u8(src + 14, s.dither_seed)
-        bytes.encode_u8(src + 15, 0)
+        bytes.encode_u8(src + 15, int(s.brush_type))
 
     return bytes
 

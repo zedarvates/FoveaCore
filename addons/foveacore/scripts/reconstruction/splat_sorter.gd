@@ -34,7 +34,7 @@ func _init_gpu() -> void:
 		push_error("SplatSorter: RenderingDevice unavailable")
 		return
 
-	var shader_file = load("res://addons/foveacore/shaders/sort_compute.glsl")
+	var shader_file = preload("res://addons/foveacore/shaders/sort_compute.glsl")
 	if shader_file == null:
 		push_error("SplatSorter: Shader not found at res://addons/foveacore/shaders/sort_compute.glsl")
 		return

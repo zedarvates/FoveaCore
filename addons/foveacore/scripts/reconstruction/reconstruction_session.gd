@@ -19,6 +19,15 @@ class_name ReconstructionSession
 @export var dry_run: bool = false
 @export var exhaustive_matching: bool = false # Use COLMAP exhaustive matching instead of sequential (video) mode
 
+@export_group("Styling & Optimization")
+@export var visual_style: String = "Realistic"
+@export var splat_shape: String = "Auto"
+@export var splat_count_density: float = 1.0
+@export var auto_tag_color: bool = true
+@export var enable_wind: bool = false
+@export var wind_speed: float = 1.0
+@export var wind_strength: float = 0.1
+
 @export_group("Reconstruction State")
 @export var is_processed: bool = false
 @export var frame_count: int = 0
@@ -48,6 +57,13 @@ func to_dict() -> Dictionary:
 		"target_size": target_size,
 		"dry_run": dry_run,
 		"exhaustive_matching": exhaustive_matching,
+		"visual_style": visual_style,
+		"splat_shape": splat_shape,
+		"splat_count_density": splat_count_density,
+		"auto_tag_color": auto_tag_color,
+		"enable_wind": enable_wind,
+		"wind_speed": wind_speed,
+		"wind_strength": wind_strength,
 		"is_processed": is_processed,
 		"frame_count": frame_count,
 		"reconstruction_progress": reconstruction_progress,
@@ -73,6 +89,13 @@ func from_dict(dict: Dictionary) -> void:
 	target_size = dict.get("target_size", target_size)
 	dry_run = dict.get("dry_run", dry_run)
 	exhaustive_matching = dict.get("exhaustive_matching", exhaustive_matching)
+	visual_style = dict.get("visual_style", visual_style)
+	splat_shape = dict.get("splat_shape", splat_shape)
+	splat_count_density = dict.get("splat_count_density", splat_count_density)
+	auto_tag_color = dict.get("auto_tag_color", auto_tag_color)
+	enable_wind = dict.get("enable_wind", enable_wind)
+	wind_speed = dict.get("wind_speed", wind_speed)
+	wind_strength = dict.get("wind_strength", wind_strength)
 	is_processed = dict.get("is_processed", is_processed)
 	frame_count = dict.get("frame_count", frame_count)
 	reconstruction_progress = dict.get("reconstruction_progress", reconstruction_progress)

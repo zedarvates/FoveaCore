@@ -37,18 +37,18 @@ func extract_frames(session: ReconstructionSession) -> void:
 		return
 
 	session.status = "Extracting Frames"
-	var output_dir = ProjectSettings.globalize_path(session.output_directory + "/input")
+	var temp_dir = ProjectSettings.globalize_path(session.output_directory + "/temp_extract")
 	
-	# Créer le répertoire de sortie s'il n'existe pas
-	if not DirAccess.dir_exists_absolute(output_dir):
-		DirAccess.make_dir_recursive_absolute(output_dir)
+	# Create temporary directory if it doesn't exist
+	if not DirAccess.dir_exists_absolute(temp_dir):
+		DirAccess.make_dir_recursive_absolute(temp_dir)
 
 	var args = [
 		"-y",
 		"-i", ProjectSettings.globalize_path(session.video_path),
 		"-vf", "fps=2", # Extraire 2 images par seconde pour le GS
 		"-q:v", "2",     # Haute qualité
-		output_dir + "/frame_%04d.jpg"
+		temp_dir + "/frame_%04d.jpg"
 	]
 
 	var cmd = ffmpeg_path if not ffmpeg_path.is_empty() else "ffmpeg"
@@ -66,12 +66,12 @@ func extract_frames(session: ReconstructionSession) -> void:
 		await get_tree().create_timer(0.5).timeout
 
 	# Une fois FFmpeg terminé, on parcourt les images pour notifier le manager
-	var dir = DirAccess.open(output_dir)
+	var dir = DirAccess.open(temp_dir)
 	var count = 0
+	var frames = []
 	if dir:
 		dir.list_dir_begin()
 		var file_name = dir.get_next()
-		var frames = []
 		while file_name != "":
 			if not dir.current_is_dir() and file_name.ends_with(".jpg"):
 				frames.append(file_name)
@@ -81,7 +81,7 @@ func extract_frames(session: ReconstructionSession) -> void:
 		frames.sort()
 		
 		for i in range(frames.size()):
-			var img = Image.load_from_file(output_dir + "/" + frames[i])
+			var img = Image.load_from_file(temp_dir + "/" + frames[i])
 			if img:
 				frame_extracted.emit(i, img)
 				count += 1
@@ -89,6 +89,13 @@ func extract_frames(session: ReconstructionSession) -> void:
 			# Keep UI responsive every 5 frames
 			if i % 5 == 0:
 				await get_tree().create_timer(0.01).timeout
+	
+	# Clean up temporary files and folder
+	if not frames.is_empty():
+		for f in frames:
+			DirAccess.remove_absolute(temp_dir.path_join(f))
+		DirAccess.remove_absolute(temp_dir)
+		print("StudioProcessor: Cleaned up temporary extraction folder: ", temp_dir)
 	
 	session.frame_count = count
 	session.status = "Frames Extracted"
@@ -152,7 +159,7 @@ func _init_gpu() -> void:
 	_rd = RenderingServer.create_local_rendering_device()
 	if not _rd: return
 	
-	var shader_file = load("res://addons/foveacore/shaders/mask_background_gpu.glsl")
+	var shader_file = preload("res://addons/foveacore/shaders/mask_background_gpu.glsl")
 	var shader_spirv: RDShaderSPIRV = shader_file.get_spirv()
 	_shader = _rd.shader_create_from_spirv(shader_spirv)
 	_pipeline = _rd.compute_pipeline_create(_shader)

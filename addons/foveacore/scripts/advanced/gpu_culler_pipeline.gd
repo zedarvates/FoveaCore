@@ -29,6 +29,11 @@ var pipeline_rid: RID
 var sort_shader_rid: RID
 var sort_pipeline_rid: RID
 
+var hiz_shader_rid: RID
+var hiz_pipeline_rid: RID
+var hiz_texture_rid: RID
+var _last_hiz_tex: RID
+
 # Persistent Vulkan buffer cache to avoid per-frame allocation stalls
 # Structure: { fovea_path: { "input": RID, "output": RID, "counter": RID, "camera_ubo": RID, "uniform_set": RID, "size": int } }
 var _gpu_buffers: Dictionary = {}
@@ -66,19 +71,25 @@ func _init() -> void:
 func _load_compute_shader() -> void:
     if not rd:
         return
-    var shader_file: RDShaderFile = load("res://addons/foveacore/shaders/gpu_culling_compute.glsl")
+    var shader_file: RDShaderFile = preload("res://addons/foveacore/shaders/gpu_culling_compute.glsl")
     var spirv: RDShaderSPIRV = shader_file.get_spirv()
     shader_rid    = rd.shader_create_from_spirv(spirv)
     pipeline_rid  = rd.compute_pipeline_create(shader_rid)
 
     # Nouveau shader bitonique : opere directement sur PackedSplat, sans depth+indices separes
-    var sort_file: RDShaderFile = load("res://addons/foveacore/shaders/sort_bitonic_splats.glsl")
+    var sort_file: RDShaderFile = preload("res://addons/foveacore/shaders/sort_bitonic_splats.glsl")
     sort_shader_rid   = rd.shader_create_from_spirv(sort_file.get_spirv())
     sort_pipeline_rid = rd.compute_pipeline_create(sort_shader_rid)
 
+    # Shader de génération de pyramide Hi-Z
+    var hiz_file: RDShaderFile = preload("res://addons/foveacore/shaders/hiz_generator.glsl")
+    hiz_shader_rid = rd.shader_create_from_spirv(hiz_file.get_spirv())
+    hiz_pipeline_rid = rd.compute_pipeline_create(hiz_shader_rid)
+
 ## Charge le fichier via Rust et exécute le Culling sur le GPU
 func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_texture: RID, cull_threshold: float = 0.0,
-    aabb_min: Vector3 = Vector3(-5, -5, -5), aabb_max: Vector3 = Vector3(5, 5, 5)) -> RID:
+    aabb_min: Vector3 = Vector3(-5, -5, -5), aabb_max: Vector3 = Vector3(5, 5, 5),
+    render_scene_data: Object = null) -> RID:
     if not rd:
         push_error("GPU Culler: RenderingDevice is not available. Skipping culling.")
         return RID()
@@ -164,7 +175,7 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
         
         var zero_counter := PackedByteArray([0,0,0,0])
         var counter_buf = rd.storage_buffer_create(4, zero_counter)
-        var camera_ubo_buf = rd.storage_buffer_create(128)
+        var camera_ubo_buf = rd.storage_buffer_create(320)
         
         # Créer le uniform set persistant 0
         var uniform_input = RDUniform.new()
@@ -212,30 +223,54 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
     sampler_state.mag_filter = RenderingDevice.SAMPLER_FILTER_NEAREST
     var sampler_rid = rd.sampler_create(sampler_state)
     
+    # Génération du Hi-Z buffer (une frame sur deux)
+    var hiz_tex: RID = RID()
+    if _frame_counter % 2 == 0 or not _last_hiz_tex.is_valid():
+        hiz_tex = _generate_hiz_pyramid(depth_texture)
+        _last_hiz_tex = hiz_tex
+    else:
+        hiz_tex = _last_hiz_tex
+        
+    var active_depth_tex = hiz_tex if hiz_tex.is_valid() else depth_texture
+
     var uniform_depth = RDUniform.new()
     uniform_depth.uniform_type = RenderingDevice.UNIFORM_TYPE_SAMPLER_WITH_TEXTURE
     uniform_depth.binding = 0
     uniform_depth.add_id(sampler_rid)
-    uniform_depth.add_id(depth_texture)
+    uniform_depth.add_id(active_depth_tex)
     
-    # 4.5. Set 1, binding 1: CameraData UBO (stereo view-projection matrices)
+    # 4.5. Set 1, binding 1: CameraData UBO (stereo view-projection matrices and frustum planes)
     cam_pos = camera.global_position
-    var view_matrix = camera.get_camera_transform().affine_inverse()
-    var proj_matrix = camera.get_camera_projection()
-    var view_proj = proj_matrix * view_matrix
     
+    var view_proj_left: Projection
+    var view_proj_right: Projection
+    
+    if render_scene_data and render_scene_data.has_method("get_view_count"):
+        var view_count = render_scene_data.get_view_count()
+        if view_count > 0:
+            view_proj_left = render_scene_data.get_view_projection(0)
+        if view_count > 1:
+            view_proj_right = render_scene_data.get_view_projection(1)
+        else:
+            view_proj_right = view_proj_left
+    else:
+        var view_matrix = camera.get_camera_transform().affine_inverse()
+        var proj_matrix = camera.get_camera_projection()
+        view_proj_left = proj_matrix * view_matrix
+        view_proj_right = view_proj_left
+        
     var camera_data_bytes = PackedByteArray()
-    camera_data_bytes.resize(128) # 2 x mat4 (std140)
-    var vp_data = view_proj
-    for col_idx in 4:
-        for row_idx in 4:
-            camera_data_bytes.encode_float((col_idx * 16) + (row_idx * 4), vp_data[col_idx][row_idx])
-    # Copy same matrix for right eye (single-view fallback)
-    for col_idx in 4:
-        for row_idx in 4:
-            camera_data_bytes.encode_float(64 + (col_idx * 16) + (row_idx * 4), vp_data[col_idx][row_idx])
+    camera_data_bytes.resize(320) # 2 x mat4 (128 bytes) + 2 x 6 x vec4 (192 bytes) = 320 bytes
     
-    rd.buffer_update(camera_ubo, 0, 128, camera_data_bytes)
+    for col_idx in 4:
+        for row_idx in 4:
+            camera_data_bytes.encode_float((col_idx * 16) + (row_idx * 4), view_proj_left[col_idx][row_idx])
+            camera_data_bytes.encode_float(64 + (col_idx * 16) + (row_idx * 4), view_proj_right[col_idx][row_idx])
+            
+    _extract_planes_to_bytes(view_proj_left, camera_data_bytes, 128)
+    _extract_planes_to_bytes(view_proj_right, camera_data_bytes, 224)
+    
+    rd.buffer_update(camera_ubo, 0, 320, camera_data_bytes)
     var uniform_camera = RDUniform.new()
     uniform_camera.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
     uniform_camera.binding = 1
@@ -312,6 +347,8 @@ func _temporal_sort_bitonic(
         aabb_min:  Vector3,
         aabb_max:  Vector3
 ) -> void:
+    if not rd:
+        return
     # Puissance de 2 superieure ou egale a splat_count
     var padded: int = 1
     while padded < splat_count:
@@ -391,15 +428,17 @@ func _load_fovea_bytes(fovea_path: String) -> PackedByteArray:
         var all_bytes = file.get_buffer(file.get_length())
         file.close()
         
-        if all_bytes.size() >= 48 and all_bytes.slice(0, 8).get_string_from_ascii() == "FOVEA_3D":
-            var color_k = all_bytes.decode_u32(16)
-            var covar_k = all_bytes.decode_u32(20)
-            var header_size = 48
-            var palette_size = color_k * 12
-            var covar_size = covar_k * 32
-            var splats_start = header_size + palette_size + covar_size
-            if all_bytes.size() >= splats_start:
-                bytes = all_bytes.slice(splats_start)
+        if all_bytes.size() >= 8 and all_bytes.slice(0, 8).get_string_from_ascii() == "FOVEA_3D":
+            var version = all_bytes.decode_u32(8)
+            var header_size = 72 if version >= 2 else 48
+            if all_bytes.size() >= header_size:
+                var color_k = all_bytes.decode_u32(16)
+                var covar_k = all_bytes.decode_u32(20)
+                var palette_size = color_k * 12
+                var covar_size = covar_k * 32
+                var splats_start = header_size + palette_size + covar_size
+                if all_bytes.size() >= splats_start:
+                    bytes = all_bytes.slice(splats_start)
         elif all_bytes.size() >= 16:
             bytes = all_bytes.slice(16)
         else:
@@ -486,6 +525,17 @@ func cleanup() -> void:
         if sort_shader_rid.is_valid():
             rd.free_rid(sort_shader_rid)
             sort_shader_rid = RID()
+        
+        if hiz_pipeline_rid.is_valid():
+            rd.free_rid(hiz_pipeline_rid)
+            hiz_pipeline_rid = RID()
+        if hiz_shader_rid.is_valid():
+            rd.free_rid(hiz_shader_rid)
+            hiz_shader_rid = RID()
+        if hiz_texture_rid.is_valid():
+            rd.free_rid(hiz_texture_rid)
+            hiz_texture_rid = RID()
+        _last_hiz_tex = RID()
         
         # Libérer les buffers GPU persistants en cache
         for path in _gpu_buffers:
@@ -588,3 +638,174 @@ func _precompute_spatial_chunks(fovea_path: String, raw_bytes: PackedByteArray, 
 
     _cached_chunks[fovea_path] = chunks
     return chunks
+
+func _extract_planes_to_bytes(vp: Projection, bytes: PackedByteArray, offset: int) -> void:
+    # Extract the 6 frustum planes (Left, Right, Bottom, Top, Near, Far)
+    # Each plane is a vec4(normal.xyz, distance)
+    
+    # Left Plane
+    var n_left = Vector3(vp.x.w + vp.x.x, vp.y.w + vp.y.x, vp.z.w + vp.z.x)
+    var len_left = n_left.length()
+    n_left = n_left / len_left
+    var d_left = (vp.w.w + vp.w.x) / len_left
+    bytes.encode_float(offset + 0, n_left.x)
+    bytes.encode_float(offset + 4, n_left.y)
+    bytes.encode_float(offset + 8, n_left.z)
+    bytes.encode_float(offset + 12, d_left)
+
+    # Right Plane
+    var n_right = Vector3(vp.x.w - vp.x.x, vp.y.w - vp.y.x, vp.z.w - vp.z.x)
+    var len_right = n_right.length()
+    n_right = n_right / len_right
+    var d_right = (vp.w.w - vp.w.x) / len_right
+    bytes.encode_float(offset + 16, n_right.x)
+    bytes.encode_float(offset + 20, n_right.y)
+    bytes.encode_float(offset + 24, n_right.z)
+    bytes.encode_float(offset + 28, d_right)
+
+    # Bottom Plane
+    var n_bottom = Vector3(vp.x.w + vp.x.y, vp.y.w + vp.y.y, vp.z.w + vp.z.y)
+    var len_bottom = n_bottom.length()
+    n_bottom = n_bottom / len_bottom
+    var d_bottom = (vp.w.w + vp.w.y) / len_bottom
+    bytes.encode_float(offset + 32, n_bottom.x)
+    bytes.encode_float(offset + 36, n_bottom.y)
+    bytes.encode_float(offset + 40, n_bottom.z)
+    bytes.encode_float(offset + 44, d_bottom)
+
+    # Top Plane
+    var n_top = Vector3(vp.x.w - vp.x.y, vp.y.w - vp.y.y, vp.z.w - vp.z.y)
+    var len_top = n_top.length()
+    n_top = n_top / len_top
+    var d_top = (vp.w.w - vp.w.y) / len_top
+    bytes.encode_float(offset + 48, n_top.x)
+    bytes.encode_float(offset + 52, n_top.y)
+    bytes.encode_float(offset + 56, n_top.z)
+    bytes.encode_float(offset + 60, d_top)
+
+    # Near Plane
+    var n_near = Vector3(vp.x.w + vp.x.z, vp.y.w + vp.y.z, vp.z.w + vp.z.z)
+    var len_near = n_near.length()
+    n_near = n_near / len_near
+    var d_near = (vp.w.w + vp.w.z) / len_near
+    bytes.encode_float(offset + 64, n_near.x)
+    bytes.encode_float(offset + 68, n_near.y)
+    bytes.encode_float(offset + 72, n_near.z)
+    bytes.encode_float(offset + 76, d_near)
+
+    # Far Plane
+    var n_far = Vector3(vp.x.w - vp.x.z, vp.y.w - vp.y.z, vp.z.w - vp.z.z)
+    var len_far = n_far.length()
+    n_far = n_far / len_far
+    var d_far = (vp.w.w - vp.w.z) / len_far
+    bytes.encode_float(offset + 80, n_far.x)
+    bytes.encode_float(offset + 84, n_far.y)
+    bytes.encode_float(offset + 88, n_far.z)
+    bytes.encode_float(offset + 92, d_far)
+
+func _generate_hiz_pyramid(depth_texture_rid: RID) -> RID:
+    if not rd or not depth_texture_rid.is_valid():
+        return RID()
+        
+    var src_w = rd.texture_get_width(depth_texture_rid)
+    var src_h = rd.texture_get_height(depth_texture_rid)
+    if src_w <= 0 or src_h <= 0:
+        return RID()
+        
+    if not hiz_texture_rid.is_valid():
+        var format := RDTextureFormat.new()
+        format.texture_type = RenderingDevice.TEXTURE_TYPE_2D
+        format.format = RenderingDevice.DATA_FORMAT_R32_SFLOAT
+        format.width = 512
+        format.height = 512
+        format.depth = 1
+        format.array_layers = 1
+        format.mipmaps = 8
+        format.usage_flags = RenderingDevice.TEXTURE_USAGE_SAMPLING_BIT | RenderingDevice.TEXTURE_USAGE_STORAGE_BIT | RenderingDevice.TEXTURE_USAGE_CAN_COPY_TO_BIT
+        hiz_texture_rid = rd.texture_create(format, RDTextureView.new())
+        if not hiz_texture_rid.is_valid():
+            push_error("GPU Culler: Failed to create Hi-Z texture.")
+            return RID()
+
+    var sampler_state = RDSamplerState.new()
+    sampler_state.min_filter = RenderingDevice.SAMPLER_FILTER_NEAREST
+    sampler_state.mag_filter = RenderingDevice.SAMPLER_FILTER_NEAREST
+    var sampler_rid = rd.sampler_create(sampler_state)
+
+    # --- Passe 0 : Résolution source -> Hi-Z Mip 0 (512x512) ---
+    var view_dest_0 := RDTextureView.new()
+    var dest_slice_0 = rd.texture_create_shared_from_slice(view_dest_0, hiz_texture_rid, 0, 0)
+    
+    var uniform_src_0 = RDUniform.new()
+    uniform_src_0.uniform_type = RenderingDevice.UNIFORM_TYPE_SAMPLER_WITH_TEXTURE
+    uniform_src_0.binding = 0
+    uniform_src_0.add_id(sampler_rid)
+    uniform_src_0.add_id(depth_texture_rid)
+    
+    var uniform_dest_0 = RDUniform.new()
+    uniform_dest_0.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
+    uniform_dest_0.binding = 1
+    uniform_dest_0.add_id(dest_slice_0)
+    
+    var uniform_set_0 = rd.uniform_set_create([uniform_src_0, uniform_dest_0], hiz_shader_rid, 0)
+    
+    var pc_0 = PackedByteArray()
+    pc_0.resize(8)
+    pc_0.encode_float(0, 1.0 / float(src_w))
+    pc_0.encode_float(4, 1.0 / float(src_h))
+    
+    var compute_list = rd.compute_list_begin()
+    rd.compute_list_bind_compute_pipeline(compute_list, hiz_pipeline_rid)
+    rd.compute_list_bind_uniform_set(compute_list, uniform_set_0, 0)
+    rd.compute_list_set_push_constant(compute_list, pc_0, pc_0.size())
+    rd.compute_list_dispatch(compute_list, 32, 32, 1) # 512/16 = 32
+    rd.compute_list_end()
+    
+    rd.free_rid(dest_slice_0)
+    
+    # --- Passes 1 à 7 : Downsampling successif de Mip L-1 -> Mip L ---
+    for L in range(1, 8):
+        var mip_src_w = 512 >> (L - 1)
+        var mip_src_h = 512 >> (L - 1)
+        var mip_dest_w = max(512 >> L, 1)
+        var mip_dest_h = max(512 >> L, 1)
+        
+        var view_src_L := RDTextureView.new()
+        var src_slice_L = rd.texture_create_shared_from_slice(view_src_L, hiz_texture_rid, 0, L - 1)
+        
+        var view_dest_L := RDTextureView.new()
+        var dest_slice_L = rd.texture_create_shared_from_slice(view_dest_L, hiz_texture_rid, 0, L)
+        
+        var uniform_src_L = RDUniform.new()
+        uniform_src_L.uniform_type = RenderingDevice.UNIFORM_TYPE_SAMPLER_WITH_TEXTURE
+        uniform_src_L.binding = 0
+        uniform_src_L.add_id(sampler_rid)
+        uniform_src_L.add_id(src_slice_L)
+        
+        var uniform_dest_L = RDUniform.new()
+        uniform_dest_L.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
+        uniform_dest_L.binding = 1
+        uniform_dest_L.add_id(dest_slice_L)
+        
+        var uniform_set_L = rd.uniform_set_create([uniform_src_L, uniform_dest_L], hiz_shader_rid, 0)
+        
+        var pc_L = PackedByteArray()
+        pc_L.resize(8)
+        pc_L.encode_float(0, 1.0 / float(mip_src_w))
+        pc_L.encode_float(4, 1.0 / float(mip_src_h))
+        
+        var compute_list_L = rd.compute_list_begin()
+        rd.compute_list_bind_compute_pipeline(compute_list_L, hiz_pipeline_rid)
+        rd.compute_list_bind_uniform_set(compute_list_L, uniform_set_L, 0)
+        rd.compute_list_set_push_constant(compute_list_L, pc_L, pc_L.size())
+        
+        var workgroups_x = int(ceil(float(mip_dest_w) / 16.0))
+        var workgroups_y = int(ceil(float(mip_dest_h) / 16.0))
+        rd.compute_list_dispatch(compute_list_L, workgroups_x, workgroups_y, 1)
+        rd.compute_list_end()
+        
+        rd.free_rid(src_slice_L)
+        rd.free_rid(dest_slice_L)
+        
+    rd.free_rid(sampler_rid)
+    return hiz_texture_rid

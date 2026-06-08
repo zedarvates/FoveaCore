@@ -93,23 +93,26 @@ var sort_interleave_factor: int = 4
 
 func _init() -> void:
 	rd = RenderingServer.create_local_rendering_device()
-	_load_shaders()
+	if rd:
+		_load_shaders()
+	else:
+		push_warning("FoveaSplatDispatcher: local rendering device not available.")
 
 func _load_shaders() -> void:
 	# Shader de culling multi-asset (avec subgroup ballot)
-	var cull_file: RDShaderFile = load("res://addons/foveacore/shaders/gpu_culling_multi.glsl")
+	var cull_file: RDShaderFile = preload("res://addons/foveacore/shaders/gpu_culling_multi.glsl")
 	var cull_spirv: RDShaderSPIRV = cull_file.get_spirv()
 	_cull_shader   = rd.shader_create_from_spirv(cull_spirv)
 	_cull_pipeline = rd.compute_pipeline_create(_cull_shader)
 
 	# Shader de pré-calcul des clés de profondeur
-	var depth_file: RDShaderFile = load("res://addons/foveacore/shaders/depth_precompute.glsl")
+	var depth_file: RDShaderFile = preload("res://addons/foveacore/shaders/depth_precompute.glsl")
 	var depth_spirv: RDShaderSPIRV = depth_file.get_spirv()
 	_depth_shader   = rd.shader_create_from_spirv(depth_spirv)
 	_depth_pipeline = rd.compute_pipeline_create(_depth_shader)
 
 	# Shader de tri bitonique avec clés pré-calculées
-	var sort_file: RDShaderFile = load("res://addons/foveacore/shaders/sort_bitonic_keyed.glsl")
+	var sort_file: RDShaderFile = preload("res://addons/foveacore/shaders/sort_bitonic_keyed.glsl")
 	var sort_spirv: RDShaderSPIRV = sort_file.get_spirv()
 	_sort_shader   = rd.shader_create_from_spirv(sort_spirv)
 	_sort_pipeline = rd.compute_pipeline_create(_sort_shader)
@@ -152,6 +155,8 @@ func unregister_asset(path: String) -> void:
 ## @returns { buffer_rid: RID, count: int } — appelant doit libérer buffer_rid via rd.free_rid()
 ##          Retourne {} si aucun splat visible.
 func process_frame(camera: Camera3D, depth_tex: RID, cull_threshold: float = 0.0) -> Dictionary:
+	if not rd:
+		return {}
 	if _entries.is_empty():
 		return {}
 
@@ -566,12 +571,29 @@ func _load_fovea_bytes(fovea_path: String) -> PackedByteArray:
 		push_error("FoveaSplatDispatcher: Fichier introuvable : " + fovea_path)
 		return PackedByteArray()
 
-	var f := FileAccess.open(fovea_path, FileAccess.READ)
-	if not f:
+	var file := FileAccess.open(fovea_path, FileAccess.READ)
+	if not file:
 		push_error("FoveaSplatDispatcher: Impossible d'ouvrir : " + fovea_path)
 		return PackedByteArray()
-	var bytes := f.get_buffer(f.get_length())
-	f.close()
+	var all_bytes := file.get_buffer(file.get_length())
+	file.close()
+
+	var bytes := PackedByteArray()
+	if all_bytes.size() >= 8 and all_bytes.slice(0, 8).get_string_from_ascii() == "FOVEA_3D":
+		var version = all_bytes.decode_u32(8)
+		var header_size = 72 if version >= 2 else 48
+		if all_bytes.size() >= header_size:
+			var color_k = all_bytes.decode_u32(16)
+			var covar_k = all_bytes.decode_u32(20)
+			var palette_size = color_k * 12
+			var covar_size = covar_k * 32
+			var splats_start = header_size + palette_size + covar_size
+			if all_bytes.size() >= splats_start:
+				bytes = all_bytes.slice(splats_start)
+	elif all_bytes.size() >= 16:
+		bytes = all_bytes.slice(16)
+	else:
+		bytes = all_bytes
 	return bytes
 
 func _precompute_blocks(raw_bytes: PackedByteArray, aabb_min: Vector3, aabb_max: Vector3) -> Array:

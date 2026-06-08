@@ -1,8 +1,9 @@
 #[compute]
-#version 450
+version 450
 
 // FoveaEngine: Splat Pre-Culling Compute Shader
 // Exécuté avant le tri (Sorting) pour éliminer le travail inutile.
+// Version optimisée par plans de frustum (Ealy-Out plane projection).
 
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
@@ -31,11 +32,13 @@ layout(set = 0, binding = 2, std430) restrict buffer CounterBuffer {
 // 4. Texture de profondeur de la scène (Hi-Z ou Depth Buffer standard)
 layout(set = 1, binding = 0) uniform sampler2D depth_map;
 
-// 5. Buffer de Matrices Stéréoscopiques (UBO)
-// Permet de dépasser la limite de 128 octets des Push Constants pour le Multiview
+// 5. Buffer de Matrices et de Plans Stéréoscopiques (UBO)
+// Contient les projections et les équations de plans pour les deux yeux
 layout(set = 1, binding = 1, std140) uniform CameraData {
     mat4 view_proj_left;
     mat4 view_proj_right;
+    vec4 planes_left[6];  // Plan = vec4(normal.xyz, distance)
+    vec4 planes_right[6];
 } camera;
 
 layout(push_constant, std430) uniform Params {
@@ -51,6 +54,17 @@ layout(push_constant, std430) uniform Params {
     float pad2;
 } params;
 
+// Vérifie si une sphère intersecte ou se trouve à l'intérieur du frustum défini par ses 6 plans
+bool is_sphere_in_frustum(vec3 p, float radius, vec4 planes[6]) {
+    for (int i = 0; i < 6; i++) {
+        // Distance signée du centre de la sphère au plan
+        if (dot(planes[i].xyz, p) + planes[i].w < -radius) {
+            return false; // Entièrement à l'extérieur
+        }
+    }
+    return true; // Visible ou coupe le frustum
+}
+
 void main() {
     uint index = gl_GlobalInvocationID.x;
     if (index >= params.total_splats) return;
@@ -58,12 +72,10 @@ void main() {
     PackedSplat splat = input_data[index];
     
     // --- 1. DÉCODAGE DES POSITIONS (Spatial Quantization) ---
-    // Extraction des 16-bits (Endianness standard CPU/GPU)
     uint qx = splat.data0 & 0xFFFFu;
     uint qy = (splat.data0 >> 16) & 0xFFFFu;
     uint qz = splat.data1 & 0xFFFFu;
     
-    // Remappage de 0..65535 vers la vraie taille via l'AABB
     vec3 q_pos = vec3(float(qx), float(qy), float(qz)) / 65535.0;
     vec3 world_pos = params.aabb_min + q_pos * (params.aabb_max - params.aabb_min);
 
@@ -72,58 +84,52 @@ void main() {
 	uint norm_v_bits = (splat.data1 >> 24) & 0xFFu;
 	float u = float(norm_u_bits) / 255.0 * 2.0 - 1.0;
 	float v = float(norm_v_bits) / 255.0 * 2.0 - 1.0;
-	// Octahedral decode: project (u,v) to the octahedron, then normalize
+	
 	float z = 1.0 - abs(u) - abs(v);
 	float x = u, y = v;
 	if (z < 0.0) {
-		// Mirror the point to the opposite face
 		float old_x = x;
 		x = (1.0 - abs(y)) * sign(x);
 		y = (1.0 - abs(old_x)) * sign(y);
 	}
 	vec3 normal = normalize(vec3(x, y, z));
 
-	// --- 3. DÉCODAGE DE LA COULEUR ET OPACITÉ ---
-    // (Sera surtout utile à copier-coller dans votre splat_render.glsl !)
-    uint color_index = splat.data2 & 0xFFFFu;
-    float r = float((color_index >> 11) & 0x1Fu) / 31.0;
-    float g = float((color_index >> 5) & 0x3Fu)  / 63.0;
-    float b = float(color_index & 0x1Fu)         / 31.0;
-    vec3 color = vec3(r, g, b); // Couleur RGB restaurée
-    
-    float opacity = float(splat.data3 & 0xFFu) / 255.0; // Opacité restaurée
-
-	// 1. BACKFACE CULLING : Splat dont la normale pointe à l'opposé de la caméra → invisible
+	// --- 3. BACKFACE CULLING ---
 	vec3 view_dir = normalize(world_pos - params.camera_position);
 	float NdotV = dot(normal, view_dir);
 	if (NdotV > params.backface_threshold) return;
 
-	// 2. OCCLUSION CULLING : Test de profondeur
-    // CULLING STÉRÉOSCOPIQUE (Combined Frustum VR)
-    vec4 clip_left = camera.view_proj_left * vec4(world_pos, 1.0);
-    vec3 ndc_left = clip_left.xyz / clip_left.w;
+	// --- 4. FRUSTUM CULLING PAR PLANS (Early-Out) ---
+    // Rayon de sécurité conservateur de la sphère englobante du splat (25 cm)
+    float splat_radius = 0.25;
     
-    vec4 clip_right = camera.view_proj_right * vec4(world_pos, 1.0);
-    vec3 ndc_right = clip_right.xyz / clip_right.w;
-    
-    bool visible_left = (abs(ndc_left.x) < 1.0 && abs(ndc_left.y) < 1.0 && ndc_left.z > 0.0 && ndc_left.z < 1.0);
-    bool visible_right = (abs(ndc_right.x) < 1.0 && abs(ndc_right.y) < 1.0 && ndc_right.z > 0.0 && ndc_right.z < 1.0);
+    bool visible_left = is_sphere_in_frustum(world_pos, splat_radius, camera.planes_left);
+    bool visible_right = is_sphere_in_frustum(world_pos, splat_radius, camera.planes_right);
 
-    // Si le splat est en dehors des DEUX yeux en même temps, on l'élimine du rendu !
+    // Si le splat est hors des deux frustums, on le jette immédiatement
     if (!visible_left && !visible_right) return;
     
-    // 3. HI-Z OCCLUSION
-    // Par soucis de performance, on teste l'occlusion sur la vue combinée ou l'œil dominant
+    // --- 5. HI-Z OCCLUSION CULLING ---
+    // Projeté pour occlusion uniquement si dans le frustum de l'œil gauche
     if (visible_left) {
-        vec2 screen_uv = ndc_left.xy * 0.5 + 0.5;
-        // En OpenXR Multiview, la texture de profondeur contient souvent les 2 yeux côte-à-côte
-        float scene_depth = textureLod(depth_map, vec2(screen_uv.x * 0.5, screen_uv.y), 0.0).r;
+        vec4 clip_left = camera.view_proj_left * vec4(world_pos, 1.0);
+        vec3 ndc_left = clip_left.xyz / clip_left.w;
         
-        // Si le splat est plus loin que la géométrie enregistrée (+ un petit biais pour éviter l'acné)
-        if (ndc_left.z > scene_depth + 0.001) return;
+        if (abs(ndc_left.x) < 1.0 && abs(ndc_left.y) < 1.0 && ndc_left.z > 0.0 && ndc_left.z < 1.0) {
+            vec2 screen_uv = ndc_left.xy * 0.5 + 0.5;
+            
+            // Sélection du mipmap Hi-Z basé sur la distance (taille perspective du splat)
+            float dist = length(world_pos - params.camera_position);
+            float diameter_pixels = 250.0 / max(dist, 0.1);
+            float mip = clamp(ceil(log2(diameter_pixels)), 0.0, 7.0);
+            
+            float scene_depth = textureLod(depth_map, vec2(screen_uv.x * 0.5, screen_uv.y), mip).r;
+            
+            if (ndc_left.z > scene_depth + 0.001) return;
+        }
     }
 
-    // Le splat est valide, on l'ajoute au buffer de rendu via un ajout atomique
+    // Le splat est valide, on l'ajoute au buffer de sortie
     uint out_index = atomicAdd(valid_splat_count, 1);
     output_data[out_index] = splat;
 }

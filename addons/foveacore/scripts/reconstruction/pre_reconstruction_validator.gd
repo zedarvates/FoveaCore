@@ -165,7 +165,7 @@ func _extract_sample_frames(path: String, count: int) -> Array[Image]:
 	var temp_dir = OS.get_user_data_dir() + "/fovea_validate_temp"
 	
 	if DirAccess.dir_exists_absolute(temp_dir):
-		DirAccess.remove_absolute(temp_dir)
+		_delete_dir_recursive(temp_dir)
 	DirAccess.make_dir_recursive_absolute(temp_dir)
 	
 	var duration = _get_video_info(path).get("duration_seconds", 10)
@@ -193,9 +193,25 @@ func _extract_sample_frames(path: String, count: int) -> Array[Image]:
 				frames.append(img)
 	
 	if DirAccess.dir_exists_absolute(temp_dir):
-		DirAccess.remove_absolute(temp_dir)
+		_delete_dir_recursive(temp_dir)
 	
 	return frames
+
+func _delete_dir_recursive(path: String) -> void:
+	var dir = DirAccess.open(path)
+	if dir:
+		dir.list_dir_begin()
+		var file_name = dir.get_next()
+		while file_name != "":
+			if file_name != "." and file_name != "..":
+				var full_path = path.path_join(file_name)
+				if dir.current_is_dir():
+					_delete_dir_recursive(full_path)
+				else:
+					DirAccess.remove_absolute(full_path)
+			file_name = dir.get_next()
+		dir.list_dir_end()
+		DirAccess.remove_absolute(path)
 
 func _analyze_lighting(frames: Array[Image], result: ValidationResult) -> void:
 	var total_brightness = 0.0

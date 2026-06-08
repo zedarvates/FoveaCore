@@ -9,7 +9,9 @@ enum LayerType {
 	SATURATION = 1,
 	LIGHT = 2,
 	SHADOW = 3,
-	LIQUID = 4
+	LIQUID = 4,
+	LEAVES = 5,
+	TRUNK = 6
 }
 
 enum BrushType {

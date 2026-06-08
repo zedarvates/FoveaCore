@@ -27,13 +27,18 @@ func _process(_delta: float) -> void:
 		_update_eye_data()
 
 func _update_eye_data() -> void:
-	var gaze_vec = _fetch_openxr_gaze()
+	var gaze_vec := _fetch_openxr_gaze()
 	
-	# Si aucun tracker n'est trouvé, on utilise un fallback au centre de l'écran (regard droit devant)
+	# Si aucun tracker n'est trouvé, on utilise la position de la souris pour simuler le regard sur Desktop (Tâche 4)
 	if gaze_vec == Vector3.ZERO:
-		var camera = get_viewport().get_camera_3d()
+		var camera := get_viewport().get_camera_3d()
 		if camera:
-			gaze_vec = -camera.global_transform.basis.z.normalized()
+			var mouse_pos := get_viewport().get_mouse_position()
+			# S'assurer que la souris est dans la fenêtre
+			if mouse_pos != Vector2.ZERO and Rect2(Vector2.ZERO, get_viewport().size).has_point(mouse_pos):
+				gaze_vec = camera.project_ray_normal(mouse_pos)
+			else:
+				gaze_vec = -camera.global_transform.basis.z.normalized()
 			
 	if gaze_vec != Vector3.ZERO:
 		_last_gaze_point = _calculate_gaze_world_hit(gaze_vec)

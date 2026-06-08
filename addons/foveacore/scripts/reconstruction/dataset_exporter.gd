@@ -28,6 +28,14 @@ func prepare_workspace(session: ReconstructionSession) -> bool:
 		if not DirAccess.dir_exists_absolute(sub_path):
 			DirAccess.make_dir_recursive_absolute(sub_path)
 			
+	# Create .gdignore in the session workspace to prevent Godot from importing assets
+	var gdignore_path = absolute_path.path_join(".gdignore")
+	if not FileAccess.file_exists(gdignore_path):
+		var f = FileAccess.open(gdignore_path, FileAccess.WRITE)
+		if f:
+			f.close()
+			print("DatasetExporter: Created .gdignore at ", gdignore_path)
+			
 	print("DatasetExporter: Workspace prepared at ", absolute_path)
 	return true
 

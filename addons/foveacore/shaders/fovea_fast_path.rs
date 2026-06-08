@@ -17,6 +17,14 @@ pub struct FoveaAssetHeader {
     // Bounding box pour décoder la Quantisation Spatiale (Fixed-Point Math)
     pub aabb_min: [f32; 3],
     pub aabb_max: [f32; 3],
+
+    // Offsets absolus pour les données optionnelles
+    pub style_offset: u32,
+    pub style_size: u32,
+    pub mesh_offset: u32,
+    pub mesh_size: u32,
+    pub meta_offset: u32,
+    pub meta_size: u32,
 }
 
 /// Structure GPU ultra-optimisée : EXACTEMENT 16 octets par splat !
@@ -437,6 +445,12 @@ impl FoveaAssetLoader {
             color_codebook_size: color_k as u32,
             covar_codebook_size: actual_k as u32,
             aabb_min, aabb_max,
+            style_offset: 0,
+            style_size: 0,
+            mesh_offset: 0,
+            mesh_size: 0,
+            meta_offset: 0,
+            meta_size: 0,
         };
         
         let header_bytes: &[u8] = unsafe {
@@ -566,9 +580,15 @@ impl FoveaAssetLoader {
         let covar_size = (header.covar_codebook_size as usize) * 32;
         
         let splats_start = header_size + palette_size + covar_size;
+        let splats_end = splats_start + (header.splat_count as usize) * 16;
+
+        if buffer.len() < splats_end {
+            godot_print!("FoveaEngine [Rust Error] : Fichier trop court pour le nombre de splats !");
+            return PackedByteArray::new();
+        }
 
         // 3. On ne renvoie QUE les octets des splats pour le buffer du MultiMesh (Zéro décalage)
-        PackedByteArray::from(&buffer[splats_start..])
+        PackedByteArray::from(&buffer[splats_start..splats_end])
     }
     
     /// Lit l'en-tête binaire d'un fichier .fovea pour en extraire l'AABB (Bounding Box)
@@ -646,5 +666,118 @@ impl FoveaAssetLoader {
         }
 
         PackedByteArray::from(&buffer[header_size + palette_size..header_size + palette_size + covar_size])
+    }
+
+    /// Alias de compatibilité pour load_covar_codebook appelé par GDScript
+    #[func]
+    pub fn load_covariance_codebook(path: GString) -> PackedByteArray {
+        Self::load_covar_codebook(path)
+    }
+
+    /// Extrait les triangles visibles en espace mondial avec backface culling rapide en Rust
+    #[func]
+    pub fn extract_visible_triangles_native(
+        &self,
+        vertices: PackedVector3Array,
+        normals: PackedVector3Array,
+        indices: PackedInt32Array,
+        world_transform: Transform3D,
+        camera_position: Vector3,
+    ) -> Dictionary {
+        let vertices_slice = vertices.as_slice();
+        let normals_slice = normals.as_slice();
+        let indices_slice = indices.as_slice();
+        
+        let total_triangles = indices_slice.len() / 3;
+        
+        let mut visible_indices = Vec::new();
+        let mut visible_vertices = Vec::new();
+        let mut visible_normals = Vec::new();
+        let mut centers = Vec::new();
+        let mut areas = Vec::new();
+        let mut distances = Vec::new();
+        
+        let mut culled_backface = 0i32;
+        
+        for i in (0..indices_slice.len()).step_by(3) {
+            if i + 2 >= indices_slice.len() { break; }
+            let idx0 = indices_slice[i] as usize;
+            let idx1 = indices_slice[i+1] as usize;
+            let idx2 = indices_slice[i+2] as usize;
+            
+            if idx0 >= vertices_slice.len() || idx1 >= vertices_slice.len() || idx2 >= vertices_slice.len() {
+                continue;
+            }
+            
+            let v0_local = vertices_slice[idx0];
+            let v1_local = vertices_slice[idx1];
+            let v2_local = vertices_slice[idx2];
+            
+            // Transformer les vertices en coordonnées mondiales
+            let v0_world = world_transform.basis * v0_local + world_transform.origin;
+            let v1_world = world_transform.basis * v1_local + world_transform.origin;
+            let v2_world = world_transform.basis * v2_local + world_transform.origin;
+            
+            // Calcul de la normale pour le backface culling
+            let edge1 = v1_world - v0_world;
+            let edge2 = v2_world - v0_world;
+            let face_normal = edge1.cross(edge2).normalized();
+            let to_camera = (camera_position - v0_world).normalized();
+            
+            let dot = face_normal.dot(to_camera);
+            if dot <= 0.0 {
+                culled_backface += 1;
+                continue;
+            }
+            
+            // Calcul de l'aire
+            let area = edge1.cross(edge2).length() / 2.0;
+            
+            // Centre du triangle
+            let center = (v0_world + v1_world + v2_world) / 3.0;
+            
+            // Distance à la caméra
+            let distance = center.distance_to(camera_position);
+            
+            // Normales mondiales
+            let n0_world = (world_transform.basis * normals_slice[idx0]).normalized();
+            let n1_world = (world_transform.basis * normals_slice[idx1]).normalized();
+            let n2_world = (world_transform.basis * normals_slice[idx2]).normalized();
+            
+            // Stocker les résultats
+            visible_indices.push(idx0 as i32);
+            visible_indices.push(idx1 as i32);
+            visible_indices.push(idx2 as i32);
+            
+            visible_vertices.push(v0_world);
+            visible_vertices.push(v1_world);
+            visible_vertices.push(v2_world);
+            
+            visible_normals.push(n0_world);
+            visible_normals.push(n1_world);
+            visible_normals.push(n2_world);
+            
+            centers.push(center);
+            areas.push(area);
+            distances.push(distance);
+        }
+        
+        let visible_count = centers.len() as i32;
+        let culled_occlusion = (total_triangles as i32) - visible_count - culled_backface;
+        
+        let mut dict = Dictionary::new();
+        dict.set("indices", PackedInt32Array::from(visible_indices.as_slice()));
+        dict.set("vertices", PackedVector3Array::from(visible_vertices.as_slice()));
+        dict.set("normals", PackedVector3Array::from(visible_normals.as_slice()));
+        dict.set("centers", PackedVector3Array::from(centers.as_slice()));
+        dict.set("areas", PackedFloat32Array::from(areas.as_slice()));
+        dict.set("distances", PackedFloat32Array::from(distances.as_slice()));
+        
+        dict.set("total_triangles", total_triangles as i32);
+        dict.set("visible_count", visible_count);
+        dict.set("culled_backface", culled_backface);
+        dict.set("culled_occlusion", culled_occlusion);
+        
+        dict
     }
 }
