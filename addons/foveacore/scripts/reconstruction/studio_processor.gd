@@ -312,6 +312,14 @@ func calculate_blur_score(image: Image) -> float:
 	if w < 3 or h < 3:
 		return 0.0
 
+	var analytical_image := image
+	# Downsample for performance if image is large
+	if w > 256 or h > 256:
+		analytical_image = image.duplicate()
+		analytical_image.resize(256, 256, Image.INTERPOLATE_BILINEAR)
+		w = 256
+		h = 256
+
 	# Laplacian kernel: [[0, 1, 0], [1, -4, 1], [0, 1, 0]]
 	var laplacian_values := PackedFloat32Array()
 	laplacian_values.resize(w * h)
@@ -319,12 +327,18 @@ func calculate_blur_score(image: Image) -> float:
 	var lap_max := 0.0
 	for y in range(1, h - 1):
 		for x in range(1, w - 1):
-			var lum := func(px: int, py: int) -> float:
-				var c := image.get_pixel(px, py)
-				return 0.299 * c.r + 0.587 * c.g + 0.114 * c.b
-			var val := abs(lum.call(x-1, y) + lum.call(x+1, y) +
-							lum.call(x, y-1) + lum.call(x, y+1) -
-							4.0 * lum.call(x, y))
+			var c_l := analytical_image.get_pixel(x-1, y)
+			var lum_l := 0.299 * c_l.r + 0.587 * c_l.g + 0.114 * c_l.b
+			var c_r := analytical_image.get_pixel(x+1, y)
+			var lum_r := 0.299 * c_r.r + 0.587 * c_r.g + 0.114 * c_r.b
+			var c_u := analytical_image.get_pixel(x, y-1)
+			var lum_u := 0.299 * c_u.r + 0.587 * c_u.g + 0.114 * c_u.b
+			var c_d := analytical_image.get_pixel(x, y+1)
+			var lum_d := 0.299 * c_d.r + 0.587 * c_d.g + 0.114 * c_d.b
+			var c_c := analytical_image.get_pixel(x, y)
+			var lum_c := 0.299 * c_c.r + 0.587 * c_c.g + 0.114 * c_c.b
+			
+			var val := abs(lum_l + lum_r + lum_u + lum_d - 4.0 * lum_c)
 			laplacian_values[y * w + x] = val
 			if val > lap_max:
 				lap_max = val
@@ -348,6 +362,41 @@ func calculate_blur_score(image: Image) -> float:
 	# Normalize to [0, 1]. Empirical threshold: variance > 0.002 = sharp
 	var score := clamp(variance / 0.005, 0.0, 1.0)
 	return score
+
+func calculate_brightness_and_variance(image: Image) -> Dictionary:
+	var w := image.get_width()
+	var h := image.get_height()
+	if w == 0 or h == 0:
+		return {"brightness": 0.0, "variance": 0.0}
+	
+	var analytical_image := image
+	if w > 128 or h > 128:
+		analytical_image = image.duplicate()
+		analytical_image.resize(128, 128, Image.INTERPOLATE_BILINEAR)
+		w = 128
+		h = 128
+		
+	var total_lum := 0.0
+	var lum_values := PackedFloat32Array()
+	lum_values.resize(w * h)
+	
+	for y in range(h):
+		for x in range(w):
+			var c := analytical_image.get_pixel(x, y)
+			var lum := 0.299 * c.r + 0.587 * c.g + 0.114 * c.b
+			lum_values[y * w + x] = lum
+			total_lum += lum
+			
+	var avg_brightness = total_lum / float(w * h)
+	
+	var sum_sq_diff := 0.0
+	for lum in lum_values:
+		var diff = lum - avg_brightness
+		sum_sq_diff += diff * diff
+		
+	var variance = sum_sq_diff / float(w * h)
+	return {"brightness": avg_brightness, "variance": variance}
+
 
 func detect_surface_features(image: Image) -> Dictionary:
 	var result = {

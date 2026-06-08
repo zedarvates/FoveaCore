@@ -48,6 +48,13 @@ func _init_gpu() -> void:
 
 func sort_splats_back_to_front(splats: Array[GaussianSplat], camera: Camera3D) -> Array[int]:
 	"""Retourne les indices des splats triés de lointain -> proche."""
+	if camera == null:
+		var indices: Array[int] = []
+		indices.resize(splats.size())
+		for i in range(splats.size()):
+			indices[i] = i
+		return indices
+
 	if not _initialized or splats.is_empty():
 		return _cpu_sort_fallback(splats, camera)
 
@@ -188,6 +195,13 @@ func _free_buffers() -> void:
 
 func _cpu_sort_fallback(splats: Array[GaussianSplat], camera: Camera3D) -> Array[int]:
 	"""Tri CPU simple par distance décroissante (back to front)."""
+	if camera == null:
+		var indices: Array[int] = []
+		indices.resize(splats.size())
+		for i in range(splats.size()):
+			indices[i] = i
+		return indices
+
 	var start = Time.get_ticks_msec()
 	var indexed: Array[Dictionary] = []
 	for i in range(splats.size()):

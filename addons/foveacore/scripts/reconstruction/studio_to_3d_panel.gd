@@ -13,6 +13,13 @@ var manager: FoveaReconstructionManager = null
 var current_session: ReconstructionSession = null
 var _preview_manager: StudioPreviewManager = null
 
+var _is_running: bool = false
+var _animation_timer: float = 0.0
+var _last_known_status: String = ""
+var _last_known_phase_prefix: String = ""
+var _spinner_idx: int = 0
+const SPINNERS: Array[String] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
 @onready var video_path_edit: LineEdit = get_node_or_null("VSplit/TopScroll/VBoxTop/VideoSource/PathEdit")
 @onready var session_name_edit: LineEdit = get_node_or_null("VSplit/TopScroll/VBoxTop/SessionName/NameEdit")
 @onready var mask_option: OptionButton = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/MaskingRow/MaskOption")
@@ -67,7 +74,7 @@ var floaters_detector: FloatersDetector = null
 @onready var colmap_exhaustive_check: CheckBox = get_node_or_null("VSplit/TopScroll/VBoxTop/Settings/ColmapOptsRow/ExhaustiveCheck")
 
 @onready var reload_ply_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/ReloadPLY")
-@onready var export_ply_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/ExportPLY")
+@onready var export_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/ExportPLY")
 @onready var toggle_renderer_btn: Button = get_node_or_null("VSplit/TopScroll/VBoxTop/Pipeline/ToggleRenderer")
 
 var current_renderer: _SplatRendererScript = null  # Référence au renderer 3D actuel
@@ -95,6 +102,7 @@ func _ready() -> void:
 			return
 		
 	# 2. Connecter les signaux du Manager
+	_safe_connect(manager.session_started, _on_session_started)
 	_safe_connect(manager.session_progress_updated, _on_progress_updated)
 	_safe_connect(manager.session_completed, _on_session_completed)
 	_safe_connect(manager.reconstruction_failed, _on_reconstruction_failed)
@@ -110,7 +118,7 @@ func _ready() -> void:
 	_safe_connect_btn(roi_button, _on_roi_pressed)
 	_safe_connect_btn(reset_button, _on_reset_pressed)
 	_safe_connect_btn(reload_ply_btn, _on_reload_ply_pressed)
-	_safe_connect_btn(export_ply_btn, _on_export_ply_pressed)
+	_safe_connect_btn(export_btn, _on_export_pressed)
 	_safe_connect_btn(toggle_renderer_btn, _on_toggle_renderer_pressed)
 	
 	_safe_connect_btn(browse_ffmpeg_btn, _on_browse_ffmpeg_pressed)
@@ -441,33 +449,51 @@ func _on_reload_ply_pressed() -> void:
 		_log("❌ No PLY file found.")
 		return
 
-	# Nettoyer l'ancien renderer si présent
-	if current_renderer:
-		current_renderer.queue_free()
-
-	# Charger et afficher
+	_log("Loading and displaying splats...")
+	
+	# Load to update stats
 	var gaussians = _PLYLoaderScript.load_gaussians_from_ply(global_ply)
-	if gaussians == null or gaussians.is_empty():
-		_log("❌ Failed to load gaussians from PLY")
-		return
-
-	var renderer = _SplatRendererScript.new()
-	renderer.name = "SplatPreview_" + current_session.session_name
-	get_tree().root.add_child(renderer)
-	renderer.load_splats(gaussians)
-
-	renderer.render_updated.connect(_on_render_updated)
-	renderer.sorting_completed.connect(_on_sorting_completed)
-	renderer.memory_usage_reported.connect(_on_memory_reported)
-
-	current_renderer = renderer
-
-	var stats = renderer.get_statistics()
-	if not stats.is_empty():
-		var center = stats.get("center", Vector3.ZERO)
+	if gaussians and not gaussians.is_empty():
 		_update_stats_label("Reloaded: %d splats" % gaussians.size())
-
-	_log("✅ Reloaded %d splats." % gaussians.size())
+	
+	if Engine.is_editor_hint():
+		var scene_root = EditorInterface.get_edited_scene_root()
+		if scene_root:
+			var splattable_script = load("res://addons/foveacore/scripts/fovea_splattable.gd")
+			var node_name = "Splat_" + current_session.session_name
+			
+			var existing_node = scene_root.find_child(node_name, true, false)
+			if not existing_node:
+				var node = Node3D.new()
+				node.name = node_name
+				node.set_script(splattable_script)
+				node.splat_file_path = global_ply
+				scene_root.add_child(node)
+				node.owner = scene_root
+				_log("✅ Nœud FoveaSplattable ajouté à la scène active : " + node_name)
+			else:
+				existing_node.splat_file_path = global_ply
+				if existing_node.has_method("_load_splats_from_ply"):
+					existing_node.call("_load_splats_from_ply")
+				_log("✅ Nœud FoveaSplattable existant mis à jour : " + node_name)
+		else:
+			_log("⚠️ Aucun nœud racine de scène active trouvé dans l'éditeur. Ouvrez une scène 3D pour ajouter/recharger le nœud.")
+	else:
+		var root = get_tree().root
+		var node_name = "Splat_" + current_session.session_name
+		var existing_node = root.find_child(node_name, true, false)
+		if not existing_node:
+			var node = Node3D.new()
+			node.name = node_name
+			node.set_script(load("res://addons/foveacore/scripts/fovea_splattable.gd"))
+			node.splat_file_path = global_ply
+			root.add_child(node)
+			_log("✅ FoveaSplattable ajouté à get_tree().root : " + node_name)
+		else:
+			existing_node.splat_file_path = global_ply
+			if existing_node.has_method("_load_splats_from_ply"):
+				existing_node.call("_load_splats_from_ply")
+			_log("✅ FoveaSplattable existant mis à jour dans get_tree().root : " + node_name)
 
 func _ensure_session() -> void:
 	# Si le manager a disparu ou n'a pas été initialisé, on tente une récupération de secours
@@ -594,6 +620,9 @@ func _on_run_pressed() -> void:
 		_log("Error: No video selected.")
 		return
 	_ensure_session()
+	if manager == null:
+		_log("Error: ReconstructionManager not available. Cannot run reconstruction.")
+		return
 	
 	_log("Starting All: " + current_session.session_name)
 
@@ -627,6 +656,27 @@ func _on_preview_pressed() -> void:
 	else:
 		_log("Failed to generate preview.")
 
+func _on_session_started(_name: String) -> void:
+	_is_running = true
+	_spinner_idx = 0
+	_animation_timer = 0.0
+
+func _process(delta: float) -> void:
+	if not _is_running:
+		return
+	
+	_animation_timer += delta
+	if _animation_timer >= 0.15:
+		_animation_timer = 0.0
+		_update_animated_status()
+
+func _update_animated_status() -> void:
+	if not status_label or _last_known_status.is_empty():
+		return
+	_spinner_idx = (_spinner_idx + 1) % SPINNERS.size()
+	var spinner := SPINNERS[_spinner_idx]
+	status_label.text = "%s%s %s" % [_last_known_phase_prefix, spinner, _last_known_status]
+
 func _on_progress_updated(progress: float) -> void:
 	if progress_bar: 
 		progress_bar.value = progress
@@ -641,10 +691,18 @@ func _on_progress_updated(progress: float) -> void:
 	else:
 		phase_prefix = "[Terminé] "
 
-	if status_label: 
-		status_label.text = phase_prefix + current_session.status
+	var status_str := current_session.status if current_session else "Running..."
+	_last_known_status = status_str
+	_last_known_phase_prefix = phase_prefix
+	_is_running = progress < 100.0
+
+	if not _is_running:
+		if status_label: 
+			status_label.text = phase_prefix + status_str
+	else:
+		_update_animated_status()
 		
-	_log("Progress: %.1f%% - %s" % [progress, current_session.status])
+	_log("Progress: %.1f%% - %s" % [progress, status_str])
 	
 	# Afficher des messages informatifs lors de la transition des phases
 	if progress >= 33.0 and progress < 35.0:
@@ -655,6 +713,7 @@ func _on_progress_updated(progress: float) -> void:
 		_log("Pipeline complet terminé avec succès !")
 
 func _on_session_completed(_session: ReconstructionSession) -> void:
+	_is_running = false
 	_log("✅ Reconstruction terminée avec succès !")
 	if status_label: status_label.text = "[Terminé] Finished"
 	if progress_bar: progress_bar.value = 100.0
@@ -699,6 +758,7 @@ func _on_session_completed(_session: ReconstructionSession) -> void:
 	_on_preview_pressed()
 
 func _on_reconstruction_failed(reason: String) -> void:
+	_is_running = false
 	_log("❌ ERREUR: " + reason)
 	if status_label: status_label.text = "Status: Failed"
 
@@ -715,6 +775,19 @@ func _on_clean_floaters_pressed() -> void:
 		return
 	
 	var workspace_path = ProjectSettings.globalize_path(current_session.output_directory)
+	var splat_file_path = workspace_path + "/point_cloud/points.ply"
+	if not FileAccess.file_exists(splat_file_path):
+		splat_file_path = workspace_path + "/splats.ply"
+		
+	if not FileAccess.file_exists(splat_file_path) and not current_session.splat_data_path.is_empty():
+		var session_splat_path = ProjectSettings.globalize_path(current_session.splat_data_path)
+		if FileAccess.file_exists(session_splat_path):
+			splat_file_path = session_splat_path
+			
+	if not FileAccess.file_exists(splat_file_path):
+		_log("Error: No splat file (.ply) found in the workspace. Please complete Phase 3 (Training) or load a model first.")
+		return
+	
 	_log("Analyzing workspace for floating artifacts: " + workspace_path)
 	
 	var result = floaters_detector.analyze_workspace(workspace_path)
@@ -753,25 +826,95 @@ func _on_toggle_renderer_pressed() -> void:
 	else:
 		_log("No active renderer to toggle.")
 
-func _on_export_ply_pressed() -> void:
-	if current_renderer == null:
-		_log("Error: No renderer active. Load a PLY first.")
+func _on_export_pressed() -> void:
+	if current_session == null:
+		_log("Error: No session active. Load or run a session first.")
+		return
+
+	# Find the source PLY file in the workspace
+	var global_ply := ""
+	var out_base := ProjectSettings.globalize_path(current_session.output_directory)
+
+	# Check WorldMirror 2.0 output: gaussians.ply at workspace root
+	var wm2_ply = current_session.output_directory.path_join("gaussians.ply")
+	if FileAccess.file_exists(ProjectSettings.globalize_path(wm2_ply)):
+		global_ply = ProjectSettings.globalize_path(wm2_ply)
+	else:
+		var ply_path = current_session.output_directory.path_join("output/point_cloud/iteration_7000/point_cloud.ply")
+		global_ply = ProjectSettings.globalize_path(ply_path)
+
+	if not FileAccess.file_exists(global_ply):
+		# Fallback: search for any .ply in workspace
+		var out_dir = DirAccess.open(out_base + "/output")
+		if not out_dir:
+			out_dir = DirAccess.open(out_base)
+		if out_dir:
+			out_dir.list_dir_begin()
+			var file = out_dir.get_next()
+			while file != "":
+				if file.ends_with(".ply"):
+					global_ply = out_base + "/output/" + file
+					if not FileAccess.file_exists(global_ply):
+						global_ply = out_base + "/" + file
+					break
+				file = out_dir.get_next()
+
+	if not FileAccess.file_exists(global_ply):
+		_log("❌ Cannot export: No reconstructed PLY file found in the workspace yet. Run reconstruction first.")
 		return
 
 	var dialog = FileDialog.new()
 	dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
 	dialog.access = FileDialog.ACCESS_FILESYSTEM
-	dialog.filters = PackedStringArray(["*.ply ; Gaussian Splat PLY"])
-	dialog.title = "Export Splats to PLY"
-	dialog.file_selected.connect(func(path):
-		var err = current_renderer.export_to_ply(path)
-		if err == OK:
-			_log("✅ Exported splats to: %s" % path)
-		else:
-			_log("❌ Export failed: %s" % path)
+	dialog.filters = PackedStringArray([
+		"*.ply ; Standard PLY Gaussian Splats",
+		"*.fovea ; Fovea Engine Binary Asset"
+	])
+	dialog.title = "Export Reconstruction As..."
+	dialog.file_selected.connect(func(path: String):
+		var ext = path.get_extension().to_lower()
+		if ext.is_empty():
+			path = path + ".ply"
+		_perform_export(global_ply, path)
 	)
 	add_child(dialog)
 	dialog.popup_centered(Vector2i(800, 600))
+
+func _perform_export(source_ply: String, dest_path: String) -> void:
+	var ext = dest_path.get_extension().to_lower()
+	_log("Exporting to %s..." % ext.to_upper())
+	
+	# Load the gaussians from the source PLY file
+	var gaussians = _PLYLoaderScript.load_gaussians_from_ply(source_ply)
+	if gaussians == null or gaussians.is_empty():
+		_log("❌ Export failed: Could not parse source PLY file.")
+		return
+		
+	if ext == "ply":
+		# Save as standard PLY using the SplatRenderer export logic
+		var temp_renderer = _SplatRendererScript.new()
+		temp_renderer.load_splats(gaussians)
+		var err = temp_renderer.export_to_ply(dest_path)
+		temp_renderer.queue_free()
+		if err == OK:
+			_log("✅ Export completed: Standard PLY saved to %s" % dest_path)
+		else:
+			_log("❌ Export failed: Error writing PLY file.")
+	elif ext == "fovea":
+		# Save as Fovea Engine Binary format using FoveaAssetWriter
+		const FoveaAssetWriterScript = preload("res://addons/foveacore/scripts/fovea_asset_writer.gd")
+		var style = current_session.style if "style" in current_session else null
+		var success = FoveaAssetWriterScript.write_fovea_asset(dest_path, gaussians, null, style, {
+			"session": current_session.session_name,
+			"exported_by": "Fovea StudioTo3D",
+			"timestamp": Time.get_unix_time_from_system()
+		})
+		if success:
+			_log("✅ Export completed: .fovea asset saved to %s" % dest_path)
+		else:
+			_log("❌ Export failed: Error writing .fovea asset.")
+	else:
+		_log("❌ Export failed: Unsupported extension .%s" % ext)
 
 # --- SplatRenderer Stats Handlers ---
 
@@ -799,8 +942,8 @@ func _input(event: InputEvent) -> void:
 				if reload_ply_btn and reload_ply_btn.visible and is_instance_valid(reload_ply_btn):
 					_on_reload_ply_pressed()
 			KEY_E:
-				if export_ply_btn and export_ply_btn.visible and is_instance_valid(export_ply_btn):
-					_on_export_ply_pressed()
+				if export_btn and export_btn.visible and is_instance_valid(export_btn):
+					_on_export_pressed()
 			KEY_T:
 				if toggle_renderer_btn and toggle_renderer_btn.visible and is_instance_valid(toggle_renderer_btn):
 					_on_toggle_renderer_pressed()

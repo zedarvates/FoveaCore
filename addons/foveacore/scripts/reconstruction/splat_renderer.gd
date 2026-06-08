@@ -1,3 +1,4 @@
+@tool
 extends MultiMeshInstance3D
 class_name SplatRenderer
 ## SplatRenderer — Rendu haute-performance des Gaussian Splats
