@@ -116,31 +116,19 @@ func sort_splats_back_to_front(splats: Array[GaussianSplat], camera: Camera3D) -
 	return sorted_indices
 
 func _create_buffers_padded(count: int, depths: PackedFloat32Array, indices: PackedInt32Array) -> bool:
-	var fmt = RDTextureFormat.new()
-	fmt.width = count
-	fmt.height = 1
-	fmt.format = RenderingDevice.DATA_FORMAT_R32_SFLOAT
-	fmt.usage_bits = RenderingDevice.TEXTURE_USAGE_STORAGE_BIT | RenderingDevice.TEXTURE_USAGE_CAN_COPY_FROM_BIT
-
 	var depth_bytes = depths.to_byte_array()
-	_depth_buffer = _rd.texture_create(fmt, RDTextureView.new(), [depth_bytes])
-
-	var idx_fmt = RDTextureFormat.new()
-	idx_fmt.width = count
-	idx_fmt.height = 1
-	idx_fmt.format = RenderingDevice.DATA_FORMAT_R32_UINT
-	idx_fmt.usage_bits = RenderingDevice.TEXTURE_USAGE_STORAGE_BIT | RenderingDevice.TEXTURE_USAGE_CAN_COPY_FROM_BIT
+	_depth_buffer = _rd.storage_buffer_create(depth_bytes.size(), depth_bytes)
 
 	var idx_bytes = indices.to_byte_array()
-	_index_buffer = _rd.texture_create(idx_fmt, RDTextureView.new(), [idx_bytes])
+	_index_buffer = _rd.storage_buffer_create(idx_bytes.size(), idx_bytes)
 
 	var uniform_depth = RDUniform.new()
-	uniform_depth.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
+	uniform_depth.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
 	uniform_depth.binding = 0
 	uniform_depth.add_id(_depth_buffer)
 
 	var uniform_idx = RDUniform.new()
-	uniform_idx.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
+	uniform_idx.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
 	uniform_idx.binding = 1
 	uniform_idx.add_id(_index_buffer)
 
@@ -169,13 +157,12 @@ func _dispatch_bitonic_sort(count: int) -> void:
 		_rd.compute_list_end()
 
 		_rd.submit()
-		_rd.sync()
 
 		if _debug_verbose:
-			print("SplatSorter: Stage %d/%d complete" % [stage+1, int(stages)])
+			print("SplatSorter: Stage %d/%d submitted" % [stage+1, int(stages)])
 
 func _read_index_buffer(count: int) -> Array[int]:
-	var data = _rd.texture_get_data(_index_buffer, 0)
+	var data = _rd.buffer_get_data(_index_buffer)
 	var indices: Array[int] = []
 	for i in range(count):
 		var val = data.decode_u32(i * 4)  # R32_UINT = 4 bytes
