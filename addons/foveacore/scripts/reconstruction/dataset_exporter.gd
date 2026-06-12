@@ -104,6 +104,9 @@ func create_metadata_json(session: ReconstructionSession) -> void:
 
 ## Verifies that the reconstruction folder contains all expected outputs (images, masks, database.db, sparse files)
 func verify_reconstruction_outputs(session: ReconstructionSession) -> bool:
+	if session.dry_run:
+		return true
+		
 	var base_dir: String = ProjectSettings.globalize_path(session.output_directory)
 	var ok := true
 	

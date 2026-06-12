@@ -26,6 +26,7 @@
 - **COLMAP Workspace Skip**: Removed pre-creation of empty `sparse` directories to prevent COLMAP's automatic reconstructor from skipping mapping.
 - **Python Bridge Paths**: Globalized Python script bridge execution using absolute paths to resolve working directory script loading errors.
 - **Automatic Scene Instancing**: Enhanced `studio_to_3d_panel.gd` to automatically instantiate a `FoveaSplattable` node under the active edited 3D scene root and set its owner upon successful reconstruction.
+- **COLMAP SfM Failure Handling**: Fixed a critical pipeline bug where Phase 2 (SfM) verification failures (such as a missing `sparse/0` directory when COLMAP failed to find a good initial pair) were ignored, incorrectly proceeding to Phase 3 (3DGS training). The pipeline now correctly halts, marks the session as `"Erreur"`, and propagates the failure. Added dry-run safety to output verification to prevent integration test failures in headless test runners.
 - **Documentation**: Updated `README.md` to reflect proper `FoveaSplattable` properties and describe the automatic scene integration feature.
 
 ---

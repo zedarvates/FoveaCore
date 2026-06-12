@@ -4,11 +4,30 @@ class_name FoveaReconstructionManager
 ## ReconstructionManager — Coordinates reconstruction sessions
 ## Interaces with externally compiled tools for SfM and 3DGS-Training
 
+## Emitted when a new reconstruction session begins.
+## [param name] represents the unique name/identifier of the started [ReconstructionSession].
 signal session_started(name: String)
+
+## Emitted when the progress of the currently active session is updated.
+## [param progress] is a floating-point value ranging from [code]0.0[/code] (started) to [code]100.0[/code] (completed).
+## This covers Phase 1 (0% to 33%), Phase 2 (33% to 66%), and Phase 3 (66% to 100%).
 signal session_progress_updated(progress: float)
+
+## Emitted when the active reconstruction session completes successfully.
+## [param result] provides the final [ReconstructionSession] containing all generated asset paths, metrics, and metadata.
 signal session_completed(result: ReconstructionSession)
+
+## Emitted when the active reconstruction session fails due to an error.
+## [param reason] contains a human-readable description of what caused the failure (e.g., missing dependencies, blur filter threshold issues, OOM, etc.).
 signal reconstruction_failed(reason: String)
+
+## Emitted when a new line of text output is received from the stdout/stderr stream of an external CLI tool
+## (such as FFmpeg, COLMAP, or Python 3DGS training scripts).
+## [param line] is the raw text string parsed from the process output.
 signal log_line_received(line: String)
+
+## Emitted when the reconstruction pipeline transitions between active and idle states.
+## [param is_active] is [code]true[/code] if there are running tasks, and [code]false[/code] when the manager becomes idle.
 signal pipeline_state_changed(is_active: bool)
 
 var is_active: bool = false:
@@ -155,6 +174,8 @@ func _ready() -> void:
 		backend.command_finished.connect(_on_backend_finished)
 		backend.error_occurred.connect(func(err): reconstruction_failed.emit(err))
 		backend.oom_detected.connect(func(cmd, details): reconstruction_failed.emit(details))
+
+	call_deferred("check_tools")
 
 func check_tools() -> Dictionary:
 	var results = {
@@ -463,7 +484,8 @@ func run_extraction(session: ReconstructionSession, mask_mode: String = "Studio 
 	var exported_count = [0]
 	var masking_func = func(idx, img): 
 		var blur = processor.calculate_blur_score(img) if not session.dry_run else 1.0
-		var mask = processor.mask_background(img, mask_mode, session.background_threshold, session.roi_rect)
+		var effective_mode = "None" if mask_mode == "Temporal Variance" else mask_mode
+		var mask = processor.mask_background(img, effective_mode, session.background_threshold, session.roi_rect)
 		var coverage = _calculate_mask_coverage(mask)
 		
 		# Calculer luminosité et variance de couleur
@@ -489,6 +511,21 @@ func run_extraction(session: ReconstructionSession, mask_mode: String = "Studio 
 	processor.frame_extracted.disconnect(masking_func)
 	session.frame_count = exported_count[0]
 	exporter.create_metadata_json(session)
+	
+	if mask_mode == "Temporal Variance":
+		session.status = "Generating Temporal Masks"
+		print("ReconstructionManager: Generating Temporal Variance masks via python...")
+		var abs_path = ProjectSettings.globalize_path(session.output_directory)
+		var input_dir = abs_path + "/input"
+		var masks_dir = abs_path + "/masks"
+		var py_script = ProjectSettings.globalize_path("res://scratch/generate_variance_masks.py")
+		var args = [py_script, "--input", input_dir, "--output", masks_dir]
+		var out = []
+		var exit_code = OS.execute(python_path, args, out)
+		if exit_code != 0:
+			push_error("ReconstructionManager: Temporal variance mask generation failed: " + str(out))
+		else:
+			print("ReconstructionManager: Temporal variance mask generation finished successfully.")
 	
 	session.status = "Pre-processed"
 	print(metrics.get_quality_report())
@@ -519,6 +556,18 @@ func run_reconstruction(session: ReconstructionSession) -> void:
 	_start_task()
 	session_started.emit(session.session_name)
 	print("ReconstructionManager: Démarrage du pipeline complet pour '", session.session_name, "'")
+	
+	# Clean up previous COLMAP cache files
+	var abs_path := ProjectSettings.globalize_path(session.output_directory)
+	var db_file := abs_path.path_join("database.db")
+	if FileAccess.file_exists(db_file):
+		DirAccess.remove_absolute(db_file)
+		print("ReconstructionManager: Cleaned up old database.db cache")
+	var sparse_dir := abs_path.path_join("sparse")
+	if DirAccess.dir_exists_absolute(sparse_dir):
+		_delete_dir_recursive(sparse_dir)
+		print("ReconstructionManager: Cleaned up old sparse reconstruction cache")
+
 	save_session(session) # Auto-save initiale
 
 	# Phase 1 : Extraction & Masquage
@@ -614,7 +663,10 @@ func run_sfm(session: ReconstructionSession) -> void:
 	# Vérification des fichiers générés
 	var output_ok = exporter.verify_reconstruction_outputs(session)
 	if not output_ok:
-		push_warning("ReconstructionManager: Output verification failed for COLMAP SfM. Required files may be missing.")
+		session.status = "Erreur"
+		reconstruction_failed.emit("Échec Phase 2 : La vérification des sorties COLMAP a échoué. Les fichiers de reconstruction sparse/0 sont manquants.")
+		_end_task()
+		return
 	else:
 		print("ReconstructionManager: Output verification succeeded. All required database and camera files generated.")
 		

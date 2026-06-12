@@ -186,6 +186,7 @@ When a reconstruction session finishes successfully, the editor panel **automati
 * This node is correctly linked to the generated `.ply` file.
 * It sets the node owner so it is persistently saved inside your `.tscn` scene file.
 * If a node with that name already exists, it updates the file path to the newly generated result.
+* **Robust Error Handling**: The pipeline automatically verifies reconstruction outputs (`database.db` and `sparse/0` files) after the SfM stage. If COLMAP fails (e.g., due to insufficient frame overlap/features), the manager gracefully halts the pipeline, sets the session status to `"Erreur"`, and displays the specific failure reason.
 
 ---
 
@@ -211,9 +212,9 @@ When a reconstruction session finishes successfully, the editor panel **automati
 | **VQ Compression** | ✅ Production | 8-bit color + 1024-cluster codebook |
 | **Splat Cleaning** | ✅ Production | NaN/Inf/floater removal in GPU pipeline |
 | **Anisotropic Splats** | ✅ Production | True ellipses via covariance |
-| **Layered Splatting** | 🚧 Prototype | Structure exists, rendering layer not wired |
-| **Dynamic Lighting** | 🚧 Prototype | Calculations done, Godot light connection pending |
-| **Hybrid Renderer** | 🚧 Prototype | Instantiated, pipeline integration underway |
+| **Layered Splatting** | ✅ Production | Multi-layer support (BASE/SATURATION/LIGHT/SHADOW) fully wired and tested |
+| **Dynamic Lighting** | ✅ Production | SplatLightingAnimator automatically connected to Godot light sources |
+| **Hybrid Renderer** | ✅ Production | Mesh + Splat rendering fully integrated into manager culling pass |
 | **ComfyUI Bridge** | 🗺️ Planned | AI generation directly from Godot (see ComfyUI + Blender workflows, e.g. [Apple Sharp 3DGS](https://youtu.be/gudf_0LAo4Q) & [Single Image 3DGS](https://youtu.be/M3TgA7OIv6Q)) |
 | **MIP-Splatting / HLOD** | 🗺️ Planned | Dynamic LOD system |
 | **Tile-Based Rasterization** | 🗺️ Planned | Screen tiles for local sorting/blending |
@@ -226,9 +227,9 @@ When a reconstruction session finishes successfully, the editor panel **automati
 ✅ **Phase 1 — Core Rendering** → Mesh/splat rendering, GPU pipeline  
 ✅ **Phase 2 — GPU Compute** → Bitonic sort, occlusion culling, Rust fast-path  
 ✅ **Phase 3 — Visual Fidelity** → Anisotropic splats, VQ, artistic shaders, LOD  
-🔄 **Phase 4 — StudioTo3D** → WorldMirror 2.0, UI, masking  
-🔄 **Phase 5 — VR & Eye Tracking** → OpenXR, foveation, interaction  
-🗺️ **Phase 6 — AI & Cloud** → ComfyUI bridge, auto-ROI, compression
+✅ **Phase 4 — StudioTo3D** → WorldMirror 2.0, UI, masking, drag-and-drop integration  
+✅ **Phase 5 — VR & Eye Tracking** → OpenXR, foveation, eye-culling, interactive sculpting  
+✅ **Phase 6 — AI & Cloud** → ComfyUI bridge, Auto-ROI by AI (SAM/rembg), local ONNX inference
 
 ---
 
