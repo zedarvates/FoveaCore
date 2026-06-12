@@ -3,13 +3,69 @@ extends EditorPlugin
 
 # Instance du plugin d'exportation pour injecter les permissions Android
 var export_plugin: FoveaAndroidExportPlugin = null
+var style_inspector_plugin: EditorInspectorPlugin = null
+var splattable_inspector_plugin: EditorInspectorPlugin = null
+var splattable_gizmo_plugin: EditorNode3DGizmoPlugin = null
 
 const FoveaAssetFormatLoaderScript = preload("res://addons/foveacore/scripts/fovea_asset_loader.gd")
 const FoveaAssetFormatSaverScript = preload("res://addons/foveacore/scripts/fovea_asset_saver.gd")
 
+# Table des autoloads : [nom, chemin du script]
+const AUTOLOADS: Array[Array] = [
+	["FoveaCoreManager", "res://addons/foveacore/scripts/foveacore_manager.gd"],
+	["ReconstructionManager", "res://addons/foveacore/scripts/reconstruction/reconstruction_manager.gd"],
+	["EyeTrackingBridge", "res://addons/foveacore/scripts/advanced/gaze_tracker_linker.gd"],
+]
+
+# Table des types personnalisés : [nom, classe de base, chemin du script, chemin de l'icône ou ""]
+# L'enregistrement et le retrait parcourent la même table : impossible d'oublier un cleanup.
+const CUSTOM_TYPES: Array[Array] = [
+	# API publique v1 — le nœud principal (voir plans/PHASE0_FONDATION_TASKS.md, A1)
+	["FoveaSplat3D", "Node3D", "res://addons/foveacore/scripts/fovea_splat_3d.gd", "res://addons/foveacore/icons/fovea_splattable.svg"],
+	["FoveaAsset", "Resource", "res://addons/foveacore/scripts/fovea_asset.gd", ""],
+	["FoveaSplattable", "Node3D", "res://addons/foveacore/scripts/fovea_splattable.gd", "res://addons/foveacore/icons/fovea_splattable.svg"],
+	# Advanced Components
+	["SplatBrush", "Node3D", "res://addons/foveacore/scripts/advanced/splat_brush_engine.gd", ""],
+	["SplatVRBrush", "Node3D", "res://addons/foveacore/scripts/advanced/splat_vr_brush.gd", ""],
+	["PhysicsProxy", "Node3D", "res://addons/foveacore/scripts/advanced/physics_proxy_generator.gd", ""],
+	["NeuralStyle", "Resource", "res://addons/foveacore/scripts/advanced/neural_style_bridge.gd", ""],
+	["FoveaSegmentation", "Resource", "res://addons/foveacore/scripts/advanced/fovea_segmentation_bridge.gd", ""],
+	["SplatLightingAnimator", "Node", "res://addons/foveacore/scripts/advanced/splat_lighting_animator.gd", ""],
+	["PLYLoader", "RefCounted", "res://addons/foveacore/scripts/reconstruction/ply_loader.gd", ""],
+	["GPUCullerPipeline", "RefCounted", "res://addons/foveacore/scripts/advanced/gpu_culler_pipeline.gd", ""],
+	["GPUNoiseGenerator", "Node", "res://addons/foveacore/scripts/materials/gpu_noise_generator.gd", ""],
+	["StudioPreviewManager", "Node", "res://addons/foveacore/scripts/reconstruction/studio_preview_manager.gd", ""],
+	["StudioRoiPainter", "AcceptDialog", "res://addons/foveacore/scripts/reconstruction/studio_roi_painter.gd", ""],
+	["WorldMirrorCameraImporter", "Node", "res://addons/foveacore/scripts/reconstruction/worldmirror_camera_importer.gd", ""],
+	["WorldMirrorDepthLoader", "Node", "res://addons/foveacore/scripts/reconstruction/worldmirror_depth_loader.gd", ""],
+	# Sprint 4 — Clay Deformer & Physics Tools
+	["FoveaClayDeformer", "Node3D", "res://addons/foveacore/scripts/advanced/fovea_clay_deformer.gd", ""],
+	["FoveaSplatCloth", "Node3D", "res://addons/foveacore/scripts/advanced/fovea_splat_cloth.gd", ""],
+	["FoveaVoxelizer", "RefCounted", "res://addons/foveacore/scripts/advanced/fovea_voxelizer.gd", ""],
+	["FoveaSplatCleaner", "RefCounted", "res://addons/foveacore/scripts/advanced/fovea_splat_cleaner.gd", ""],
+	["SplatInteractionController", "Node", "res://addons/foveacore/scripts/advanced/splat_interaction_controller.gd", ""],
+	["FoveaMultiplayerSync", "Node", "res://addons/foveacore/scripts/vr/fovea_multiplayer_sync.gd", ""],
+	["SplatDecalTool", "Node3D", "res://addons/foveacore/scripts/advanced/splat_decal_tool.gd", ""],
+	# Phase 3 — Global Splat Instancing
+	["FoveaInstancedSplatRenderer", "MultiMeshInstance3D", "res://addons/foveacore/scripts/advanced/fovea_instanced_splat_renderer.gd", ""],
+	["FoveaInstancedCuller", "RefCounted", "res://addons/foveacore/scripts/advanced/fovea_instanced_culler.gd", ""],
+	# Manager Sub-Systems (refactoring God Object)
+	["FoveaVRSubsystem", "Node", "res://addons/foveacore/scripts/fovea_vr_subsystem.gd", ""],
+	["FoveaFoveatedSubsystem", "Node", "res://addons/foveacore/scripts/fovea_foveated_subsystem.gd", ""],
+	["FoveaSplatSubsystem", "Node", "res://addons/foveacore/scripts/fovea_splat_subsystem.gd", ""],
+]
+
 # Custom Resource Format Loader and Saver for .fovea binary format
 var format_loader: ResourceFormatLoader = null
 var format_saver: ResourceFormatSaver = null
+
+# StudioTo3D UI Panel Dock control
+var panel: Control = null
+
+# Active FoveaSplattable node selected in editor and its viewport menu button
+var selected_splattable: FoveaSplattable = null
+var fovea_menu: MenuButton = null
+var context_menu_plugin: EditorContextMenuPlugin = null
 
 func _enter_tree():
 	# Register .fovea custom resource format loader and saver
@@ -17,65 +73,79 @@ func _enter_tree():
 	format_saver = FoveaAssetFormatSaverScript.new()
 	ResourceLoader.add_resource_format_loader(format_loader)
 	ResourceSaver.add_resource_format_saver(format_saver)
-	
-	add_custom_type("FoveaAsset", "Resource", preload("res://addons/foveacore/scripts/fovea_asset.gd"), null)
 
 	# Autoloads
-	add_autoload_singleton("FoveaCoreManager", "res://addons/foveacore/scripts/foveacore_manager.gd")
-	add_autoload_singleton("ReconstructionManager", "res://addons/foveacore/scripts/reconstruction/reconstruction_manager.gd")
-	add_autoload_singleton("EyeTrackingBridge", "res://addons/foveacore/scripts/advanced/gaze_tracker_linker.gd")
-	
-	# Custom nodes
-	add_custom_type("FoveaSplattable", "Node3D", preload("res://addons/foveacore/scripts/fovea_splattable.gd"), preload("res://addons/foveacore/icons/fovea_splattable.svg"))
+	for autoload in AUTOLOADS:
+		add_autoload_singleton(autoload[0], autoload[1])
 
-	
+	# Custom types (table-driven, see CUSTOM_TYPES)
+	for type_def in CUSTOM_TYPES:
+		var icon: Texture2D = load(type_def[3]) if type_def[3] != "" else null
+		add_custom_type(type_def[0], type_def[1], load(type_def[2]), icon)
+
 	# GDExtension - charger seulement si disponible
 	var gdextension_path = "res://addons/foveacore/gdextension/bin/foveacore.dll"
 	if FileAccess.file_exists(gdextension_path):
 		print("FoveaCore GDExtension loaded (native renderer)")
 	else:
 		print("FoveaCore running in GDScript-only mode (GDExtension not compiled)")
-	
-	# Advanced Components
-	add_custom_type("SplatBrush", "Node3D", preload("res://addons/foveacore/scripts/advanced/splat_brush_engine.gd"), null)
-	add_custom_type("SplatVRBrush", "Node3D", preload("res://addons/foveacore/scripts/advanced/splat_vr_brush.gd"), null)
-	add_custom_type("PhysicsProxy", "Node3D", preload("res://addons/foveacore/scripts/advanced/physics_proxy_generator.gd"), null)
-	add_custom_type("NeuralStyle", "Resource", preload("res://addons/foveacore/scripts/advanced/neural_style_bridge.gd"), null)
-	add_custom_type("FoveaSegmentation", "Resource", preload("res://addons/foveacore/scripts/advanced/fovea_segmentation_bridge.gd"), null)
-	add_custom_type("PLYLoader", "RefCounted", preload("res://addons/foveacore/scripts/reconstruction/ply_loader.gd"), null)
-	add_custom_type("GPUCullerPipeline", "RefCounted", preload("res://addons/foveacore/scripts/advanced/gpu_culler_pipeline.gd"), null)
-	add_custom_type("GPUNoiseGenerator", "Node", preload("res://addons/foveacore/scripts/materials/gpu_noise_generator.gd"), null)
-	add_custom_type("StudioPreviewManager", "Node", preload("res://addons/foveacore/scripts/reconstruction/studio_preview_manager.gd"), null)
-	add_custom_type("StudioRoiPainter", "AcceptDialog", preload("res://addons/foveacore/scripts/reconstruction/studio_roi_painter.gd"), null)
-	add_custom_type("WorldMirrorCameraImporter", "Node", preload("res://addons/foveacore/scripts/reconstruction/worldmirror_camera_importer.gd"), null)
-	add_custom_type("WorldMirrorDepthLoader", "Node", preload("res://addons/foveacore/scripts/reconstruction/worldmirror_depth_loader.gd"), null)
-	
-	# Sprint 4 — Clay Deformer & Physics Tools
-	add_custom_type("FoveaClayDeformer", "Node3D",    preload("res://addons/foveacore/scripts/advanced/fovea_clay_deformer.gd"),  null)
-	add_custom_type("FoveaSplatCloth",    "Node3D",    preload("res://addons/foveacore/scripts/advanced/fovea_splat_cloth.gd"),     null)
-	add_custom_type("FoveaVoxelizer",    "RefCounted", preload("res://addons/foveacore/scripts/advanced/fovea_voxelizer.gd"),     null)
-	add_custom_type("FoveaSplatCleaner", "RefCounted", preload("res://addons/foveacore/scripts/advanced/fovea_splat_cleaner.gd"), null)
-
-	# Phase 3 — Global Splat Instancing
-	add_custom_type("FoveaInstancedSplatRenderer", "MultiMeshInstance3D", preload("res://addons/foveacore/scripts/advanced/fovea_instanced_splat_renderer.gd"), null)
-	add_custom_type("FoveaInstancedCuller", "RefCounted", preload("res://addons/foveacore/scripts/advanced/fovea_instanced_culler.gd"), null)
-
-	# Manager Sub-Systems (refactoring God Object)
-	add_custom_type("FoveaVRSubsystem",       "Node", preload("res://addons/foveacore/scripts/fovea_vr_subsystem.gd"),       null)
-	add_custom_type("FoveaFoveatedSubsystem", "Node", preload("res://addons/foveacore/scripts/fovea_foveated_subsystem.gd"), null)
-	add_custom_type("FoveaSplatSubsystem",    "Node", preload("res://addons/foveacore/scripts/fovea_splat_subsystem.gd"),    null)
 
 	# Enregistrement du plugin d'exportation pour injecter les permissions Android
 	export_plugin = FoveaAndroidExportPlugin.new()
 	add_export_plugin(export_plugin)
 
+	# Inspector Plugin Setup
+	var inspector_plugin_script = load("res://addons/foveacore/scripts/editor/fovea_style_inspector_plugin.gd")
+	if inspector_plugin_script:
+		style_inspector_plugin = inspector_plugin_script.new()
+		add_inspector_plugin(style_inspector_plugin)
+
+	# Action buttons for FoveaSplattable / FoveaSplat3D (remplace les checkboxes trigger_*)
+	var splattable_inspector_script = load("res://addons/foveacore/scripts/editor/fovea_splattable_inspector_plugin.gd")
+	if splattable_inspector_script:
+		splattable_inspector_plugin = splattable_inspector_script.new()
+		add_inspector_plugin(splattable_inspector_plugin)
+
+	# Gizmo Plugin Setup
+	var gizmo_plugin_script = load("res://addons/foveacore/scripts/editor/fovea_splattable_gizmo_plugin.gd")
+	if gizmo_plugin_script:
+		splattable_gizmo_plugin = gizmo_plugin_script.new()
+		add_node_3d_gizmo_plugin(splattable_gizmo_plugin)
+
+	# Context Menu Plugin Setup
+	context_menu_plugin = preload("res://addons/foveacore/scripts/editor/fovea_context_menu_plugin.gd").new(self)
+	add_context_menu_plugin(EditorContextMenuPlugin.CONTEXT_SLOT_SCENE_TREE, context_menu_plugin)
+
 	print("FoveaCore plugin loaded — Eye-tracking, Physics, Neural, PLY Loader, Clay Deformer (Sprint 4)")
-	
-	# Add the StudioTo3D Panel
-	var panel = preload("res://addons/foveacore/scripts/reconstruction/studio_to_3d_panel.tscn").instantiate()
+
+	# Add the StudioTo3D Panel.
+	# Note : plus de wizard modal à l'activation — si les outils externes ne sont pas
+	# configurés, le panneau StudioTo3D affiche une bannière non bloquante.
+	panel = preload("res://addons/foveacore/scripts/reconstruction/studio_to_3d_panel.tscn").instantiate()
 	add_control_to_dock(DOCK_SLOT_RIGHT_BL, panel)
 
+	# VIEWPORT TOOLBAR MENU SETUP
+	fovea_menu = MenuButton.new()
+	fovea_menu.text = "FoveaSplattable"
+	fovea_menu.flat = true
+	fovea_menu.visible = false
+
+	var popup = fovea_menu.get_popup()
+	popup.add_item("Reload / Generate Splats", 0)
+	popup.add_item("Convert PLY to .fovea", 1)
+	popup.add_item("Generate physical collision shape", 2)
+	popup.add_separator()
+	popup.add_item("Open in StudioTo3D Panel", 3)
+
+	popup.id_pressed.connect(_on_menu_item_pressed)
+	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, fovea_menu)
+
 func _exit_tree():
+	if panel:
+		remove_control_from_docks(panel)
+		panel.queue_free()
+		panel = null
+
 	# Unregister .fovea loader/saver
 	if format_loader:
 		ResourceLoader.remove_resource_format_loader(format_loader)
@@ -84,42 +154,87 @@ func _exit_tree():
 		ResourceSaver.remove_resource_format_saver(format_saver)
 		format_saver = null
 
-	remove_autoload_singleton("FoveaCoreManager")
-	remove_autoload_singleton("ReconstructionManager")
-	remove_autoload_singleton("EyeTrackingBridge")
-	
-	remove_custom_type("FoveaSplattable")
-	remove_custom_type("FoveaAsset")
+	for type_def in CUSTOM_TYPES:
+		remove_custom_type(type_def[0])
 
-	remove_custom_type("SplatBrush")
-	remove_custom_type("SplatVRBrush")
-	remove_custom_type("PhysicsProxy")
-	remove_custom_type("NeuralStyle")
-	remove_custom_type("FoveaSegmentation")
-	remove_custom_type("PLYLoader")
-	remove_custom_type("GPUCullerPipeline")
-	remove_custom_type("GPUNoiseGenerator")
-	remove_custom_type("StudioPreviewManager")
-	remove_custom_type("StudioRoiPainter")
-	remove_custom_type("WorldMirrorCameraImporter")
-	remove_custom_type("WorldMirrorDepthLoader")
-	remove_custom_type("FoveaClayDeformer")
-	remove_custom_type("FoveaSplatCloth")
-	remove_custom_type("FoveaVoxelizer")
-	remove_custom_type("FoveaSplatCleaner")
-	remove_custom_type("FoveaInstancedSplatRenderer")
-	remove_custom_type("FoveaInstancedCuller")
-	remove_custom_type("FoveaVRSubsystem")
-	remove_custom_type("FoveaFoveatedSubsystem")
-	remove_custom_type("FoveaSplatSubsystem")
-	
+	for autoload in AUTOLOADS:
+		remove_autoload_singleton(autoload[0])
+
 	# Retrait du plugin d'exportation
 	if export_plugin:
 		remove_export_plugin(export_plugin)
 		export_plugin = null
 
-		
+	# Clean up Inspector Plugins
+	if style_inspector_plugin:
+		remove_inspector_plugin(style_inspector_plugin)
+		style_inspector_plugin = null
+	if splattable_inspector_plugin:
+		remove_inspector_plugin(splattable_inspector_plugin)
+		splattable_inspector_plugin = null
+
+	# Clean up Gizmo Plugin
+	if splattable_gizmo_plugin:
+		remove_node_3d_gizmo_plugin(splattable_gizmo_plugin)
+		splattable_gizmo_plugin = null
+
+	# Clean up Viewport MenuButton
+	if fovea_menu:
+		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, fovea_menu)
+		fovea_menu.queue_free()
+		fovea_menu = null
+
+	# Clean up Context Menu Plugin
+	if context_menu_plugin:
+		remove_context_menu_plugin(context_menu_plugin)
+		context_menu_plugin = null
+
 	print("FoveaCore unloaded")
+
+func _handles(object: Object) -> bool:
+	return object is FoveaSplattable
+
+func _edit(object: Object) -> void:
+	selected_splattable = object as FoveaSplattable
+
+func _make_visible(visible: bool) -> void:
+	if fovea_menu:
+		fovea_menu.visible = visible
+
+func _on_menu_item_pressed(id: int) -> void:
+	if selected_splattable == null or not is_instance_valid(selected_splattable):
+		return
+
+	match id:
+		0: # Reload / Generate Splats
+			if not selected_splattable.splat_file_path.is_empty():
+				selected_splattable._load_splats_from_ply()
+				print("FoveaPlugin: Reloaded splats from PLY path: ", selected_splattable.splat_file_path)
+			else:
+				print("FoveaPlugin: Cannot reload: splat file path is empty.")
+		1: # Convert PLY to .fovea
+			if not selected_splattable.splat_file_path.is_empty():
+				var default_dest = selected_splattable.splat_file_path.get_basename() + ".fovea"
+				var ok = selected_splattable.export_to_fovea(default_dest)
+				if ok:
+					print("FoveaPlugin: Successfully converted to: ", default_dest)
+					selected_splattable.splat_file_path = default_dest
+				else:
+					push_error("FoveaPlugin: Conversion failed.")
+			else:
+				push_error("FoveaPlugin: Cannot convert: No splat file path set.")
+		2: # Generate physical collision shape
+			if selected_splattable.splat_file_path.ends_with(".fovea"):
+				selected_splattable._generate_collision_shape()
+				print("FoveaPlugin: Generated physical collision shape.")
+			else:
+				push_error("FoveaPlugin: Collision shape generation requires a .fovea asset format.")
+		3: # Open in StudioTo3D Panel
+			if panel:
+				if panel.has_method("set_session_path_from_splattable"):
+					panel.set_session_path_from_splattable(selected_splattable)
+				else:
+					print("FoveaPlugin: Panel does not support loading splattable paths.")
 
 # Sous-classe interne gérant l'exportation des permissions d'eye tracking sur Android (Quest Pro / Android XR)
 class FoveaAndroidExportPlugin extends EditorExportPlugin:

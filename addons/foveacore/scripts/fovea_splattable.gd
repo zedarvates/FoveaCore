@@ -5,13 +5,45 @@ extends Node3D
 
 class_name FoveaSplattable
 
-## Référence statique au PLYLoader via preload
+# ─────────────────────────────────────────────────────────────
+#  Events / Signals
+# ─────────────────────────────────────────────────────────────
+
+## Emitted when 3D segmentation begins on this splattable node.
+## [param prompt] represents the text description or prompt target of the segmentation.
+signal segmentation_started(prompt: String)
+
+## Emitted when 3D segmentation completes on this node.
+## [param success] is [code]true[/code] if the segmentation successfully finished and updated the splats.
+signal segmentation_completed(success: bool)
+
+## Emitted when asset conversion and compression to the native [code].fovea[/code] format starts.
+## [param dest_path] is the destination path on disk where the asset will be written.
+signal conversion_started(dest_path: String)
+
+## Emitted when asset conversion and compression to [code].fovea[/code] completes.
+## [param success] is [code]true[/code] if the export was successful.
+## [param dest_path] is the path of the successfully written asset.
+signal conversion_completed(success: bool, dest_path: String)
+
+## Emitted when procedural splat generation starts.
+signal generation_started()
+
+## Emitted when procedural splats are successfully generated from the node's mesh.
+## [param splat_count] is the total number of splats generated.
+signal generation_completed(splat_count: int)
+
+# ─────────────────────────────────────────────────────────────
+#  Static References & Exports
+# ─────────────────────────────────────────────────────────────
+
+## Static reference to the PLYLoader script.
 const _PlyLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/ply_loader.gd")
 
-## Densité locale des splats (1.0 = densité globale)
+## Local multiplier for splat density (e.g. 1.0 matches the global density).
 @export var splat_density := 1.0
 
-## Chemin vers un fichier de Gaussian Splatting (.ply, .fovea, .spz)
+## Path to a Gaussian Splatting file (.ply, .fovea, .spz).
 @export_file("*.ply", "*.fovea", "*.spz") var splat_file_path: String = "":
 	set(val):
 		splat_file_path = val
@@ -19,15 +51,13 @@ const _PlyLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/
 			if splat_file_path.ends_with(".ply"):
 				_load_splats_from_ply()
 			elif splat_file_path.ends_with(".fovea"):
-				var renderer = get_node_or_null("SplatRenderer")
+				var renderer: Node = get_node_or_null("SplatRenderer")
 				if renderer:
 					renderer.queue_free()
 				_setup_native_renderer()
 
-## @deprecated Utiliser splat_file_path à la place.
-## Conservé uniquement pour la compatibilité ascendante des scènes existantes.
-## Migration : remplacer ply_file_path par splat_file_path dans l'inspecteur.
-## Cette propriété sera supprimée dans une future version de FoveaCore.
+## @deprecated Use [member splat_file_path] instead.
+## Maintained for backwards compatibility with existing scenes.
 @export_file("*.ply") var ply_file_path: String = "":
 	set(val):
 		ply_file_path = val
@@ -35,59 +65,54 @@ const _PlyLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/
 			splat_file_path = ply_file_path
 
 @export_group("AI Segmentation & Tagging")
-## Tag text/prompt to segment in 3D (e.g. "liquid", "wood", "cloth", "stone")
+## Tag text/prompt to segment in 3D (e.g. "liquid", "wood", "cloth", "stone").
+## Run it from the "Fovea Actions" buttons at the top of the inspector,
+## or call [method run_segmentation] from code.
 @export var run_segmentation_prompt: String = ""
-## Click to trigger AI Segmentation using ComfyUI/Simulation
-@export var trigger_segmentation: bool = false:
-	set(val):
-		if val:
-			if run_segmentation_prompt.is_empty():
-				push_warning("FoveaSplattable: Please specify a segmentation prompt.")
-			else:
-				run_segmentation(run_segmentation_prompt)
-		trigger_segmentation = false
 
-@export_group("Format Conversion & Compression")
-## Click to convert and compress the loaded PLY splats into a .fovea asset (adjacent file)
-@export var trigger_conversion_to_fovea: bool = false:
-	set(val):
-		if val:
-			if splat_file_path.is_empty():
-				push_warning("FoveaSplattable: No splat file loaded to convert.")
-			else:
-				var default_dest = splat_file_path.get_basename() + ".fovea"
-				export_to_fovea(default_dest)
-		trigger_conversion_to_fovea = false
+# Note : les anciens déclencheurs "checkbox-bouton" (trigger_segmentation,
+# trigger_conversion_to_fovea, trigger_generation) sont remplacés par de vrais
+# boutons d'inspecteur — voir editor/fovea_splattable_inspector_plugin.gd.
+# Les actions restent accessibles en code : run_segmentation(), export_to_fovea(),
+# generate_splats_now().
 
 @export_group("Physics Collisions")
-## Activer la génération de collision physique automatique depuis les voxels
+## If [code]true[/code], generates a physical collision shape from the splat voxels.
 @export var generate_collisions := false
-## Résolution de la grille de voxels en mètres (ex: 0.15 = 15cm)
+## Grid resolution of voxels used for collision generation, in meters (e.g. 0.15 is 15cm).
 @export var voxel_size := 0.15
-## Seuil d'opacité pour considérer un voxel comme solide (0.0..1.0)
+## Opacity threshold (0.0 to 1.0) above which a voxel is considered solid.
 @export_range(0.0, 1.0) var opacity_threshold := 0.1
 
-## Override du style local (null = utiliser le style global)
+## Local override style resource (null will inherit the global FoveaCoreManager style).
 @export var style_override: FoveaStyle = null
 
-## Activer/désactiver le splatting pour cet objet
+## If [code]true[/code], enables splatting for this object.
 @export var splatting_enabled := true
 
-## Activer le rendu d'instances partagées (Global Splat Instancing)
+## If [code]true[/code], enables shared instanced rendering (Global Splat Instancing) for .fovea assets.
 @export var enable_instancing: bool = true
 
 @export_group("Delta-Splat Overrides")
-## Couleur de teinte personnalisée pour cette instance
+## Custom tint color override applied to this instance.
 @export var color_override: Color = Color.WHITE
-## Multiplicateur de taille pour cette instance
+## Custom scale multiplier override applied to this instance.
 @export var scale_override: float = 1.0
-## Multiplicateur d'opacité/visibilité pour cette instance (0.0..1.0)
+## Custom alpha/opacity multiplier override (0.0 to 1.0) applied to this instance.
 @export var alpha_override: float = 1.0
+## Type de déformation locale appliqué à cette instance (morph).
+@export_enum("None", "Bend", "Twist", "Squish", "Wave") var morph_type: String = "None"
+## Force de la déformation (0.0 = aucun effet, 1.0 = effet maximum).
+@export_range(0.0, 1.0) var morph_weight: float = 0.0
+## Fréquence spatiale du morphing.
+@export var morph_frequency: float = 1.0
+## Amplitude maximale du morphing.
+@export var morph_amplitude: float = 0.5
 
-## Masquer le mesh original (pour ne voir que le nuage de points/splats)
+## If [code]true[/code], hides the original MeshInstance3D when splatting is active.
 @export var hide_mesh_when_splatting := true
 
-## Priorité de culling (0 = toujours culler en premier si nécessaire)
+## Culling priority (0 is culled first, 10 is culled last).
 @export_range(0, 10) var culling_priority := 5
 
 ## Référence au mesh original
@@ -111,14 +136,14 @@ var splat_buffer_rid: RID = RID()
 
 func _enter_tree() -> void:
 	add_to_group("splattables")
-	var manager = get_node_or_null("/root/FoveaCoreManager")
+	var manager: Node = get_node_or_null("/root/FoveaCoreManager")
 	if manager:
 		manager.register_splattable(self)
 
 
 func _exit_tree() -> void:
 	remove_from_group("splattables")
-	var manager = get_node_or_null("/root/FoveaCoreManager")
+	var manager: Node = get_node_or_null("/root/FoveaCoreManager")
 	if manager:
 		manager.unregister_splattable(self)
 
@@ -163,7 +188,7 @@ func _setup_native_renderer() -> void:
 		print("FoveaSplattable: Rendu natif local détecté pour ", splat_file_path)
 	
 	# Instancier dynamiquement FoveaCoreSplatRenderer pour les assets natifs
-	var renderer = get_node_or_null("FoveaCoreSplatRenderer")
+	var renderer: Node = get_node_or_null("FoveaCoreSplatRenderer")
 	if not renderer:
 		renderer = FoveaCoreSplatRenderer.new()
 		renderer.name = "FoveaCoreSplatRenderer"
@@ -175,9 +200,9 @@ func _setup_native_renderer() -> void:
 func _update_local_renderer() -> void:
 	if Engine.is_editor_hint() or not get_node_or_null("/root/FoveaCoreManager"):
 		if has_ply_splats and not loaded_splats.is_empty():
-			var renderer = get_node_or_null("SplatRenderer")
+			var renderer: Node = get_node_or_null("SplatRenderer")
 			if not renderer:
-				var SplatRendererScript = load("res://addons/foveacore/scripts/reconstruction/splat_renderer.gd")
+				var SplatRendererScript: GDScript = load("res://addons/foveacore/scripts/reconstruction/splat_renderer.gd")
 				if SplatRendererScript:
 					renderer = SplatRendererScript.new()
 					renderer.name = "SplatRenderer"
@@ -186,13 +211,17 @@ func _update_local_renderer() -> void:
 				renderer.load_splats(loaded_splats)
 
 
+## Runs 3D semantic segmentation on this splattable using the specified prompt.
+## Emits [signal segmentation_started] and [signal segmentation_completed].
 func run_segmentation(prompt: String) -> void:
 	print("FoveaSplattable: Démarrage de la segmentation pour le prompt : '", prompt, "'...")
-	var SegmentationBridgeScript = load("res://addons/foveacore/scripts/advanced/fovea_segmentation_bridge.gd")
+	var SegmentationBridgeScript: GDScript = load("res://addons/foveacore/scripts/advanced/fovea_segmentation_bridge.gd")
 	if not SegmentationBridgeScript:
 		push_error("FoveaSplattable: Impossible de charger le script FoveaSegmentationBridge.")
+		segmentation_completed.emit(false)
 		return
-	var bridge = SegmentationBridgeScript.new()
+	segmentation_started.emit(prompt)
+	var bridge: Object = SegmentationBridgeScript.new()
 	bridge.use_simulation = true # La simulation locale fonctionne de manière autonome
 	bridge.segment_splattable(self, prompt, func(success: bool):
 		if success:
@@ -200,21 +229,28 @@ func run_segmentation(prompt: String) -> void:
 			_update_local_renderer()
 		else:
 			push_error("FoveaSplattable: Échec de la segmentation.")
+		segmentation_completed.emit(success)
 	)
 
 
+## Converts and compresses the loaded Gaussian splats into a native binary [code].fovea[/code] asset.
+## Saves the output to [param dest_path]. Returns [code]true[/code] if successful.
+## Emits [signal conversion_started] and [signal conversion_completed].
 func export_to_fovea(dest_path: String) -> bool:
 	if loaded_splats.is_empty():
 		push_error("FoveaSplattable: Aucun splat chargé à exporter.")
+		conversion_completed.emit(false, dest_path)
 		return false
 	
 	print("FoveaSplattable: Conversion et compression au format .fovea vers : ", dest_path)
-	var FoveaAssetWriterScript = load("res://addons/foveacore/scripts/fovea_asset_writer.gd")
+	conversion_started.emit(dest_path)
+	var FoveaAssetWriterScript: GDScript = load("res://addons/foveacore/scripts/fovea_asset_writer.gd")
 	if not FoveaAssetWriterScript:
 		push_error("FoveaSplattable: Script FoveaAssetWriter introuvable.")
+		conversion_completed.emit(false, dest_path)
 		return false
 		
-	var success = FoveaAssetWriterScript.write_fovea_asset(dest_path, loaded_splats, null, style_override, {
+	var success: bool = FoveaAssetWriterScript.write_fovea_asset(dest_path, loaded_splats, null, style_override, {
 		"session": "Imported & Compressed",
 		"exported_by": "FoveaSplattable Editor Tool",
 		"timestamp": Time.get_unix_time_from_system()
@@ -226,6 +262,7 @@ func export_to_fovea(dest_path: String) -> bool:
 	else:
 		push_error("FoveaSplattable: Échec de l'écriture de l'asset .fovea.")
 	
+	conversion_completed.emit(success, dest_path)
 	return success
 
 
@@ -256,7 +293,7 @@ func _capture_mesh_reference() -> void:
 ## Charger les splats depuis le fichier PLY configuré
 func _load_splats_from_ply() -> void:
 	print("FoveaSplattable: Chargement PLY depuis '", splat_file_path, "'...")
-	var gaussians = _PlyLoaderScript.load_gaussians_from_ply(splat_file_path)
+	var gaussians: Variant = _PlyLoaderScript.load_gaussians_from_ply(splat_file_path)
 	if gaussians == null or gaussians.is_empty():
 		push_error("FoveaSplattable: PLYLoader returned empty")
 		return
@@ -269,15 +306,15 @@ func _load_splats_from_ply() -> void:
 ## Génère et attache une collision physique ConcavePolygonShape3D
 func _generate_collision_shape() -> void:
 	print("FoveaSplattable: Génération de la collision physique via FoveaVoxelizer...")
-	var collision_shape = FoveaVoxelizer.generate_collision_shape(splat_file_path, voxel_size, opacity_threshold)
+	var collision_shape: Shape3D = FoveaVoxelizer.generate_collision_shape(splat_file_path, voxel_size, opacity_threshold)
 	if collision_shape == null:
 		push_warning("FoveaSplattable: Impossible de générer la collision pour " + splat_file_path)
 		return
 		
-	var static_body = StaticBody3D.new()
+	var static_body: StaticBody3D = StaticBody3D.new()
 	static_body.name = "SplatCollisionBody"
 	
-	var collision_node = CollisionShape3D.new()
+	var collision_node: CollisionShape3D = CollisionShape3D.new()
 	collision_node.name = "SplatCollisionShape"
 	collision_node.shape = collision_shape
 	
@@ -286,10 +323,12 @@ func _generate_collision_shape() -> void:
 	print("FoveaSplattable: Collision physique attachée avec succès au nœud.")
 
 
+## Sets the local splat density multiplier, clamped between [code]0.1[/code] and [code]5.0[/code].
 func set_density(density: float) -> void:
 	splat_density = clamp(density, 0.1, 5.0)
 
 
+## Checks if the splattable is visible to the given camera frustum (AABB/position culling).
 func is_visible_to_camera(camera: Camera3D) -> bool:
 	if camera == null:
 		return true
@@ -317,6 +356,82 @@ func is_visible_to_camera(camera: Camera3D) -> bool:
 	return camera.is_position_in_frustum(global_position)
 
 
+func get_aabb() -> AABB:
+	if original_mesh != null:
+		return original_mesh.get_aabb()
+	
+	if splat_file_path != "" and ClassDB.can_instantiate("FoveaAssetLoader"):
+		var loader: Object = ClassDB.instantiate("FoveaAssetLoader")
+		if loader and loader.has_method("get_asset_aabb"):
+			var aabb_val: Variant = loader.get_asset_aabb(splat_file_path)
+			if aabb_val is AABB:
+				return aabb_val
+				
+	# Fallback box
+	return AABB(Vector3(-1.0, -1.0, -1.0), Vector3(2.0, 2.0, 2.0))
+
+
+## Procedurally generates Gaussian splats from the vertex and normal arrays of the attached mesh.
+## Emits [signal generation_started] and [signal generation_completed].
+func generate_splats_now() -> void:
+	print("FoveaSplattable: Generating procedural splats...")
+	_capture_mesh_reference()
+	if original_mesh == null:
+		push_error("FoveaSplattable: Cannot generate splats, no mesh found.")
+		generation_completed.emit(0)
+		return
+	
+	generation_started.emit()
+	var triangles: Array = []
+	var mesh: Mesh = original_mesh
+	
+	for surface_idx in range(mesh.get_surface_count()):
+		var mesh_data: Array = mesh.surface_get_arrays(surface_idx)
+		if mesh_data.size() < Mesh.ARRAY_INDEX:
+			continue
+		
+		var vertices: PackedVector3Array = mesh_data[Mesh.ARRAY_VERTEX]
+		var normals: PackedVector3Array = mesh_data[Mesh.ARRAY_NORMAL] if mesh_data[Mesh.ARRAY_NORMAL] else PackedVector3Array()
+		var indices: PackedInt32Array = mesh_data[Mesh.ARRAY_INDEX]
+		
+		for i in range(0, indices.size() - 2, 3):
+			var idx0: int = indices[i]
+			var idx1: int = indices[i + 1]
+			var idx2: int = indices[i + 2]
+			
+			var tri: SurfaceExtractor.VisibleTriangle = SurfaceExtractor.VisibleTriangle.new()
+			tri.indices = [idx0, idx1, idx2]
+			tri.vertices = [vertices[idx0], vertices[idx1], vertices[idx2]]
+			
+			var n0: Vector3 = normals[idx0] if normals.size() > idx0 else Vector3.UP
+			var n1: Vector3 = normals[idx1] if normals.size() > idx1 else Vector3.UP
+			var n2: Vector3 = normals[idx2] if normals.size() > idx2 else Vector3.UP
+			tri.normals = [n0, n1, n2]
+			
+			tri.center = (tri.vertices[0] + tri.vertices[1] + tri.vertices[2]) / 3.0
+			tri.area = SurfaceExtractor.triangle_area(tri.vertices)
+			tri.distance_to_camera = 1.0
+			triangles.append(tri)
+			
+	var config: SplatGenerator.SplatConfig = SplatGenerator.SplatConfig.new()
+	config.splats_per_triangle = 3
+	config.min_radius = 0.02
+	config.max_radius = 0.3
+	
+	var gen_res: SplatGenerator.SplatGenerationResult = SplatGenerator.generate_splats_from_triangles(
+		triangles,
+		Vector3.ZERO,
+		config,
+		splat_density
+	)
+	
+	loaded_splats = gen_res.splats
+	has_ply_splats = true
+	print("FoveaSplattable: Procedurally generated %d splats." % loaded_splats.size())
+	_update_local_renderer()
+	generation_completed.emit(loaded_splats.size())
+
+
 class SplatSpatialHashGrid extends RefCounted:
 	var cell_size: float
 	var grid: Dictionary = {} # Vector3i -> Array[int]
@@ -324,8 +439,8 @@ class SplatSpatialHashGrid extends RefCounted:
 	func _init(p_cell_size: float, splats: Array[GaussianSplat]) -> void:
 		cell_size = p_cell_size
 		for i in range(splats.size()):
-			var pos = splats[i].position
-			var cell = Vector3i(
+			var pos: Vector3 = splats[i].position
+			var cell: Vector3i = Vector3i(
 				int(floor(pos.x / cell_size)),
 				int(floor(pos.y / cell_size)),
 				int(floor(pos.z / cell_size))
@@ -336,12 +451,12 @@ class SplatSpatialHashGrid extends RefCounted:
 
 	func get_indices_in_radius(center: Vector3, radius: float) -> Array[int]:
 		var results: Array[int] = []
-		var min_cell = Vector3i(
+		var min_cell: Vector3i = Vector3i(
 			int(floor((center.x - radius) / cell_size)),
 			int(floor((center.y - radius) / cell_size)),
 			int(floor((center.z - radius) / cell_size))
 		)
-		var max_cell = Vector3i(
+		var max_cell: Vector3i = Vector3i(
 			int(floor((center.x + radius) / cell_size)),
 			int(floor((center.y + radius) / cell_size)),
 			int(floor((center.z + radius) / cell_size))
@@ -349,7 +464,7 @@ class SplatSpatialHashGrid extends RefCounted:
 		for x in range(min_cell.x, max_cell.x + 1):
 			for y in range(min_cell.y, max_cell.y + 1):
 				for z in range(min_cell.z, max_cell.z + 1):
-					var cell = Vector3i(x, y, z)
+					var cell: Vector3i = Vector3i(x, y, z)
 					if grid.has(cell):
 						results.append_array(grid[cell])
 		return results
