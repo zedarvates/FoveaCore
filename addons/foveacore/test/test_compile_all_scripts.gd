@@ -15,6 +15,8 @@ func _init() -> void:
 	await create_timer(0.1).timeout
 	_check_directory("res://addons/foveacore/scripts")
 	_check_directory("res://addons/foveacore/test")
+	if DirAccess.dir_exists_absolute("res://addons/fovea_labs"):
+		_check_directory("res://addons/fovea_labs")
 	if DirAccess.dir_exists_absolute("res://test"):
 		_check_directory("res://test")
 	

@@ -30,7 +30,7 @@ project/assembly_name="FoveaEngine"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/fovea_engine/plugin.cfg", "res://addons/foveacore/plugin.cfg")
+enabled=PackedStringArray("res://addons/fovea_labs/plugin.cfg", "res://addons/foveacore/plugin.cfg")
 
 [fovea]
 

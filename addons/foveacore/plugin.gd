@@ -19,40 +19,18 @@ const AUTOLOADS: Array[Array] = [
 
 # Table des types personnalisés : [nom, classe de base, chemin du script, chemin de l'icône ou ""]
 # L'enregistrement et le retrait parcourent la même table : impossible d'oublier un cleanup.
+#
+# Périmètre volontairement minimal (voir plans/PHASE0_FONDATION_TASKS.md, B3) :
+# - Les outils expérimentaux (brushes, cloth, decals, multiplayer, neural...) sont
+#   enregistrés par le plugin séparé addons/fovea_labs.
+# - Les utilitaires internes (PLYLoader, GPUCullerPipeline, FoveaVoxelizer,
+#   sous-systèmes du manager, etc.) ont tous un class_name global : ils restent
+#   accessibles partout en code sans add_custom_type.
 const CUSTOM_TYPES: Array[Array] = [
 	# API publique v1 — le nœud principal (voir plans/PHASE0_FONDATION_TASKS.md, A1)
 	["FoveaSplat3D", "Node3D", "res://addons/foveacore/scripts/fovea_splat_3d.gd", "res://addons/foveacore/icons/fovea_splattable.svg"],
 	["FoveaAsset", "Resource", "res://addons/foveacore/scripts/fovea_asset.gd", ""],
 	["FoveaSplattable", "Node3D", "res://addons/foveacore/scripts/fovea_splattable.gd", "res://addons/foveacore/icons/fovea_splattable.svg"],
-	# Advanced Components
-	["SplatBrush", "Node3D", "res://addons/foveacore/scripts/advanced/splat_brush_engine.gd", ""],
-	["SplatVRBrush", "Node3D", "res://addons/foveacore/scripts/advanced/splat_vr_brush.gd", ""],
-	["PhysicsProxy", "Node3D", "res://addons/foveacore/scripts/advanced/physics_proxy_generator.gd", ""],
-	["NeuralStyle", "Resource", "res://addons/foveacore/scripts/advanced/neural_style_bridge.gd", ""],
-	["FoveaSegmentation", "Resource", "res://addons/foveacore/scripts/advanced/fovea_segmentation_bridge.gd", ""],
-	["SplatLightingAnimator", "Node", "res://addons/foveacore/scripts/advanced/splat_lighting_animator.gd", ""],
-	["PLYLoader", "RefCounted", "res://addons/foveacore/scripts/reconstruction/ply_loader.gd", ""],
-	["GPUCullerPipeline", "RefCounted", "res://addons/foveacore/scripts/advanced/gpu_culler_pipeline.gd", ""],
-	["GPUNoiseGenerator", "Node", "res://addons/foveacore/scripts/materials/gpu_noise_generator.gd", ""],
-	["StudioPreviewManager", "Node", "res://addons/foveacore/scripts/reconstruction/studio_preview_manager.gd", ""],
-	["StudioRoiPainter", "AcceptDialog", "res://addons/foveacore/scripts/reconstruction/studio_roi_painter.gd", ""],
-	["WorldMirrorCameraImporter", "Node", "res://addons/foveacore/scripts/reconstruction/worldmirror_camera_importer.gd", ""],
-	["WorldMirrorDepthLoader", "Node", "res://addons/foveacore/scripts/reconstruction/worldmirror_depth_loader.gd", ""],
-	# Sprint 4 — Clay Deformer & Physics Tools
-	["FoveaClayDeformer", "Node3D", "res://addons/foveacore/scripts/advanced/fovea_clay_deformer.gd", ""],
-	["FoveaSplatCloth", "Node3D", "res://addons/foveacore/scripts/advanced/fovea_splat_cloth.gd", ""],
-	["FoveaVoxelizer", "RefCounted", "res://addons/foveacore/scripts/advanced/fovea_voxelizer.gd", ""],
-	["FoveaSplatCleaner", "RefCounted", "res://addons/foveacore/scripts/advanced/fovea_splat_cleaner.gd", ""],
-	["SplatInteractionController", "Node", "res://addons/foveacore/scripts/advanced/splat_interaction_controller.gd", ""],
-	["FoveaMultiplayerSync", "Node", "res://addons/foveacore/scripts/vr/fovea_multiplayer_sync.gd", ""],
-	["SplatDecalTool", "Node3D", "res://addons/foveacore/scripts/advanced/splat_decal_tool.gd", ""],
-	# Phase 3 — Global Splat Instancing
-	["FoveaInstancedSplatRenderer", "MultiMeshInstance3D", "res://addons/foveacore/scripts/advanced/fovea_instanced_splat_renderer.gd", ""],
-	["FoveaInstancedCuller", "RefCounted", "res://addons/foveacore/scripts/advanced/fovea_instanced_culler.gd", ""],
-	# Manager Sub-Systems (refactoring God Object)
-	["FoveaVRSubsystem", "Node", "res://addons/foveacore/scripts/fovea_vr_subsystem.gd", ""],
-	["FoveaFoveatedSubsystem", "Node", "res://addons/foveacore/scripts/fovea_foveated_subsystem.gd", ""],
-	["FoveaSplatSubsystem", "Node", "res://addons/foveacore/scripts/fovea_splat_subsystem.gd", ""],
 ]
 
 # Custom Resource Format Loader and Saver for .fovea binary format
@@ -116,7 +94,7 @@ func _enter_tree():
 	context_menu_plugin = preload("res://addons/foveacore/scripts/editor/fovea_context_menu_plugin.gd").new(self)
 	add_context_menu_plugin(EditorContextMenuPlugin.CONTEXT_SLOT_SCENE_TREE, context_menu_plugin)
 
-	print("FoveaCore plugin loaded — Eye-tracking, Physics, Neural, PLY Loader, Clay Deformer (Sprint 4)")
+	print("FoveaCore plugin loaded — splat rendering, foveated VR, StudioTo3D (experimental tools: enable the FoveaLabs plugin)")
 
 	# Add the StudioTo3D Panel.
 	# Note : plus de wizard modal à l'activation — si les outils externes ne sont pas
