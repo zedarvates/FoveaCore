@@ -8,6 +8,7 @@ const _PCVisualizerScript = preload("res://addons/foveacore/scripts/reconstructi
 const _SplatRendererScript = preload("res://addons/foveacore/scripts/reconstruction/splat_renderer.gd")
 const _PLYLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/ply_loader.gd")
 const _GaussianSplatScript = preload("res://addons/foveacore/scripts/reconstruction/gaussian_splat.gd")
+const _ConfigWizardScript = preload("res://addons/foveacore/scripts/editor/fovea_config_wizard.gd")
 
 var manager: FoveaReconstructionManager = null
 var current_session: ReconstructionSession = null
@@ -47,6 +48,7 @@ const SPINNERS: Array[String] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦"
 @onready var run_button: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Pipeline/Run")
 @onready var auto_run_check: CheckBox = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Pipeline/AutoRun")
 @onready var roi_button: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ROIRow/ROIButton")
+@onready var auto_roi_button: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ROIRow/AutoROIButton")
 @onready var save_button: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/HeaderBox/Save")
 @onready var load_button: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/HeaderBox/Load")
 @onready var reset_button: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/HeaderBox/Reset")
@@ -84,7 +86,12 @@ var floaters_detector: FloatersDetector = null
 var current_renderer: _SplatRendererScript = null  # Référence au renderer 3D actuel
 var dry_run_check: CheckBox = null
 
+# Bannière non bloquante affichée quand les outils externes ne sont pas configurés
+# (remplace le wizard modal qui s'ouvrait à l'activation du plugin)
+var _config_banner: PanelContainer = null
+
 func _ready() -> void:
+	_setup_config_banner()
 	floaters_detector = FloatersDetector.new()
 	add_child(floaters_detector)
 	
@@ -122,6 +129,7 @@ func _ready() -> void:
 	_safe_connect_btn(preview_button, _on_preview_pressed)
 	_safe_connect_btn(run_button, _on_run_pressed)
 	_safe_connect_btn(roi_button, _on_roi_pressed)
+	_safe_connect_btn(auto_roi_button, _on_auto_roi_pressed)
 	_safe_connect_btn(reset_button, _on_reset_pressed)
 	_safe_connect_btn(reload_ply_btn, _on_reload_ply_pressed)
 	_safe_connect_btn(export_btn, _on_export_pressed)
@@ -134,6 +142,33 @@ func _ready() -> void:
 	
 	_safe_connect_btn(clear_logs_btn, _on_clear_logs_pressed)
 	_safe_connect_btn(popout_logs_btn, _on_popout_logs_pressed)
+	
+	# Dynamic log controls and styling setup
+	var hbox = get_node_or_null("VBoxMain/Tabs/Logs/HBoxLogButtons")
+	if hbox:
+		var copy_btn = Button.new()
+		copy_btn.name = "CopyLogs"
+		copy_btn.text = "Copy Logs"
+		copy_btn.tooltip_text = "Copy all logs to the clipboard"
+		copy_btn.pressed.connect(_on_copy_logs_pressed)
+		hbox.add_child(copy_btn)
+		
+		var export_btn = Button.new()
+		export_btn.name = "ExportLogs"
+		export_btn.text = "Export Logs (.txt)"
+		export_btn.tooltip_text = "Save all logs to a text file"
+		export_btn.pressed.connect(_on_export_logs_pressed)
+		hbox.add_child(export_btn)
+		
+	if log_text:
+		var highlighter = CodeHighlighter.new()
+		highlighter.add_color_region("❌", "", Color(1.0, 0.35, 0.35), true)
+		highlighter.add_color_region("✅", "", Color(0.35, 1.0, 0.35), true)
+		highlighter.add_color_region("⚠️", "", Color(1.0, 0.85, 0.35), true)
+		highlighter.add_color_region("ERROR:", "", Color(1.0, 0.35, 0.35), true)
+		highlighter.add_color_region("WARNING:", "", Color(1.0, 0.85, 0.35), true)
+		highlighter.add_color_region("[", "]", Color(0.6, 0.6, 0.6), false)
+		log_text.syntax_highlighter = highlighter
 	
 	if threshold_slider:
 		threshold_slider.value_changed.connect(_on_threshold_changed)
@@ -498,6 +533,77 @@ func _on_roi_pressed() -> void:
 	)
 	add_child(painter)
 	painter.popup_centered()
+
+func _on_auto_roi_pressed() -> void:
+	if video_path_edit.text.is_empty():
+		_log("Error: Select a video first to detect Auto-ROI.")
+		return
+		
+	_log("Detecting Auto-ROI using AI/heuristics...")
+	_ensure_session()
+	if manager == null or manager.processor == null:
+		_log("Error: Processor or ReconstructionManager not ready.")
+		return
+		
+	var img: Image = await manager.processor.get_preview_frame(video_path_edit.text)
+	if img == null:
+		_log("Error: Could not extract preview frame for Auto-ROI (check FFmpeg).")
+		return
+
+	# Save preview image to a temp location for the python script
+	var temp_path: String = OS.get_user_data_dir() + "/fovea_auto_roi_temp.png"
+	var save_err: Error = img.save_png(temp_path)
+	if save_err != OK:
+		_log("Error: Failed to save temporary image on disk.")
+		return
+		
+	# Retrieve python executable path
+	var python_bin: String = manager.python_path if manager else "python"
+	var script_path: String = ProjectSettings.globalize_path("res://tools/auto_roi.py")
+	
+	# Check if custom model path exists (e.g. for offline MobileNet-SAM ONNX)
+	var model_path: String = ProjectSettings.globalize_path("res://addons/foveacore/models/mobilenet_sam.onnx")
+	var args: Array[String] = [script_path, "--input", ProjectSettings.globalize_path(temp_path)]
+	if FileAccess.file_exists(model_path):
+		args.append_array(["--model", model_path])
+		
+	_log("Running Auto-ROI backend process: " + python_bin + " " + " ".join(args))
+	
+	var output: Array = []
+	var exit_code: int = OS.execute(python_bin, args, output, true)
+	
+	if exit_code == 0 and not output.is_empty():
+		var json: JSON = JSON.new()
+		var raw_output: String = output[0]
+		var start_idx = raw_output.find("{")
+		var end_idx = raw_output.rfind("}")
+		var json_str = raw_output
+		if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+			json_str = raw_output.substr(start_idx, end_idx - start_idx + 1)
+		if json.parse(json_str) == OK:
+			var res: Dictionary = json.data
+			if res.has("error"):
+				_log("Auto-ROI AI error: " + str(res["error"]))
+			elif res.has("x") and res.has("y") and res.has("width") and res.has("height"):
+				var rect := Rect2i(int(res["x"]), int(res["y"]), int(res["width"]), int(res["height"]))
+				current_session.roi_rect = rect
+				_log("✅ Auto-ROI set: " + str(rect) + " (Method: " + str(res.get("method", "unknown")) + ")")
+				
+				# Enable show ROI toggle to visualize the new bounding box
+				if roi_toggle:
+					roi_toggle.button_pressed = true
+				if _preview_manager:
+					_preview_manager.on_show_roi_toggled(true)
+			else:
+				_log("Error: Auto-ROI script returned invalid format: " + output[0])
+		else:
+			_log("Error: Failed to parse Auto-ROI output JSON: " + output[0])
+	else:
+		_log("Error: Auto-ROI python process failed with exit code " + str(exit_code) + ". Output: " + str(output))
+		
+	# Clean up temp file
+	if FileAccess.file_exists(temp_path):
+		DirAccess.remove_absolute(temp_path)
 
 func _on_browse_pressed() -> void:
 	var dialog = FileDialog.new()
@@ -1268,6 +1374,16 @@ func _on_popout_pressed() -> void:
 	popout_edit.text = log_text.text if log_text else ""
 	popout_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	popout_edit.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	
+	var highlighter = CodeHighlighter.new()
+	highlighter.add_color_region("❌", "", Color(1.0, 0.35, 0.35), true)
+	highlighter.add_color_region("✅", "", Color(0.35, 1.0, 0.35), true)
+	highlighter.add_color_region("⚠️", "", Color(1.0, 0.85, 0.35), true)
+	highlighter.add_color_region("ERROR:", "", Color(1.0, 0.35, 0.35), true)
+	highlighter.add_color_region("WARNING:", "", Color(1.0, 0.85, 0.35), true)
+	highlighter.add_color_region("[", "]", Color(0.6, 0.6, 0.6), false)
+	popout_edit.syntax_highlighter = highlighter
+	
 	window.add_child(popout_edit)
 	
 	var updater := func(line: String) -> void:
@@ -1285,6 +1401,38 @@ func _on_popout_pressed() -> void:
 	window.popup_centered()
 
 
+func _on_copy_logs_pressed() -> void:
+	if log_text == null or log_text.text.is_empty():
+		_log("⚠️ Log text is empty.")
+		return
+	DisplayServer.clipboard_set(log_text.text)
+	_log("✅ Logs copied to clipboard.")
+
+
+func _on_export_logs_pressed() -> void:
+	if log_text == null or log_text.text.is_empty():
+		_log("⚠️ Cannot export: Log text is empty.")
+		return
+		
+	var dialog = FileDialog.new()
+	dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+	dialog.access = FileDialog.ACCESS_FILESYSTEM
+	dialog.filters = PackedStringArray(["*.txt ; Text File"])
+	dialog.title = "Export Logs to File"
+	dialog.current_file = "reconstruction_log.txt"
+	dialog.file_selected.connect(func(path: String):
+		var file = FileAccess.open(path, FileAccess.WRITE)
+		if file:
+			file.store_string(log_text.text)
+			file.close()
+			_log("✅ Logs exported successfully to %s" % path)
+		else:
+			_log("❌ Failed to export logs to %s" % path)
+	)
+	add_child(dialog)
+	dialog.popup_centered(Vector2i(800, 600))
+
+
 func _on_pipeline_state_changed(is_active: bool) -> void:
 	_is_running = is_active
 	if not _is_running:
@@ -1298,8 +1446,50 @@ func _on_visual_style_changed(index: int) -> void:
 	if current_session:
 		var opt = find_child("VisualStyleOption", true, false) as OptionButton
 		if opt:
-			current_session.visual_style = opt.get_item_text(index)
-			_log("Visual style set to: " + current_session.visual_style)
+			var style_name = opt.get_item_text(index)
+			current_session.visual_style = style_name
+			_log("Visual style set to: " + style_name)
+			
+			# Apply predefined generation and rendering presets automatically
+			match style_name:
+				"Realistic":
+					current_session.splat_count_density = 1.0
+					current_session.splat_shape = "Triangle"
+					current_session.enable_wind = false
+					current_session.wind_speed = 0.0
+					current_session.wind_strength = 0.0
+				"Cartoon":
+					current_session.splat_count_density = 0.5
+					current_session.splat_shape = "Quad"
+					current_session.enable_wind = true
+					current_session.wind_speed = 1.0
+					current_session.wind_strength = 0.03
+				"Pixelated":
+					current_session.splat_count_density = 0.8
+					current_session.splat_shape = "Quad"
+					current_session.enable_wind = false
+					current_session.wind_speed = 0.0
+					current_session.wind_strength = 0.0
+				"Watercolor":
+					current_session.splat_count_density = 0.7
+					current_session.splat_shape = "Triangle"
+					current_session.enable_wind = true
+					current_session.wind_speed = 1.8
+					current_session.wind_strength = 0.12
+				"Oil":
+					current_session.splat_count_density = 0.7
+					current_session.splat_shape = "Triangle"
+					current_session.enable_wind = true
+					current_session.wind_speed = 1.2
+					current_session.wind_strength = 0.08
+				"Crosshatch":
+					current_session.splat_count_density = 1.0
+					current_session.splat_shape = "Triangle"
+					current_session.enable_wind = false
+					current_session.wind_speed = 0.0
+					current_session.wind_strength = 0.0
+			
+			_update_ui_from_session()
 			_apply_style_to_active_renderer()
 
 func _on_splat_shape_changed(index: int) -> void:
@@ -1381,6 +1571,10 @@ func _apply_style_to_active_renderer() -> void:
 				if mat.shader == null or mat.shader.resource_path != "res://addons/foveacore/shaders/splat_render_artistic.gdshader":
 					mat.shader = preload("res://addons/foveacore/shaders/splat_render_artistic.gdshader")
 				mat.set_shader_parameter("art_mode", mode_idx)
+				# Bind brush textures (Sponge, Drybrush, Stipple)
+				var TexturedSplatGeneratorScript = load("res://addons/foveacore/scripts/advanced/textured_splat_generator.gd")
+				if TexturedSplatGeneratorScript:
+					TexturedSplatGeneratorScript.apply_brush_textures(mat)
 			else:
 				if mat.shader == null or mat.shader.resource_path != "res://addons/foveacore/shaders/splat_render_triangle.gdshader":
 					mat.shader = preload("res://addons/foveacore/shaders/splat_render_triangle.gdshader")
@@ -1390,4 +1584,126 @@ func _apply_style_to_active_renderer() -> void:
 			mat.set_shader_parameter("wind_speed", current_session.wind_speed)
 			mat.set_shader_parameter("wind_strength", current_session.wind_strength)
 			
+			if renderer.has_method("update_material_shader"):
+				renderer.update_material_shader()
+			
 			_log("Applied visual style '%s' and wind settings to active renderer." % current_session.visual_style)
+
+
+func set_session_path_from_splattable(splattable: FoveaSplattable) -> void:
+	if splattable == null or splattable.splat_file_path.is_empty():
+		return
+	var path = splattable.splat_file_path
+	# Extrait le dossier de session s'il existe
+	var workspace_dir = ""
+	var parts = path.split("/")
+	for i in range(parts.size()):
+		if parts[i] == "reconstructions" and i + 1 < parts.size():
+			workspace_dir = "res://reconstructions/" + parts[i+1]
+			break
+	if workspace_dir.is_empty():
+		workspace_dir = path.get_base_dir()
+		
+	# Charger la session correspondante
+	var session_json = workspace_dir.path_join("session.json")
+	if FileAccess.file_exists(session_json):
+		var session = manager.load_session(session_json)
+		if session:
+			current_session = session
+			_update_ui_from_session()
+			_log("✅ Selected session loaded from splattable path: " + session.session_name)
+	else:
+		_log("⚠️ Selected splattable is not part of a reconstruction session.")
+
+
+func _can_drop_data(at_position: Vector2, data: Variant) -> bool:
+	if typeof(data) == TYPE_DICTIONARY and data.has("type") and data["type"] == "files":
+		var files = data["files"]
+		if files is PackedStringArray or files is Array:
+			for file in files:
+				if file.ends_with(".ply") or file.ends_with(".fovea"):
+					return true
+	return false
+
+
+func _drop_data(at_position: Vector2, data: Variant) -> void:
+	if typeof(data) == TYPE_DICTIONARY and data.has("type") and data["type"] == "files":
+		var files = data["files"]
+		for file in files:
+			if file.ends_with(".ply") or file.ends_with(".fovea"):
+				_handle_file_drop(file)
+				break
+
+
+func _handle_file_drop(file_path: String) -> void:
+	var root = EditorInterface.get_edited_scene_root()
+	if root == null:
+		_log("⚠️ Cannot drop file: No active scene opened in editor.")
+		return
+		
+	var splattable_script = preload("res://addons/foveacore/scripts/fovea_splattable.gd")
+	var splattable = Node3D.new()
+	splattable.set_script(splattable_script)
+	
+	# Configure name and paths
+	var base_name = file_path.get_file().get_basename().to_pascal_case()
+	splattable.name = base_name + "Splat"
+	splattable.splat_file_path = file_path
+	
+	root.add_child(splattable)
+	splattable.owner = root
+	
+	# Select the new node
+	EditorInterface.get_selection().clear()
+	EditorInterface.get_selection().add_node(splattable)
+	
+	_log("✅ Instantiated FoveaSplattable node in scene: '%s' with splats loaded from: %s" % [splattable.name, file_path])
+
+
+# ── Bannière de configuration des outils externes ──────────────────────────
+# Affichée en tête du panneau tant que le fichier de réglages utilisateur
+# n'existe pas. Ne bloque jamais l'éditeur : le wizard ne s'ouvre qu'à la demande.
+
+func _setup_config_banner() -> void:
+	var settings_path: String = OS.get_user_data_dir() + "/fovea_engine_user_settings.cfg"
+	if FileAccess.file_exists(settings_path):
+		return
+	var vbox_main: Control = get_node_or_null("VBoxMain")
+	if vbox_main == null:
+		return
+
+	_config_banner = PanelContainer.new()
+	_config_banner.name = "ConfigBanner"
+	var row: HBoxContainer = HBoxContainer.new()
+	_config_banner.add_child(row)
+
+	var msg: Label = Label.new()
+	msg.text = "⚠ External tools (FFmpeg / COLMAP) are not configured — required for reconstruction."
+	msg.autowrap_mode = TextServer.AUTOWRAP_WORD
+	msg.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(msg)
+
+	var setup_btn: Button = Button.new()
+	setup_btn.text = "Setup…"
+	setup_btn.tooltip_text = "Open the tools detection wizard"
+	setup_btn.pressed.connect(_on_config_banner_setup_pressed)
+	row.add_child(setup_btn)
+
+	var dismiss_btn: Button = Button.new()
+	dismiss_btn.text = "✕"
+	dismiss_btn.tooltip_text = "Dismiss for this session"
+	dismiss_btn.pressed.connect(_dismiss_config_banner)
+	row.add_child(dismiss_btn)
+
+	vbox_main.add_child(_config_banner)
+	vbox_main.move_child(_config_banner, 0)
+
+func _on_config_banner_setup_pressed() -> void:
+	var wizard: AcceptDialog = _ConfigWizardScript.new()
+	add_child(wizard)
+	wizard.popup_centered()
+
+func _dismiss_config_banner() -> void:
+	if _config_banner != null and is_instance_valid(_config_banner):
+		_config_banner.queue_free()
+		_config_banner = null
