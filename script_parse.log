@@ -1,4 +1,0 @@
-Godot Engine v4.7.dev5.mono.official.a8643700c - https://godotengine.org
-
-ERROR: Can't load the script "addons/foveacore/scripts/advanced/fovea_thread_pool.gd" as it doesn't inherit from SceneTree or MainLoop.
-   at: start (main/main.cpp:4360)
