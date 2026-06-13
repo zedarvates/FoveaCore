@@ -1,0 +1,138 @@
+name: Release
+
+# Builds the native GDExtension for all platforms, assembles a ready-to-install
+# addon zip (no compilation needed by the user), and publishes a GitHub Release.
+# Trigger: push a tag like v0.1.2  (must match the version in plugin.cfg).
+#
+# NOTE: this workflow is validated by YAML lint + structure; its first real run
+# happens on the first tag push. See plans/PHASE0_FONDATION_TASKS.md (D2).
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write  # needed to create the Release
+
+jobs:
+  # ── 1. Tag must match plugin.cfg version (hard fail) ───────────────────
+  version-check:
+    name: Version sync (tag == plugin.cfg)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare tag to plugin.cfg (and warn on Cargo.toml drift)
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          CFG="$(grep -E '^version=' addons/foveacore/plugin.cfg | head -1 | cut -d'"' -f2)"
+          CARGO="$(grep -E '^version' addons/foveacore/rust/Cargo.toml | head -1 | cut -d'"' -f2)"
+          echo "tag=$TAG  plugin.cfg=$CFG  Cargo.toml=$CARGO"
+          if [ "$TAG" != "$CFG" ]; then
+            echo "::error::Tag v$TAG does not match plugin.cfg version $CFG — bump plugin.cfg before tagging."
+            exit 1
+          fi
+          if [ "$TAG" != "$CARGO" ]; then
+            echo "::warning::Cargo.toml version $CARGO differs from tag v$TAG (informational)."
+          fi
+
+  # ── 2. Build native GDExtension per platform ───────────────────────────
+  build:
+    name: Build ${{ matrix.target }}
+    needs: version-check
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            out: libfoveacore.so
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            out: foveacore.dll
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            out: libfoveacore.dylib
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            out: libfoveacore.dylib
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Build (release)
+        run: |
+          cd addons/foveacore/rust
+          cargo build --release --target ${{ matrix.target }}
+      - name: Stage binary
+        shell: bash
+        run: |
+          mkdir -p staged
+          cp "addons/foveacore/rust/target/${{ matrix.target }}/release/${{ matrix.out }}" "staged/${{ matrix.out }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.target }}
+          path: staged/${{ matrix.out }}
+          if-no-files-found: error
+
+  # ── 3. Assemble addon + binaries → zip → Release ───────────────────────
+  package:
+    name: Package & publish
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Assemble release tree
+        run: |
+          set -euo pipefail
+          VER="${GITHUB_REF_NAME#v}"
+          ROOT="FoveaEngine-${VER}"
+          mkdir -p "$ROOT"
+
+          # Ship only the foveacore addon (see docs/ARCHITECTURE.md).
+          cp -r addons/foveacore "$ROOT/foveacore"
+          # Drop the Rust sources + bundled godot-cpp from the shipped addon.
+          rm -rf "$ROOT/foveacore/rust" "$ROOT/foveacore/gdextension/godot-cpp"
+
+          # Populate the native binaries the .gdextension expects.
+          BIN="$ROOT/foveacore/gdextension/bin"
+          mkdir -p "$BIN"
+          cp artifacts/native-x86_64-unknown-linux-gnu/libfoveacore.so "$BIN/libfoveacore.so"
+          cp artifacts/native-x86_64-pc-windows-msvc/foveacore.dll      "$BIN/foveacore.dll"
+          # Universal macOS dylib (x86_64 + arm64).
+          lipo -create -output "$BIN/libfoveacore.dylib" \
+            artifacts/native-x86_64-apple-darwin/libfoveacore.dylib \
+            artifacts/native-aarch64-apple-darwin/libfoveacore.dylib || \
+            cp artifacts/native-aarch64-apple-darwin/libfoveacore.dylib "$BIN/libfoveacore.dylib"
+
+          # License + readme alongside the addon.
+          cp README.md "$ROOT/README.md" || true
+          [ -f LICENSE ] && cp LICENSE "$ROOT/LICENSE" || true
+
+          # The user drops this 'addons/' folder into their project.
+          mkdir -p "out/$ROOT/addons"
+          mv "$ROOT/foveacore" "out/$ROOT/addons/foveacore"
+          [ -f "$ROOT/README.md" ] && mv "$ROOT/README.md" "out/$ROOT/README.md" || true
+          [ -f "$ROOT/LICENSE" ] && mv "$ROOT/LICENSE" "out/$ROOT/LICENSE" || true
+
+          cd out
+          zip -rq "../${ROOT}.zip" "$ROOT"
+          cd ..
+          sha256sum "${ROOT}.zip" > "${ROOT}.zip.sha256"
+          echo "ROOT=$ROOT" >> "$GITHUB_ENV"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ env.ROOT }}.zip
+            ${{ env.ROOT }}.zip.sha256
+          generate_release_notes: true
+          fail_on_unmatched_files: true

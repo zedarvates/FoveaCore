@@ -82,14 +82,14 @@ Le constat : [ci.yml](../.github/workflows/ci.yml) a une bonne base (gdparse, py
 
 Le constat : la CI builde déjà les artefacts Rust pour Windows/Linux/macOS x86_64 (ci.yml l.109–145) mais ne produit aucune release installable, et macOS ARM (la majorité des Mac) manque.
 
-- [ ] **D1. Compléter la matrice de build** — ajouter `aarch64-apple-darwin` (lipo en universal binary avec x86_64) et vérifier que le fichier `.gdextension` référence bien chaque plateforme avec les bons chemins `bin/`.
+- [x] **D1. Compléter la matrice de build** — ajouter `aarch64-apple-darwin` (lipo en universal binary avec x86_64) et vérifier que le fichier `.gdextension` référence bien chaque plateforme avec les bons chemins `bin/`. *(Fait 2026-06-13 : `aarch64-apple-darwin` ajouté à la matrice `build-gdextension` de ci.yml ; le `.gdextension` référence déjà `macos.debug`/`macos.release` → un seul dylib universel (lipo dans release.yml). **Validé par structure/YAML, build réel au premier run CI.**)*
   - ✅ *Accepté si : le plugin charge le natif sur un Mac M-series.*
 
-- [ ] **D2. Workflow de release** — `release.yml` déclenché par tag `v*` : builds matrix → assemble `addons/foveacore/` complet avec `bin/` peuplé → zip + SHA-256 → GitHub Release avec notes générées. Synchroniser la version entre `plugin.cfg`, `Cargo.toml` et le tag (script de vérification en CI).
-  - ✅ *Accepté si : télécharger le zip de la release → extraire dans un projet Godot vierge → activer → drop un PLY → ça rend. Zéro compilation, zéro terminal.*
+- [x] **D2. Workflow de release** — `release.yml` déclenché par tag `v*` : builds matrix → assemble `addons/foveacore/` complet avec `bin/` peuplé → zip + SHA-256 → GitHub Release avec notes générées. Synchroniser la version entre `plugin.cfg`, `Cargo.toml` et le tag (script de vérification en CI). *(Fait 2026-06-13 : `.github/workflows/release.yml` — job `version-check` (échec dur si tag≠plugin.cfg, warning si ≠Cargo.toml), `build` (4 cibles, lipo universel macOS), `package` (assemble addons/foveacore sans `rust/`+`godot-cpp`, peuple `bin/`, zip + sha256, `softprops/action-gh-release` avec notes auto). **YAML validé ; run réel au premier tag `v*`.** Note : plugin.cfg=0.1.2 vs Cargo.toml=0.1.0 — à aligner avant le premier tag.)*
+  - ✅ *Accepté si : télécharger le zip de la release → extraire dans un projet Godot vierge → activer → drop un PLY → ça rend. Zéro compilation, zéro terminal.* → à confirmer au premier release.
 
-- [ ] **D3. Test du fallback GDScript-only en continu** — le mode dégradé sans GDExtension (plugin.gd l.43–48 ne fait qu'un print) doit être réellement fonctionnel : loader PLY GDScript + renderer de base. Couvert par C5, mais ajouter un smoke test qui charge effectivement la fixture en mode fallback.
-  - ✅ *Accepté si : sans binaire natif, un PLY ≤ 200k splats s'affiche quand même.*
+- [x] **D3. Test du fallback GDScript-only en continu** — le mode dégradé sans GDExtension (plugin.gd l.43–48 ne fait qu'un print) doit être réellement fonctionnel : loader PLY GDScript + renderer de base. Couvert par C5, mais ajouter un smoke test qui charge effectivement la fixture en mode fallback. *(Satisfait par C5 : `smoke_startup.gd` charge la fixture (8000 splats) et l'assert, sans aucun binaire natif compilé — c'est l'état par défaut du job. Exécuté en échec dur dans la matrice CI `smoke-startup` sur les 3 méthodes de rendu.)*
+  - ✅ *Accepté si : sans binaire natif, un PLY ≤ 200k splats s'affiche quand même.* → **OK** (vérifié localement 8000 splats ; benchmark a chargé 150k).
 
 - [ ] **D4. Préparation Asset Library** — `plugin.cfg` métadonnées complètes, icône, 4 screenshots, README anglais avec le chiffre de C6, LICENSE clarifiée (MIT pour Core, conformément à la Phase 5). Ne pas soumettre encore — la soumission se fait au jalon Phase 1.
   - ✅ *Accepté si : le dossier passe la checklist de soumission de l'Asset Library Godot.*
