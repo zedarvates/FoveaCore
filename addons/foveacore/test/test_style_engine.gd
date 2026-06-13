@@ -3,6 +3,11 @@ extends SceneTree
 ## Unit tests for StyleEngine
 ## Validates procedural material computation: colors, roughness, specular, bump, noise functions
 
+## Marks this suite as requiring a GPU/RenderingDevice for meaningful validation
+## (GPU noise generation). Routed to the "gpu" group by run_all_tests.gd.
+## See plans/PHASE0_FONDATION_TASKS.md (C1).
+const REQUIRES_GPU := true
+
 var _passed := 0
 var _failed := 0
 var _config: Object  # MaterialStyleConfig (inner class, created dynamically)
