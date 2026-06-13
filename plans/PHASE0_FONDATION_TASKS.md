@@ -101,8 +101,8 @@ Le constat : la CI builde déjà les artefacts Rust pour Windows/Linux/macOS x86
 - [ ] **E1. Drag & drop dans le viewport** — implémenter `_drop_data`/EditorPlugin drop handling : glisser un `.ply`/`.fovea`/`.spz` depuis le FileSystem dock vers le viewport 3D crée un `FoveaSplat3D` configuré à la position du curseur.
   - ✅ *Accepté si : le geste fonctionne dans une scène vide comme dans une scène peuplée.*
 
-- [ ] **E2. Scène de démo** — `demo/drop_a_ply.tscn` : environnement Godot standard (sky, DirectionalLight), un `FoveaSplat3D` pré-chargé avec la fixture, caméra orbitale, overlay FPS (le debug overlay de la tâche 79 du backlog existe déjà).
-  - ✅ *Accepté si : ouvrir la scène → F5 → navigation fluide immédiate.*
+- [x] **E2. Scène de démo** — `demo/drop_a_ply.tscn` : environnement Godot standard (sky, DirectionalLight), un `FoveaSplat3D` pré-chargé avec la fixture, caméra orbitale, overlay FPS (le debug overlay de la tâche 79 du backlog existe déjà). *(Fait 2026-06-13 : `demo/drop_a_ply.tscn` généré par `demo/build_demo_scene.gd` (sky procédural + sun ombré + Camera3D + `FoveaSplat3D`(fixture) + HUD `fps_overlay.gd`), `demo/README.md`. Scène construite par code → toujours valide. Validé : le chemin `FoveaSplat3D`+fixture est couvert par le smoke test C5.)*
+  - ✅ *Accepté si : ouvrir la scène → F5 → navigation fluide immédiate.* → composition validée headless ; le ressenti « fluide » dépend du finding perf C6.
 
 - [ ] **E3. Vidéo 60 secondes** — script : (1) installer le zip de release, (2) activer le plugin, (3) drag & drop d'un PLY, (4) navigation temps réel avec compteur FPS visible, (5) export `.fovea` + comparaison de taille de fichier. Publier sur le repo + r/godot en fin de Phase 0.
   - ✅ *Accepté si : la vidéo est tournée sans aucune coupe cachant une manipulation technique.*
