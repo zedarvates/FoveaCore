@@ -134,6 +134,43 @@ jobs:
           "./${GODOT_BIN}" --headless --path . \
             -s res://addons/foveacore/test/run_all_tests.gd --group=gpu
 
+  # ── 5c. Matrice de non-crash au démarrage (échec dur) ──────────────────
+  # Le plugin doit démarrer et charger un nuage de splats proprement dans
+  # chaque méthode de rendu ET en mode GDScript-only (pas de binaire natif :
+  # rien n'est compilé dans ce job). Échec si exit != 0 ou si une ligne
+  # "SCRIPT ERROR" / "ERROR:" apparaît à la sortie. (C5)
+  smoke-startup:
+    name: Smoke Startup (no-crash, hard fail)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        rendering-method: [forward_plus, mobile, gl_compatibility]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+      - name: Download Godot ${{ env.GODOT_VERSION }} (mono)
+        run: |
+          curl -sSL -o godot.zip \
+            "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}/${GODOT_ZIP}"
+          unzip -q godot.zip
+          chmod +x "${GODOT_BIN}"
+      - name: Import project resources
+        run: |
+          "./${GODOT_BIN}" --headless --path . --import || true
+      - name: Smoke boot (${{ matrix.rendering-method }}), fail on ERROR
+        run: |
+          set -o pipefail
+          "./${GODOT_BIN}" --headless --rendering-method ${{ matrix.rendering-method }} \
+            --path . -s res://addons/foveacore/test/smoke_startup.gd 2>&1 | tee smoke.log
+          if grep -E "SCRIPT ERROR|ERROR:" smoke.log; then
+            echo "::error::Startup emitted ERROR lines under ${{ matrix.rendering-method }}"
+            exit 1
+          fi
+
   # ── 6. Build GDExtension Rust ───────────────────────────────────────────
   build-gdextension:
     name: Build GDExtension (Rust)
