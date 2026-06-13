@@ -28,6 +28,9 @@ audit_foveacore.diff
 /reconstructions/*
 !/reconstructions/.gitkeep
 
+# Generated benchmark artifact (C6) — the official number lives in the benchmark README
+/benchmark_report.json
+
 # Local tools
 Understand-Anything/
 nemotron AUdit.txt
