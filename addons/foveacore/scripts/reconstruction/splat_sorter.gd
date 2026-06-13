@@ -31,7 +31,9 @@ func _init_gpu() -> void:
 
 	_rd = RenderingServer.create_local_rendering_device()
 	if not _rd:
-		push_error("SplatSorter: RenderingDevice unavailable")
+		# Expected in headless / Compatibility mode: fall back gracefully to the
+		# CPU sort path instead of erroring (null-safety rule, see CLAUDE.md).
+		push_warning("SplatSorter: RenderingDevice unavailable — using CPU fallback")
 		return
 
 	var shader_file = preload("res://addons/foveacore/shaders/sort_compute.glsl")
@@ -93,6 +95,7 @@ func sort_splats_back_to_front(splats: Array[GaussianSplat], camera: Camera3D) -
 	# 3. Lancer le bitonic sort sur GPU
 	var start_time = Time.get_ticks_msec()
 	_dispatch_bitonic_sort(n_pow2)
+	_rd.submit()
 	_rd.sync()
 	var elapsed = Time.get_ticks_msec() - start_time
 
@@ -156,10 +159,8 @@ func _dispatch_bitonic_sort(count: int) -> void:
 		_rd.compute_list_dispatch(compute_list, ceil(count / 256.0), 1, 1)
 		_rd.compute_list_end()
 
-		_rd.submit()
-
 		if _debug_verbose:
-			print("SplatSorter: Stage %d/%d submitted" % [stage+1, int(stages)])
+			print("SplatSorter: Stage %d/%d recorded" % [stage+1, int(stages)])
 
 func _read_index_buffer(count: int) -> Array[int]:
 	var data = _rd.buffer_get_data(_index_buffer)
