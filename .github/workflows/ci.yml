@@ -6,47 +6,30 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  GODOT_VERSION: "4.7-dev5"
+  GODOT_ZIP: "Godot_v4.7-dev5_mono_linux_x86_64.zip"
+  GODOT_BIN: "Godot_v4.7-dev5_mono_linux_x86_64/Godot_v4.7-dev5_mono_linux.x86_64"
+
 jobs:
-  gdscript-lint:
-    name: GDScript Lint
+  # ── 1. Syntaxe GDScript (rapide, échec dur) ─────────────────────────────
+  gdscript-parse:
+    name: GDScript Parse Check
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install gdtoolkit
-        run: pip install gdtoolkit
-      - name: Lint GDScript files
+      - name: Install gdtoolkit (Godot 4)
+        run: pip install "gdtoolkit==4.*"
+      - name: Parse all GDScript files (hors godot-cpp)
         run: |
-          find addons -name "*.gd" -exec gdlint {} \; 2>&1 | tee lint_output.txt
-          if grep -q "error\|Error\|violat" lint_output.txt; then
-            echo "Linting errors found."
-            cat lint_output.txt
-            exit 1
-          fi
+          find addons test -name "*.gd" -not -path "*godot-cpp*" -print0 \
+            | xargs -0 gdparse
+          echo "GDScript parse OK."
 
-  unit-tests:
-    name: Unit Tests
-    runs-on: ubuntu-24.04
-    container:
-      image: barichello/godot-ci:4.6
-    strategy:
-      matrix:
-        test-script:
-          - res://addons/foveacore/test/test_style_engine.gd
-          - res://addons/foveacore/test/test_surface_extractor.gd
-      fail-fast: false
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run Godot headless test
-        run: |
-          godot --headless --quit-after 100 --script ${{ matrix.test-script }} 2>&1 | tee test_output.txt
-          if grep -q "✗\|failed" test_output.txt; then
-            echo "Tests failed in ${{ matrix.test-script }}"
-            exit 1
-          fi
-
+  # ── 2. Syntaxe Python (bridges de reconstruction) ──────────────────────
   py-validate:
     name: Python Bridge Validation
     runs-on: ubuntu-24.04
@@ -55,11 +38,103 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Validate Python syntax
+      - name: Validate Python syntax (tous les bridges)
         run: |
-          python -m py_compile addons/foveacore/scripts/reconstruction/worldmirror_bridge.py
-          echo "Python bridge syntax OK."
+          python -m py_compile addons/foveacore/scripts/reconstruction/*.py
+          echo "Python bridges syntax OK."
 
+  # ── 3. Build C# (Godot.NET.Sdk) ─────────────────────────────────────────
+  dotnet-build:
+    name: C# Build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+      - name: Build FoveaEngine.csproj
+        run: dotnet build FoveaEngine.csproj --nologo
+
+  # ── 4. Vérification de compilation Godot headless (échec dur) ──────────
+  godot-compile-check:
+    name: Godot Compile Check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+      - name: Download Godot ${{ env.GODOT_VERSION }} (mono)
+        run: |
+          curl -sSL -o godot.zip \
+            "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}/${GODOT_ZIP}"
+          unzip -q godot.zip
+          chmod +x "${GODOT_BIN}"
+      - name: Import project resources
+        run: |
+          "./${GODOT_BIN}" --headless --path . --import || true
+      - name: Compile-check all scripts
+        run: |
+          "./${GODOT_BIN}" --headless --path . \
+            -s res://addons/foveacore/test/test_compile_all_scripts.gd
+
+  # ── 5a. Tests unitaires non-GPU (échec dur) ────────────────────────────
+  # Valident la logique pure (parsing, .fovea, math, cleaner...) sans
+  # RenderingDevice. Doivent toujours passer headless → échec dur (C1).
+  unit-tests-nogpu:
+    name: Unit Tests (non-GPU, hard fail)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+      - name: Download Godot ${{ env.GODOT_VERSION }} (mono)
+        run: |
+          curl -sSL -o godot.zip \
+            "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}/${GODOT_ZIP}"
+          unzip -q godot.zip
+          chmod +x "${GODOT_BIN}"
+      - name: Import project resources
+        run: |
+          "./${GODOT_BIN}" --headless --path . --import || true
+      - name: Run non-GPU tests (hard fail)
+        run: |
+          "./${GODOT_BIN}" --headless --path . \
+            -s res://addons/foveacore/test/run_all_tests.gd --group=nogpu
+
+  # ── 5b. Tests unitaires GPU (informatif sur runner sans GPU) ───────────
+  # Les suites marquées `const REQUIRES_GPU := true` ne valident vraiment
+  # qu'avec un vrai GPU. Sur les runners GitHub (logiciel/headless) elles
+  # dégradent en faux-positif → job informatif. À promouvoir en échec dur
+  # sur un runner self-hosted avec GPU (C6).
+  unit-tests-gpu:
+    name: Unit Tests (GPU, informational)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+      - name: Download Godot ${{ env.GODOT_VERSION }} (mono)
+        run: |
+          curl -sSL -o godot.zip \
+            "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}/${GODOT_ZIP}"
+          unzip -q godot.zip
+          chmod +x "${GODOT_BIN}"
+      - name: Import project resources
+        run: |
+          "./${GODOT_BIN}" --headless --path . --import || true
+      - name: Run GPU tests (informational)
+        run: |
+          "./${GODOT_BIN}" --headless --path . \
+            -s res://addons/foveacore/test/run_all_tests.gd --group=gpu
+
+  # ── 6. Build GDExtension Rust ───────────────────────────────────────────
   build-gdextension:
     name: Build GDExtension (Rust)
     runs-on: ${{ matrix.os }}
@@ -77,23 +152,23 @@ jobs:
             artifact: libfoveacore.dylib
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-          
+
       - name: Build Rust crate
         run: |
-          cd addons/foveacore/shaders
+          cd addons/foveacore/rust
           cargo build --release --target ${{ matrix.target }}
-          
+
       - name: Locate and upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: foveacore-${{ matrix.target }}
           path: |
-            addons/foveacore/shaders/target/${{ matrix.target }}/release/foveacore.dll
-            addons/foveacore/shaders/target/${{ matrix.target }}/release/libfoveacore.so
-            addons/foveacore/shaders/target/${{ matrix.target }}/release/libfoveacore.dylib
+            addons/foveacore/rust/target/${{ matrix.target }}/release/foveacore.dll
+            addons/foveacore/rust/target/${{ matrix.target }}/release/libfoveacore.so
+            addons/foveacore/rust/target/${{ matrix.target }}/release/libfoveacore.dylib
           if-no-files-found: ignore

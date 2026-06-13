@@ -3,6 +3,11 @@ extends SceneTree
 ## Unit tests for FoveaInstancedCuller and FoveaInstancedSplatRenderer
 ## Validates: culler initialization, transform serialization, parallel instanced decoding.
 
+## Marks this suite as requiring a GPU/RenderingDevice for meaningful validation.
+## Without one it degrades gracefully (false pass), so run_all_tests.gd routes it
+## to the "gpu" group only. See plans/PHASE0_FONDATION_TASKS.md (C1).
+const REQUIRES_GPU := true
+
 var _passed := 0
 var _failed := 0
 
