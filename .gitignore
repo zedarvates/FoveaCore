@@ -10,11 +10,31 @@ __pycache__/
 
 # Rust build artifacts
 addons/foveacore/rust/target/
-addons/foveacore/shaders/target/
 
 # Audit exports
 audit_foveacore.diff
 
+# Logs de test / runtime (D5 — hygiène du dépôt)
+/*.log
+
+# Assets locaux non versionnés (B5 — hygiène du dépôt, voir plans/PHASE0_FONDATION_TASKS.md)
+/Videos test/
+/my icone/
+/ScreenShot/
+/scratch/
+
+# Sorties de reconstruction générées localement (dossier conservé via .gitkeep —
+# c'est la destination par défaut du pipeline StudioTo3D)
+/reconstructions/*
+!/reconstructions/.gitkeep
+
 # Local tools
 Understand-Anything/
+nemotron AUdit.txt
+nemotron_audit.txt
+*.log
+test_run*.log
+test_output.log
+script_parse.log
+import.log
 
