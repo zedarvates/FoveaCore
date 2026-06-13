@@ -23,10 +23,10 @@ Le constat : `FoveaSplattable` ([fovea_splattable.gd](../addons/foveacore/script
 - [x] **A3. Remplacer les booléens-boutons par de vrais boutons d'inspecteur** — `trigger_segmentation` (l.71), `trigger_conversion_to_fovea` (l.82), `trigger_generation` (l.94) sont des checkboxes-hacks. Les migrer dans un inspector plugin sous forme de `Button`. *(Fait 2026-06-12 : nouveau `editor/fovea_splattable_inspector_plugin.gd` avec section "Fovea Actions" ; les 3 exports `trigger_*` supprimés de `FoveaSplattable`)*
   - ✅ *Accepté si : zéro `@export var trigger_*: bool` dans l'API publique.*
 
-- [ ] **A4. Trancher GDScript vs C#** — deux addons coexistent : `addons/foveacore` (GDScript+Rust) et `addons/fovea_engine` (C#). Décision : **`foveacore` est le produit livré** ; `fovea_engine` C# passe en bindings optionnels ou en labs. Documenter la décision dans `docs/ARCHITECTURE.md`.
-  - ✅ *Accepté si : un seul addon à activer pour l'utilisateur final.*
+- [x] **A4. Trancher GDScript vs C#** — deux addons coexistent : `addons/foveacore` (GDScript+Rust) et `addons/fovea_engine` (C#). Décision : **`foveacore` est le produit livré** ; `fovea_engine` C# passe en bindings optionnels ou en labs. Documenter la décision dans `docs/ARCHITECTURE.md`. *(Fait 2026-06-13 : décision documentée dans [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md). Constat : `fovea_engine` C# n'était déjà pas activé dans `project.godot` — seul `foveacore` (+`fovea_labs`) l'est. Non destructif : le C# reste dans le repo et compile en CI, mais hors livraison.)*
+  - ✅ *Accepté si : un seul addon à activer pour l'utilisateur final.* → **OK** (foveacore seul ; fovea_labs optionnel).
 
-- [ ] **A5. Documentation de classe intégrée** — doc-comments GDScript (`##`) sur `FoveaSplat3D`, `FoveaAsset` et chaque membre public → visibles dans l'aide intégrée de Godot (F1).
+- [x] **A5. Documentation de classe intégrée** — doc-comments GDScript (`##`) sur `FoveaSplat3D`, `FoveaAsset` et chaque membre public → visibles dans l'aide intégrée de Godot (F1). *(Fait : `FoveaSplat3D` documenté à sa création (A1) ; `FoveaAsset` entièrement documenté 2026-06-13, chaque membre + `get_aabb()` ajouté.)*
   - ✅ *Accepté si : F1 sur `FoveaSplat3D` dans l'éditeur affiche une doc complète en anglais.*
 
 ---
@@ -47,8 +47,9 @@ Le constat : [plugin.gd](../addons/foveacore/plugin.gd) enregistre ~30 custom ty
 - [x] **B4. Assistant de configuration non bloquant** — le wizard (plugin.gd l.110–117) s'affiche en popup à la première activation. Le remplacer par une bannière discrète dans le panneau StudioTo3D ("Configurer FFmpeg/COLMAP →"). L'activation du plugin ne doit JAMAIS ouvrir de modale. *(Fait 2026-06-12 : bannière `ConfigBanner` dans studio_to_3d_panel.gd avec boutons Setup…/✕ ; le wizard ne s'ouvre plus qu'à la demande)*
   - ✅ *Accepté si : activation du plugin sans aucune interaction requise.*
 
-- [ ] **B5. Hygiène du dépôt** — `my icone/`, `Videos test/`, `ScreenShot/`, `scratch/`, `Understand-Anything/`, `reconstructions/` sont à la racine du repo. Les déplacer dans un dossier `dev/` gitignoré ou les sortir du repo. Définir le **manifeste de packaging** : ce qui part dans le zip de release = `addons/foveacore/` + `LICENSE` + `README`.
+- [x] **B5. Hygiène du dépôt** — `my icone/`, `Videos test/`, `ScreenShot/`, `scratch/`, `Understand-Anything/`, `reconstructions/` sont à la racine du repo. Les déplacer dans un dossier `dev/` gitignoré ou les sortir du repo. Définir le **manifeste de packaging** : ce qui part dans le zip de release = `addons/foveacore/` + `LICENSE` + `README`. *(Fait 2026-06-13 : 185 fichiers retirés de l'index git (gardés sur disque) ; `.gitignore` étendu (ScreenShot, scratch, reconstructions/* sauf .gitkeep) ; `scratch/generate_variance_masks.py` — seule dépendance runtime — déplacé dans `addons/foveacore/scripts/reconstruction/` et la référence corrigée. Manifeste de packaging documenté dans ARCHITECTURE.md (D2).)*
   - ✅ *Accepté si : `git ls-files addons/foveacore` = exactement le contenu livré.*
+  - ⚠️ *Note : `test/palette_benchmark.gd` (l.69) référence `res://reconstructions/bonsaitree/...` désormais non versionné — bénin (outil de bench manuel, données locales).*
 
 ---
 
