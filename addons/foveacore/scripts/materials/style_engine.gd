@@ -30,7 +30,7 @@ class MaterialStyleConfig:
 	var noise_gain: float = 0.5
 
 ## Cache des styles
-static var _style_cache: Dictionary = {}
+static var _style_cache: Dictionary[String, Variant] = {}
 
 ## Obtenir la couleur procédurale pour un point
 static func compute_color(
@@ -40,7 +40,7 @@ static func compute_color(
 	config: MaterialStyleConfig,
 	light_direction: Vector3 = Vector3(0, 1, 0.5).normalized()
 ) -> Color:
-	var base = config.base_color
+	var base: Color = config.base_color
 
 	match material_type:
 		MaterialType.STONE:
@@ -88,10 +88,10 @@ static func compute_specular(
 	material_type: MaterialType,
 	config: MaterialStyleConfig
 ) -> float:
-	var half_vector = (view_direction + light_direction).normalized()
-	var ndoth = max(normal.dot(half_vector), 0.0)
-	var roughness = compute_roughness(position, normal, material_type, config)
-	var specular_power = pow(1.0 - roughness, 4.0) * 128.0
+	var half_vector: Vector3 = (view_direction + light_direction).normalized()
+	var ndoth: float = max(normal.dot(half_vector), 0.0)
+	var roughness: float = compute_roughness(position, normal, material_type, config)
+	var specular_power: float = pow(1.0 - roughness, 4.0) * 128.0
 	return pow(ndoth, max(specular_power, 1.0)) * config.specular_strength
 
 ## Obtenir le bump implicite (perturbation de normale)
@@ -101,16 +101,16 @@ static func compute_bump(
 	material_type: MaterialType,
 	config: MaterialStyleConfig
 ) -> Vector3:
-	var bump_strength = config.bump_strength * 0.1
-	var scale = config.noise_scale * 2.0
+	var bump_strength: float = config.bump_strength * 0.1
+	var scale: float = config.noise_scale * 2.0
 
 	# Gradient du noise pour simuler le bump
-	var dx = _fbm((position + Vector3(0.01, 0, 0)) * scale, config.noise_octaves) - \
+	var dx: float = _fbm((position + Vector3(0.01, 0, 0)) * scale, config.noise_octaves) - \
 			 _fbm((position - Vector3(0.01, 0, 0)) * scale, config.noise_octaves)
-	var dz = _fbm((position + Vector3(0, 0, 0.01)) * scale, config.noise_octaves) - \
+	var dz: float = _fbm((position + Vector3(0, 0, 0.01)) * scale, config.noise_octaves) - \
 			 _fbm((position - Vector3(0, 0, 0.01)) * scale, config.noise_octaves)
 
-	var bumped_normal = normal + Vector3(dx, 0, dz) * bump_strength
+	var bumped_normal: Vector3 = normal + Vector3(dx, 0, dz) * bump_strength
 	return bumped_normal.normalized()
 
 # ============================================================================
@@ -122,28 +122,28 @@ static func _compute_stone_color(
 	position: Vector3, normal: Vector3, base: Color,
 	config: MaterialStyleConfig, light_dir: Vector3
 ) -> Color:
-	var scale = config.noise_scale
-	var octaves = config.noise_octaves
+	var scale: float = config.noise_scale
+	var octaves: int = config.noise_octaves
 
 	# FBM pour la variation de base
-	var fbm_val = _fbm(position * scale, octaves)
+	var fbm_val: float = _fbm(position * scale, octaves)
 
 	# Worley noise pour les cellules de pierre
-	var worley = _worley_noise(position * scale * 0.5)
+	var worley: float = _worley_noise(position * scale * 0.5)
 
 	# Combiner les deux
-	var variation = fbm_val * 0.6 + worley * 0.4
+	var variation: float = fbm_val * 0.6 + worley * 0.4
 
 	# Appliquer la variation à la couleur de base
-	var color = base * (0.7 + variation * 0.6 * config.detail)
+	var color: Color = base * (0.7 + variation * 0.6 * config.detail)
 
 	# Micro-shadowing basé sur la normale et la lumière
-	var ndotl = max(normal.dot(light_dir), 0.0)
-	var shadow = lerpf(config.micro_shadow, 1.0, ndotl)
+	var ndotl: float = max(normal.dot(light_dir), 0.0)
+	var shadow: float = lerpf(config.micro_shadow, 1.0, ndotl)
 	color = color * shadow
 
 	# Grain
-	var grain_noise = _simple_noise(position * scale * 5.0) * config.grain * 0.1
+	var grain_noise: float = _simple_noise(position * scale * 5.0) * config.grain * 0.1
 	color = color + Color(grain_noise, grain_noise, grain_noise)
 
 	return color.clamp(Color(0, 0, 0), Color(1, 1, 1))
@@ -153,32 +153,32 @@ static func _compute_wood_color(
 	position: Vector3, normal: Vector3, base: Color,
 	config: MaterialStyleConfig, light_dir: Vector3
 ) -> Color:
-	var scale = config.noise_scale
+	var scale: float = config.noise_scale
 
 	# Direction du grain (aligné sur l'axe Y par défaut)
-	var grain_direction = Vector3(0, 1, 0)
-	var distance_along_grain = position.dot(grain_direction)
+	var grain_direction: Vector3 = Vector3(0, 1, 0)
+	var distance_along_grain: float = position.dot(grain_direction)
 
 	# Anneaux du bois (sinusoïdes déformées)
-	var ring_frequency = 3.0 * config.detail
-	var ring_phase = distance_along_grain * ring_frequency
+	var ring_frequency: float = 3.0 * config.detail
+	var ring_phase: float = distance_along_grain * ring_frequency
 
 	# Déformation fractale des anneaux
-	var distortion = _fbm(position * scale * 0.5, 3) * 0.5
-	var ring_value = sin(ring_phase + distortion * 3.14159 * 2.0)
+	var distortion: float = _fbm(position * scale * 0.5, 3) * 0.5
+	var ring_value: float = sin(ring_phase + distortion * 3.14159 * 2.0)
 	ring_value = ring_value * 0.5 + 0.5  # [0, 1]
 
 	# Couleur de base avec variation des anneaux
-	var dark_wood = base * 0.6
-	var light_wood = base * 1.2
-	var color = dark_wood.lerp(light_wood, ring_value)
+	var dark_wood: Color = base * 0.6
+	var light_wood: Color = base * 1.2
+	var color: Color = dark_wood.lerp(light_wood, ring_value)
 
 	# Noise directionnel pour le grain
-	var grain_noise = _directional_noise(position, grain_direction, scale) * config.grain * 0.15
+	var grain_noise: float = _directional_noise(position, grain_direction, scale) * config.grain * 0.15
 	color = color + Color(grain_noise, grain_noise * 0.8, grain_noise * 0.6)
 
 	# Micro-shadowing
-	var ndotl = max(normal.dot(light_dir), 0.0)
+	var ndotl: float = max(normal.dot(light_dir), 0.0)
 	color = color * lerpf(config.micro_shadow, 1.0, ndotl)
 
 	return color.clamp(Color(0, 0, 0), Color(1, 1, 1))
@@ -188,29 +188,29 @@ static func _compute_metal_color(
 	position: Vector3, normal: Vector3, base: Color,
 	config: MaterialStyleConfig, light_dir: Vector3
 ) -> Color:
-	var scale = config.noise_scale
+	var scale: float = config.noise_scale
 
 	# Couleur de base métallique
-	var color = base
+	var color: Color = base
 
 	# Anisotropie procédurale (stries directionnelles)
-	var aniso_direction = Vector3(1, 0, 0).normalized()
-	var aniso_stripe = sin(position.dot(aniso_direction) * scale * 2.0) * 0.5 + 0.5
-	var aniso_variation = aniso_stripe * 0.1 * config.detail
+	var aniso_direction: Vector3 = Vector3(1, 0, 0).normalized()
+	var aniso_stripe: float = sin(position.dot(aniso_direction) * scale * 2.0) * 0.5 + 0.5
+	var aniso_variation: float = aniso_stripe * 0.1 * config.detail
 	color = color + Color(aniso_variation, aniso_variation, aniso_variation)
 
 	# Faux reflet (basé sur l'angle de vue simulé)
-	var view_dir = Vector3(0, 0, 1).normalized()
-	var reflection_angle = normal.dot(view_dir)
-	var fake_reflection = pow(1.0 - abs(reflection_angle), 3.0) * 0.3
+	var view_dir: Vector3 = Vector3(0, 0, 1).normalized()
+	var reflection_angle: float = normal.dot(view_dir)
+	var fake_reflection: float = pow(1.0 - abs(reflection_angle), 3.0) * 0.3
 	color = color + Color(fake_reflection, fake_reflection, fake_reflection * 1.1)
 
 	# Specular implicite
-	var specular = compute_specular(position, normal, view_dir, light_dir, MaterialType.METAL, config)
+	var specular: float = compute_specular(position, normal, view_dir, light_dir, MaterialType.METAL, config)
 	color = color + Color(specular, specular, specular)
 
 	# Micro-rayures
-	var scratch_noise = _fbm(position * scale * 5.0, 2) * 0.05
+	var scratch_noise: float = _fbm(position * scale * 5.0, 2) * 0.05
 	color = color + Color(scratch_noise, scratch_noise, scratch_noise)
 
 	return color.clamp(Color(0, 0, 0), Color(1, 1, 1))
@@ -220,27 +220,27 @@ static func _compute_skin_color(
 	position: Vector3, normal: Vector3, base: Color,
 	config: MaterialStyleConfig, light_dir: Vector3
 ) -> Color:
-	var scale = config.noise_scale
+	var scale: float = config.noise_scale
 
 	# Couleur de base peau
-	var color = base
+	var color: Color = base
 
 	# SSS approximatif (subsurface scattering)
 	# Simuler la lumière qui traverse légèrement la surface
-	var sss_strength = 0.15 * config.detail
-	var sss_color = Color(1.0, 0.6, 0.5)  # Teinte rougeâtre typique SSS
-	var ndotl = max(normal.dot(light_dir), 0.0)
-	var wrap_ndotl = max((ndotl + 0.5) / 1.5, 0.0)  # Wrapped diffuse
-	var sss = lerpf(wrap_ndotl, 1.0, sss_strength) * sss_strength
+	var sss_strength: float = 0.15 * config.detail
+	var sss_color: Color = Color(1.0, 0.6, 0.5)  # Teinte rougeâtre typique SSS
+	var ndotl: float = max(normal.dot(light_dir), 0.0)
+	var wrap_ndotl: float = max((ndotl + 0.5) / 1.5, 0.0)  # Wrapped diffuse
+	var sss: float = lerpf(wrap_ndotl, 1.0, sss_strength) * sss_strength
 	color = color * (1.0 - sss) + sss_color * sss
 
 	# Variation de teinte douce (rougeurs, etc.)
-	var hue_variation = _fbm(position * scale * 0.3, 3) * 0.1
+	var hue_variation: float = _fbm(position * scale * 0.3, 3) * 0.1
 	color.r = min(color.r + hue_variation, 1.0)
 	color.g = min(color.g + hue_variation * 0.5, 1.0)
 
 	# Micro-détails (pores)
-	var pore_noise = _worley_noise(position * scale * 3.0) * config.grain * 0.05
+	var pore_noise: float = _worley_noise(position * scale * 3.0) * config.grain * 0.05
 	color = color - Color(pore_noise, pore_noise, pore_noise)
 
 	# Éclairage doux
@@ -253,19 +253,19 @@ static func _compute_fabric_color(
 	position: Vector3, normal: Vector3, base: Color,
 	config: MaterialStyleConfig, light_dir: Vector3
 ) -> Color:
-	var scale = config.noise_scale
+	var scale: float = config.noise_scale
 
 	# Tissu avec motif de tissage
-	var weave_x = sin(position.x * scale * 4.0) * 0.5 + 0.5
-	var weave_y = sin(position.y * scale * 4.0) * 0.5 + 0.5
-	var weave = weave_x * weave_y
+	var weave_x: float = sin(position.x * scale * 4.0) * 0.5 + 0.5
+	var weave_y: float = sin(position.y * scale * 4.0) * 0.5 + 0.5
+	var weave: float = weave_x * weave_y
 
 	# Variation douce
-	var soft_variation = _fbm(position * scale * 0.5, 2) * 0.2
-	var color = base * (0.8 + weave * 0.2 + soft_variation)
+	var soft_variation: float = _fbm(position * scale * 0.5, 2) * 0.2
+	var color: Color = base * (0.8 + weave * 0.2 + soft_variation)
 
 	# Micro-shadowing
-	var ndotl = max(normal.dot(light_dir), 0.0)
+	var ndotl: float = max(normal.dot(light_dir), 0.0)
 	color = color * lerpf(config.micro_shadow, 1.0, ndotl)
 
 	return color.clamp(Color(0, 0, 0), Color(1, 1, 1))
@@ -275,11 +275,11 @@ static func _compute_custom_color(
 	position: Vector3, normal: Vector3, base: Color,
 	config: MaterialStyleConfig, light_dir: Vector3
 ) -> Color:
-	var scale = config.noise_scale
-	var variation = _fbm(position * scale, config.noise_octaves)
-	var color = base * (0.7 + variation * 0.6 * config.detail)
+	var scale: float = config.noise_scale
+	var variation: float = _fbm(position * scale, config.noise_octaves)
+	var color: Color = base * (0.7 + variation * 0.6 * config.detail)
 
-	var ndotl = max(normal.dot(light_dir), 0.0)
+	var ndotl: float = max(normal.dot(light_dir), 0.0)
 	color = color * lerpf(config.micro_shadow, 1.0, ndotl)
 
 	return color.clamp(Color(0, 0, 0), Color(1, 1, 1))
@@ -289,20 +289,20 @@ static func _compute_glass_color(
 	config: MaterialStyleConfig, light_dir: Vector3
 ) -> Color:
 	var view_dir := Vector3(0, 0, 1)  # Approx: camera looks along +Z
-	var ndotv := abs(normal.dot(view_dir))
-	var ndotl := max(normal.dot(light_dir), 0.0)
+	var ndotv: float = abs(normal.dot(view_dir))
+	var ndotl: float = max(normal.dot(light_dir), 0.0)
 
 	# Fresnel: edges are more reflective (higher opacity)
 	var fresnel: float = 1.0 - ndotv
 	fresnel = fresnel * fresnel * fresnel * fresnel  # Schlick quartic approx
-	var glass_alpha := clamp(0.15 + fresnel * 0.85, 0.1, 1.0)
+	var glass_alpha: float = clamp(0.15 + fresnel * 0.85, 0.1, 1.0)
 
 	# Specular highlight (Phong-like)
 	var reflect_dir: Vector3 = (2.0 * normal * ndotl - light_dir).normalized()
-	var spec := pow(max(reflect_dir.dot(view_dir), 0.0), 32.0) * config.specular_strength
+	var spec: float = pow(max(reflect_dir.dot(view_dir), 0.0), 32.0) * config.specular_strength
 
 	# Base color: transparent tint + specular
-	var color := base * (0.2 + spec * 1.5)
+	var color: Color = base * (0.2 + spec * 1.5)
 	color.a = glass_alpha * config.grain
 
 	# Edge darkening + inner glow
@@ -317,17 +317,17 @@ static func _compute_glass_color(
 
 ## Simple noise hash
 static func _simple_noise(pos: Vector3) -> float:
-	var n = sin(pos.x * 12.9898 + pos.y * 78.233 + pos.z * 45.543) * 43758.5453
+	var n: float = sin(pos.x * 12.9898 + pos.y * 78.233 + pos.z * 45.543) * 43758.5453
 	return n - floor(n)
 
 ## FBM (Fractional Brownian Motion)
 static func _fbm(pos: Vector3, octaves: int, lacunarity: float = 2.0, gain: float = 0.5) -> float:
-	var value = 0.0
-	var amplitude = 1.0
-	var frequency = 1.0
-	var max_value = 0.0
+	var value: float = 0.0
+	var amplitude: float = 1.0
+	var frequency: float = 1.0
+	var max_value: float = 0.0
 
-	for i in range(octaves):
+	for i: int in range(octaves):
 		value += _simple_noise(pos * frequency) * amplitude
 		max_value += amplitude
 		amplitude *= gain
@@ -337,24 +337,24 @@ static func _fbm(pos: Vector3, octaves: int, lacunarity: float = 2.0, gain: floa
 
 ## Worley noise (cellular noise)
 static func _worley_noise(pos: Vector3) -> float:
-	var cell = Vector3(floor(pos.x), floor(pos.y), floor(pos.z))
-	var min_dist = 10.0
+	var cell: Vector3 = Vector3(floor(pos.x), floor(pos.y), floor(pos.z))
+	var min_dist: float = 10.0
 
-	for x in range(-1, 2):
-		for y in range(-1, 2):
-			for z in range(-1, 2):
-				var neighbor = cell + Vector3(x, y, z)
-				var point = neighbor + Vector3(
+	for x: int in range(-1, 2):
+		for y: int in range(-1, 2):
+			for z: int in range(-1, 2):
+				var neighbor: Vector3 = cell + Vector3(x, y, z)
+				var point: Vector3 = neighbor + Vector3(
 					_simple_noise(neighbor),
 					_simple_noise(neighbor + Vector3(100, 0, 0)),
 					_simple_noise(neighbor + Vector3(0, 100, 0))
 				)
-				var dist = pos.distance_to(point)
+				var dist: float = pos.distance_to(point)
 				min_dist = min(min_dist, dist)
 
 	return min_dist
 
 ## Noise directionnel
 static func _directional_noise(pos: Vector3, direction: Vector3, scale: float) -> float:
-	var projected = pos.dot(direction) * scale
+	var projected: float = pos.dot(direction) * scale
 	return _fbm(Vector3(projected, pos.y * scale, pos.z * scale), 3)
