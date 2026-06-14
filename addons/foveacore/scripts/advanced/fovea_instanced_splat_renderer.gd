@@ -9,6 +9,7 @@ extends MultiMeshInstance3D
 @export var use_triangle_mesh: bool = true
 @export var splat_subdivisions: int = 16
 @export var sort_distance_threshold: float = 0.1
+@export var enable_layered_splatting: bool = true
 
 ## Liste des transformations (position, rotation, échelle) pour chaque instance
 @export var instance_transforms: Array[Transform3D] = []
@@ -30,7 +31,7 @@ extends MultiMeshInstance3D
 
 var instanced_culler: FoveaInstancedCuller
 var splat_mesh: ArrayMesh
-var triangle_mesh_generator
+var triangle_mesh_generator: GDScript
 var _last_camera_pos: Vector3 = Vector3.ZERO
 var _last_transforms: Array[Transform3D] = []
 var _last_transforms_size: int = 0
@@ -38,9 +39,20 @@ var _last_transforms_size: int = 0
 var instance_colors: Array[Color] = []
 var instance_scales: Array[float] = []
 var instance_alphas: Array[float] = []
+var instance_morph_types: Array[int] = []
+var instance_morph_weights: Array[float] = []
+var instance_morph_frequencies: Array[float] = []
+var instance_morph_amplitudes: Array[float] = []
+
 var _last_colors: Array[Color] = []
 var _last_scales: Array[float] = []
 var _last_alphas: Array[float] = []
+var _last_morph_types: Array[int] = []
+var _last_morph_weights: Array[float] = []
+var _last_morph_frequencies: Array[float] = []
+var _last_morph_amplitudes: Array[float] = []
+
+var _cached_main_light: DirectionalLight3D = null
 
 func _ready() -> void:
 	instanced_culler = FoveaInstancedCuller.new()
@@ -51,9 +63,9 @@ func _ready() -> void:
 		splat_mesh = triangle_mesh_generator.generate_triangle_splat_mesh_optimized()
 	else:
 		# Fallback: QuadMesh classique
-		var quad_mesh = QuadMesh.new()
+		var quad_mesh: QuadMesh = QuadMesh.new()
 		quad_mesh.size = Vector2(1.0, 1.0)
-		var st = SurfaceTool.new()
+		var st: SurfaceTool = SurfaceTool.new()
 		st.begin(Mesh.PRIMITIVE_TRIANGLES)
 		st.add_vertex(Vector3(-0.5, -0.5, 0))
 		st.add_vertex(Vector3(0.5, -0.5, 0))
@@ -68,7 +80,7 @@ func _ready() -> void:
 	multimesh.use_custom_data = true
 	multimesh.mesh = splat_mesh
 
-	var material = ShaderMaterial.new()
+	var material: ShaderMaterial = ShaderMaterial.new()
 	material.shader = preload("res://addons/foveacore/shaders/splat_render_triangle.gdshader")
 	material.set_shader_parameter("splat_subdivisions", splat_subdivisions)
 	material.set_shader_parameter("use_palette", false)
@@ -90,17 +102,34 @@ func _process(_delta: float) -> void:
 		return
 
 	# 0. Mettre à jour la liste des transforms et overrides d'instances depuis le groupe "splattables"
-	var active_nodes = get_tree().get_nodes_in_group("splattables")
+	var active_nodes: Array[Node] = get_tree().get_nodes_in_group("splattables")
 	var transforms: Array[Transform3D] = []
 	var colors: Array[Color] = []
 	var scales: Array[float] = []
 	var alphas: Array[float] = []
+	var morph_types: Array[int] = []
+	var morph_weights: Array[float] = []
+	var morph_frequencies: Array[float] = []
+	var morph_amplitudes: Array[float] = []
+	
 	for n in active_nodes:
 		if n is FoveaSplattable and n.splat_file_path == asset_path and n.visible and n.splatting_enabled:
 			transforms.append(n.global_transform)
 			colors.append(n.color_override)
 			scales.append(n.scale_override)
 			alphas.append(n.alpha_override)
+			
+			var m_idx := 0
+			match n.morph_type:
+				"None": m_idx = 0
+				"Bend": m_idx = 1
+				"Twist": m_idx = 2
+				"Squish": m_idx = 3
+				"Wave": m_idx = 4
+			morph_types.append(m_idx)
+			morph_weights.append(n.morph_weight)
+			morph_frequencies.append(n.morph_frequency)
+			morph_amplitudes.append(n.morph_amplitude)
 
 	var changed := false
 	if transforms.size() != _last_transforms_size:
@@ -119,26 +148,59 @@ func _process(_delta: float) -> void:
 			if not is_equal_approx(alphas[i], _last_alphas[i]):
 				changed = true
 				break
+			if i < _last_morph_types.size():
+				if morph_types[i] != _last_morph_types[i]:
+					changed = true
+					break
+				if not is_equal_approx(morph_weights[i], _last_morph_weights[i]):
+					changed = true
+					break
+				if not is_equal_approx(morph_frequencies[i], _last_morph_frequencies[i]):
+					changed = true
+					break
+				if not is_equal_approx(morph_amplitudes[i], _last_morph_amplitudes[i]):
+					changed = true
+					break
+			else:
+				changed = true
+				break
 
 	instance_transforms = transforms
 	instance_colors = colors
 	instance_scales = scales
 	instance_alphas = alphas
+	instance_morph_types = morph_types
+	instance_morph_weights = morph_weights
+	instance_morph_frequencies = morph_frequencies
+	instance_morph_amplitudes = morph_amplitudes
 
 	_last_transforms = transforms.duplicate()
 	_last_colors = colors.duplicate()
 	_last_scales = scales.duplicate()
 	_last_alphas = alphas.duplicate()
+	_last_morph_types = morph_types.duplicate()
+	_last_morph_weights = morph_weights.duplicate()
+	_last_morph_frequencies = morph_frequencies.duplicate()
+	_last_morph_amplitudes = morph_amplitudes.duplicate()
 	_last_transforms_size = transforms.size()
 
 	# Recalculer le culling si la caméra bouge ou si les instances ont changé
-	var cam_pos = camera.global_position
+	var cam_pos: Vector3 = camera.global_position
+	
+	# Update light direction in shader for dynamic specular calculations
+	var mat := material_override as ShaderMaterial
+	if mat:
+		var main_light: DirectionalLight3D = _find_main_light()
+		if main_light:
+			var light_dir: Vector3 = -main_light.global_transform.basis.z.normalized()
+			mat.set_shader_parameter("light_direction", light_dir)
+			
 	if changed or (cam_pos - _last_camera_pos).length() > sort_distance_threshold:
 		_last_camera_pos = cam_pos
 		load_and_render_splats()
 
 func load_and_render_splats() -> void:
-	var camera = get_viewport().get_camera_3d()
+	var camera: Camera3D = get_viewport().get_camera_3d()
 	if not camera or not instanced_culler or instanced_culler.rd == null:
 		return
 
@@ -148,7 +210,7 @@ func load_and_render_splats() -> void:
 	# 1. Charger les octets bruts du fichier .fovea
 	var raw_bytes := PackedByteArray()
 	if ClassDB.can_instantiate("FoveaAssetLoader"):
-		var loader = ClassDB.instantiate("FoveaAssetLoader")
+		var loader: Object = ClassDB.instantiate("FoveaAssetLoader")
 		if loader and loader.has_method("load_raw_splat_bytes"):
 			raw_bytes = loader.load_raw_splat_bytes(asset_path)
 
@@ -156,18 +218,18 @@ func load_and_render_splats() -> void:
 		# Fallback direct
 		var file := FileAccess.open(asset_path, FileAccess.READ)
 		if file:
-			var all_bytes = file.get_buffer(file.get_length())
+			var all_bytes: PackedByteArray = file.get_buffer(file.get_length())
 			file.close()
-			
+
 			if all_bytes.size() >= 8 and all_bytes.slice(0, 8).get_string_from_ascii() == "FOVEA_3D":
-				var version = all_bytes.decode_u32(8)
-				var header_size = 72 if version >= 2 else 48
+				var version: int = all_bytes.decode_u32(8)
+				var header_size: int = 72 if version >= 2 else 48
 				if all_bytes.size() >= header_size:
-					var color_k = all_bytes.decode_u32(16)
-					var covar_k = all_bytes.decode_u32(20)
-					var palette_size = color_k * 12
-					var covar_size = covar_k * 32
-					var splats_start = header_size + palette_size + covar_size
+					var color_k: int = all_bytes.decode_u32(16)
+					var covar_k: int = all_bytes.decode_u32(20)
+					var palette_size: int = color_k * 12
+					var covar_size: int = covar_k * 32
+					var splats_start: int = header_size + palette_size + covar_size
 					if all_bytes.size() >= splats_start:
 						raw_bytes = all_bytes.slice(splats_start)
 			elif all_bytes.size() >= 16:
@@ -183,31 +245,34 @@ func load_and_render_splats() -> void:
 	var aabb_min := Vector3(-5, -5, -5)
 	var aabb_max := Vector3(5, 5, 5)
 	if ClassDB.can_instantiate("FoveaAssetLoader"):
-		var loader = ClassDB.instantiate("FoveaAssetLoader")
+		var loader: Object = ClassDB.instantiate("FoveaAssetLoader")
 		if loader and loader.has_method("get_asset_aabb"):
-			var aabb: AABB = loader.get_asset_aabb(asset_path)
-			if aabb.size.length_squared() > 0.001:
-				aabb_min = aabb.position
-				aabb_max = aabb.end
+			var aabb_val: Variant = loader.get_asset_aabb(asset_path)
+			if aabb_val is AABB:
+				var aabb: AABB = aabb_val
+				if aabb.size.length_squared() > 0.001:
+					aabb_min = aabb.position
+					aabb_max = aabb.end
 
 	var mat := material_override as ShaderMaterial
 	if mat:
 		mat.set_shader_parameter("aabb_min", aabb_min)
 		mat.set_shader_parameter("aabb_max", aabb_max)
+		mat.set_shader_parameter("enable_layered_splatting", enable_layered_splatting)
 
 	# 3. Récupérer la texture de profondeur de la caméra si possible
 	var depth_tex: RID = RID()
 	if camera.has_method("get_camera_attributes") and camera.get_camera_attributes():
-		var attrs = camera.get_camera_attributes()
+		var attrs: Variant = camera.get_camera_attributes()
 		if attrs.has_method("get_depth_texture"):
 			depth_tex = attrs.get_depth_texture()
 	elif "attributes" in camera and camera.attributes:
-		var attrs = camera.attributes
+		var attrs: Variant = camera.attributes
 		if attrs.has_method("get_depth_texture"):
 			depth_tex = attrs.get_depth_texture()
 
 	# 4. Culling GPU d'instances multiples
-	var cull_res = instanced_culler.process_instanced_splats(
+	var cull_res: Dictionary = instanced_culler.process_instanced_splats(
 		raw_bytes,
 		instance_transforms,
 		camera,
@@ -217,15 +282,19 @@ func load_and_render_splats() -> void:
 		aabb_max
 	)
 
-	var output_buffer_rid = cull_res.buffer_rid
-	var surviving_splats_count = cull_res.count
-	var active_instance_indices = cull_res.active_instance_indices
+	var output_buffer_rid: RID = cull_res.buffer_rid
+	var surviving_splats_count: int = cull_res.count
+	var active_instance_indices: Array = cull_res.active_instance_indices
 
 	if not output_buffer_rid.is_valid() or surviving_splats_count == 0:
 		multimesh.instance_count = 0
 		return
 
-	# Lire les données filtrées depuis le GPU
+	# Lire les données filtrées depuis le GPU (garde null Vulkan : Compatibility/headless)
+	if instanced_culler == null or instanced_culler.rd == null:
+		push_error("FoveaInstancedSplatRenderer: instanced_culler or rd is null, skipping data readback.")
+		multimesh.instance_count = 0
+		return
 	var culled_bytes: PackedByteArray = instanced_culler.rd.buffer_get_data(output_buffer_rid)
 
 	# 5. Nettoyage GPU optionnel
@@ -250,11 +319,20 @@ func load_and_render_splats() -> void:
 	var active_colors: Array[Color] = []
 	var active_scales: Array[float] = []
 	var active_alphas: Array[float] = []
+	var active_morph_types: Array[int] = []
+	var active_morph_weights: Array[float] = []
+	var active_morph_frequencies: Array[float] = []
+	var active_morph_amplitudes: Array[float] = []
+	
 	for idx in active_instance_indices:
 		active_transforms.append(instance_transforms[idx])
 		active_colors.append(instance_colors[idx] if idx < instance_colors.size() else Color.WHITE)
 		active_scales.append(instance_scales[idx] if idx < instance_scales.size() else 1.0)
 		active_alphas.append(instance_alphas[idx] if idx < instance_alphas.size() else 1.0)
+		active_morph_types.append(instance_morph_types[idx] if idx < instance_morph_types.size() else 0)
+		active_morph_weights.append(instance_morph_weights[idx] if idx < instance_morph_weights.size() else 0.0)
+		active_morph_frequencies.append(instance_morph_frequencies[idx] if idx < instance_morph_frequencies.size() else 1.0)
+		active_morph_amplitudes.append(instance_morph_amplitudes[idx] if idx < instance_morph_amplitudes.size() else 0.5)
 
 	# 6. Décodage parallèle
 	var decode_result := FoveaThreadPool.decode_parallel(
@@ -265,14 +343,19 @@ func load_and_render_splats() -> void:
 		active_transforms,
 		active_colors,
 		active_scales,
-		active_alphas
+		active_alphas,
+		active_morph_types,
+		active_morph_weights,
+		active_morph_frequencies,
+		active_morph_amplitudes
 	)
 
 	multimesh.transform_array = decode_result.xf_array
 	multimesh.custom_data_array = decode_result.cd_array
 
 	# Libérer le buffer GPU
-	instanced_culler.rd.free_rid(output_buffer_rid)
+	if output_buffer_rid.is_valid():
+		instanced_culler.rd.free_rid(output_buffer_rid)
 
 func _set_default_covar_texture() -> void:
 	var default_data := PackedByteArray()
@@ -303,7 +386,7 @@ func _upload_covar_codebook() -> void:
 
 	var codebook_bytes := PackedByteArray()
 	if ClassDB.can_instantiate("FoveaAssetLoader"):
-		var loader = ClassDB.instantiate("FoveaAssetLoader")
+		var loader: Object = ClassDB.instantiate("FoveaAssetLoader")
 		if loader and loader.has_method("load_covariance_codebook"):
 			codebook_bytes = loader.load_covariance_codebook(asset_path)
 
@@ -375,6 +458,11 @@ func update_material_shader() -> void:
 	var mat := material_override as ShaderMaterial
 	if not mat:
 		return
+	
+	if mat.shader and mat.shader.resource_path.ends_with("splat_render_artistic.gdshader"):
+		TexturedSplatGenerator.apply_brush_textures(mat)
+		return
+		
 	var has_palette := false
 	if enable_palette and ClassDB.can_instantiate("FoveaAssetLoader") and asset_path != "":
 		var loader: Object = ClassDB.instantiate("FoveaAssetLoader")
@@ -392,3 +480,34 @@ func update_material_shader() -> void:
 func _exit_tree() -> void:
 	if instanced_culler:
 		instanced_culler.cleanup()
+
+func _find_main_light() -> DirectionalLight3D:
+	if is_instance_valid(_cached_main_light):
+		return _cached_main_light
+	if not is_inside_tree():
+		return null
+	var lights: Array[Node] = get_tree().get_nodes_in_group("directional_lights")
+	for light in lights:
+		if light is DirectionalLight3D:
+			_cached_main_light = light
+			return light
+	var current_scene: Node = get_tree().current_scene
+	if current_scene:
+		var found: DirectionalLight3D = _find_light_recursive(current_scene)
+		if found:
+			_cached_main_light = found
+			return found
+	var found_root := _find_light_recursive(get_tree().root)
+	if found_root:
+		_cached_main_light = found_root
+		return found_root
+	return null
+
+func _find_light_recursive(node: Node) -> DirectionalLight3D:
+	if node is DirectionalLight3D:
+		return node
+	for child in node.get_children():
+		var found: DirectionalLight3D = _find_light_recursive(child)
+		if found:
+			return found
+	return null
