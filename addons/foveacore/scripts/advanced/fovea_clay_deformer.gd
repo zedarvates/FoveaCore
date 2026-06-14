@@ -122,7 +122,7 @@ var _handles: Array[ClayHandle] = []
 
 ## Cache des transforms originaux (non déformés)
 ## Clé: MultiMesh RID.get_id(), Valeur: Array[Transform3D]
-var _original_transforms: Dictionary = {}
+var _original_transforms: Dictionary[int, PackedFloat32Array] = {}
 
 ## Référence au renderer parent (si FoveaClayDeformer est enfant d'un SplatRenderer)
 var _renderer: FoveaCoreSplatRenderer = null
@@ -167,16 +167,41 @@ func get_handles() -> Array[ClayHandle]:
 ## Lire le cache de transforms originaux pour un MultiMesh donné.
 ## Utile pour que le renderer puisse l'alimenter après le chargement des splats.
 func set_original_transforms(mm: MultiMesh, transforms: Array[Transform3D]) -> void:
-	_original_transforms[mm.get_instance_id()] = transforms
+	var count := transforms.size()
+	var arr := PackedFloat32Array()
+	arr.resize(count * 12)
+	for i in count:
+		var xf := transforms[i]
+		var b := xf.basis
+		var o := xf.origin
+		var base := i * 12
+		arr[base + 0] = b.x.x
+		arr[base + 1] = b.y.x
+		arr[base + 2] = b.z.x
+		arr[base + 3] = o.x
+		arr[base + 4] = b.x.y
+		arr[base + 5] = b.y.y
+		arr[base + 6] = b.z.y
+		arr[base + 7] = o.y
+		arr[base + 8] = b.x.z
+		arr[base + 9] = b.y.z
+		arr[base + 10] = b.z.z
+		arr[base + 11] = o.z
+	_original_transforms[mm.get_instance_id()] = arr
 
 ## Forcer un recalcul des transforms originaux depuis le MultiMesh actuel
 ## (snapshot de l'état courant comme "repos")
 func snapshot_originals(mm: MultiMesh) -> void:
 	var count := mm.instance_count
-	var arr: Array[Transform3D] = []
-	arr.resize(count)
+	var stride := FoveaMultiMeshBulk.stride_of(mm)
+	var buf := mm.buffer
+	var arr := PackedFloat32Array()
+	arr.resize(count * 12)
 	for i in count:
-		arr[i] = mm.get_instance_transform(i)
+		var src := i * stride
+		var dest := i * 12
+		for j in 12:
+			arr[dest + j] = buf[src + j]
 	_original_transforms[mm.get_instance_id()] = arr
 	print("FoveaClayDeformer: Snapshot de %d transforms originaux." % count)
 
@@ -186,10 +211,24 @@ func reset_to_originals(mm: MultiMesh) -> void:
 	if not _original_transforms.has(key):
 		push_warning("FoveaClayDeformer: Aucun snapshot disponible pour ce MultiMesh.")
 		return
-	var originals: Array[Transform3D] = _original_transforms[key]
-	var count := mini(mm.instance_count, originals.size())
+	var originals: PackedFloat32Array = _original_transforms[key]
+	var count := mini(mm.instance_count, originals.size() / 12)
+	var stride := FoveaMultiMeshBulk.stride_of(mm)
+	var buf := mm.buffer
 	for i in count:
-		mm.set_instance_transform(i, originals[i])
+		var src := i * 12
+		var dest := i * stride
+		for j in 12:
+			buf[dest + j] = originals[src + j]
+	mm.buffer = buf
+
+func _read_transform(arr: PackedFloat32Array, index: int) -> Transform3D:
+	var base := index * 12
+	var x_axis := Vector3(arr[base + 0], arr[base + 4], arr[base + 8])
+	var y_axis := Vector3(arr[base + 1], arr[base + 5], arr[base + 9])
+	var z_axis := Vector3(arr[base + 2], arr[base + 6], arr[base + 10])
+	var origin := Vector3(arr[base + 3], arr[base + 7], arr[base + 11])
+	return Transform3D(Basis(x_axis, y_axis, z_axis), origin)
 
 # ─────────────────────────────────────────────
 #  Deformation Engine
@@ -209,14 +248,18 @@ func deform_multimesh(mm: MultiMesh) -> void:
 		snapshot_originals(mm)
 		return  # On attend le prochain frame pour travailler sur des données fraîches
 
-	var originals: Array[Transform3D] = _original_transforms[key]
+	var originals: PackedFloat32Array = _original_transforms[key]
 	var limit := count if max_splats_per_frame <= 0 else mini(count, max_splats_per_frame)
 
+	# Écriture bulk : modification d'une copie du buffer puis une seule affectation GPU
+	var stride := FoveaMultiMeshBulk.stride_of(mm)
+	var buf: PackedFloat32Array = mm.buffer
+
 	for i in limit:
-		if i >= originals.size():
+		if i >= originals.size() / 12:
 			break
 
-		var original_xf: Transform3D = originals[i]
+		var original_xf := _read_transform(originals, i)
 		var world_pos: Vector3 = original_xf.origin
 
 		# Accumuler toutes les contributions des handles
@@ -226,7 +269,9 @@ func deform_multimesh(mm: MultiMesh) -> void:
 			if weight > 0.0:
 				final_xf = handle.apply_to_transform(final_xf, weight)
 
-		mm.set_instance_transform(i, final_xf)
+		FoveaMultiMeshBulk.write_transform(buf, i * stride, final_xf)
+
+	mm.buffer = buf
 
 
 # ─────────────────────────────────────────────

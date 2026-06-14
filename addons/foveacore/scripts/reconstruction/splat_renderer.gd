@@ -96,11 +96,17 @@ func load_splats(splats: Array[GaussianSplat]) -> void:
 	_multimesh.instance_count = count
 
 	var cam_pos = _camera.global_position if _camera else Vector3.ZERO
+	# Écriture bulk (règle Batch Processing) : une seule affectation GPU
+	var stride: int = FoveaMultiMeshBulk.stride_of(_multimesh)
+	var buf: PackedFloat32Array = _multimesh.buffer
+	var has_colors: bool = _multimesh.use_colors
 	for i in range(count):
 		var splat = _splats[i]
-		var transform = _splat_to_transform(splat, cam_pos)
-		_multimesh.set_instance_transform(i, transform)
-		_multimesh.set_instance_color(i, splat.color)
+		var base: int = i * stride
+		FoveaMultiMeshBulk.write_transform(buf, base, _splat_to_transform(splat, cam_pos))
+		if has_colors:
+			FoveaMultiMeshBulk.write_color(buf, base + 12, splat.color)
+	_multimesh.buffer = buf
 
 	_sort_dirty = true
 	_last_camera_pos = cam_pos
@@ -177,11 +183,19 @@ func _sort_by_camera_distance() -> void:
 
 	# Réorganiser les transformations dans le MultiMesh selon le nouvel ordre
 	# (évite readback GPU, on recalcule à partir des splats)
-	for i in range(sorted_indices.size()):
+	# Écriture bulk (règle Batch Processing) : une seule affectation GPU
+	var cam_pos: Vector3 = _camera.global_position if _camera else Vector3.ZERO
+	var stride: int = FoveaMultiMeshBulk.stride_of(_multimesh)
+	var buf: PackedFloat32Array = _multimesh.buffer
+	var has_colors: bool = _multimesh.use_colors
+	var n: int = mini(sorted_indices.size(), _multimesh.instance_count)
+	for i in range(n):
 		var splat = _splats[sorted_indices[i]]
-		var cam_pos = _camera.global_position if _camera else Vector3.ZERO
-		_multimesh.set_instance_transform(i, _splat_to_transform(splat, cam_pos))
-		_multimesh.set_instance_color(i, splat.color)
+		var base: int = i * stride
+		FoveaMultiMeshBulk.write_transform(buf, base, _splat_to_transform(splat, cam_pos))
+		if has_colors:
+			FoveaMultiMeshBulk.write_color(buf, base + 12, splat.color)
+	_multimesh.buffer = buf
 
 	var elapsed = Time.get_ticks_msec() - start_time
 	sorting_completed.emit(elapsed)

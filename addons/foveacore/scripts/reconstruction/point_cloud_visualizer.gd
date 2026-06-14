@@ -60,8 +60,13 @@ func _parse_ply_header(file: FileAccess) -> Dictionary:
 func _populate_points(file: FileAccess, header: Dictionary) -> void:
 	var count = header.get("vertex_count", 0)
 	var has_color = header.get("has_color", false)
-	
-	for i in range(count):
+
+	# Écriture bulk (règle Batch Processing) : buffer construit en une passe
+	var stride: int = FoveaMultiMeshBulk.stride_of(multimesh)
+	var buf := PackedFloat32Array()
+	buf.resize(multimesh.instance_count * stride)
+
+	for i in range(mini(count, multimesh.instance_count)):
 		var pos = Vector3.ZERO
 		var color = default_color
 		
@@ -78,7 +83,9 @@ func _populate_points(file: FileAccess, header: Dictionary) -> void:
 			pos = Vector3(randf_range(-1,1), randf_range(0,2), randf_range(-1,1))
 			color = Color(randf(), randf(), randf())
 			
-		multimesh.set_instance_transform(i, Transform3D(Basis(), pos))
-		multimesh.set_instance_color(i, color)
-	
+		var base: int = i * stride
+		FoveaMultiMeshBulk.write_transform(buf, base, Transform3D(Basis(), pos))
+		FoveaMultiMeshBulk.write_color(buf, base + 12, color)
+
+	multimesh.buffer = buf
 	print("PointCloudVisualizer: Affichage de %d points." % count)

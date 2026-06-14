@@ -124,12 +124,17 @@ func render() -> void:
 	mm.mesh = mesh
 	_multi_mesh.multimesh = mm
 	
+	# Écriture bulk (règle Batch Processing) : buffer construit en une passe
+	var stride: int = FoveaMultiMeshBulk.stride_of(mm)
+	var buf := PackedFloat32Array()
+	buf.resize(_points_data.size() * stride)
 	for i in range(_points_data.size()):
 		var pt = _points_data[i]
-		var t = Transform3D(Basis(), pt["pos"])
-		mm.set_instance_transform(i, t)
-		mm.set_instance_color(i, pt["color"])
-	
+		var base: int = i * stride
+		FoveaMultiMeshBulk.write_transform(buf, base, Transform3D(Basis(), pt["pos"]))
+		FoveaMultiMeshBulk.write_color(buf, base + 12, pt["color"])
+	mm.buffer = buf
+
 	print("EnhancedPointCloud: Rendered %d points" % _points_data.size())
 
 func _create_material() -> StandardMaterial3D:
