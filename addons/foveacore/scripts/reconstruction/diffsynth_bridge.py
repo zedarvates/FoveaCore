@@ -36,7 +36,10 @@ def main():
     parser.add_argument("--fps", type=int, default=2, help="FPS for video extraction")
     parser.add_argument("--task", default="reconstruct", help="Task mode (reconstruct/reshoot/expand)")
     parser.add_argument("--loop_steps", type=int, default=8, help="Refinement loop steps K (for DVLT compute knob)")
+    parser.add_argument("--dry-run", action="store_true", dest="dry_run",
+                        help="Allow placeholder outputs for integration testing (no real inference)")
     args = parser.parse_args()
+    t_start = time.time()
 
     output_dir = Path(args.output).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -65,7 +68,7 @@ def main():
         "backend": args.backend,
         "task": args.task,
         "input": args.input,
-        "elapsed_s": round(time.time() - t_start, 1) if "t_start" in dir() else 0
+        "elapsed_s": round(time.time() - t_start, 1)
     }))
     print(f"[DiffSynth Bridge] Done. Marker: {marker}")
 
@@ -178,10 +181,15 @@ def _run_anyrecon(args, output_dir):
     # Phase 3: Wan 2.1 I2V inference with AnyRecon LoRA
     # Phase 4: 3D geometry memory update (iterative loop)
 
-    # Placeholder — full implementation requires AnyRecon LoRA + Wan I2V pipeline
-    print("[DiffSynth Bridge] AnyRecon inference — not yet fully implemented (LoRA weights needed)")
+    # Implémentation réelle non disponible (nécessite AnyRecon LoRA + pipeline Wan I2V).
+    # On échoue explicitement plutôt que de retourner un succès silencieusement faux.
+    if not getattr(args, "dry_run", False):
+        print("[DiffSynth Bridge] ERROR: AnyRecon backend is NOT implemented "
+              "(requires AnyRecon LoRA weights + Wan I2V pipeline).", file=sys.stderr)
+        print("  Use --backend worldmirror2, or pass --dry-run for integration tests.", file=sys.stderr)
+        sys.exit(2)
 
-    print(f"[DiffSynth Bridge] AnyRecon placeholder done in {time.time() - t_start:.1f}s")
+    print(f"[DiffSynth Bridge] AnyRecon DRY-RUN placeholder done in {time.time() - t_start:.1f}s")
 
 
 def _run_dvlt(args, output_dir):
@@ -224,12 +232,20 @@ def _run_dvlt(args, output_dir):
     # outputs.save_camera_params(str(output_dir / "camera_params.json"))
     # outputs.save_point_cloud(str(output_dir / "points.ply"))
 
-    # Placeholder pour le test d'intégration
+    # Inférence réelle non câblée : on échoue explicitement hors --dry-run
+    # plutôt que d'écrire de fausses poses (audit B8).
+    if not getattr(args, "dry_run", False):
+        print("[DiffSynth Bridge] ERROR: DVLT inference is NOT wired yet "
+              "(model instantiation/reconstruct calls are stubbed).", file=sys.stderr)
+        print("  Pass --dry-run to generate placeholder outputs for integration tests.", file=sys.stderr)
+        sys.exit(2)
+
+    # Placeholder pour le test d'intégration (uniquement en --dry-run)
     (output_dir / "depth").mkdir(parents=True, exist_ok=True)
     camera_params = output_dir / "camera_params.json"
-    camera_params.write_text(json.dumps({"info": "DVLT predicted poses placeholder"}))
-    
-    print("[DiffSynth Bridge] DVLT: Saved predicted depths, points.ply, and camera_params.json.")
+    camera_params.write_text(json.dumps({"info": "DVLT predicted poses placeholder", "dry_run": True}))
+
+    print("[DiffSynth Bridge] DVLT DRY-RUN: wrote placeholder depth/ and camera_params.json.")
     print(f"[DiffSynth Bridge] DVLT finished in {time.time() - t_start:.1f}s")
 
 

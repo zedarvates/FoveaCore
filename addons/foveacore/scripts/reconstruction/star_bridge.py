@@ -1,4 +1,5 @@
 import os
+import sys
 import argparse
 import json
 import cv2
@@ -12,37 +13,53 @@ try:
 except ImportError:
     HAS_DA3 = False
 
-def process_star_monocular(input_dir, output_dir, device='cuda'):
+def process_star_monocular(input_dir, output_dir, device='cuda', checkpoint=None, allow_heuristic=False):
     print(f"STAR Bridge: Starting fast monocular path for {input_dir}")
     os.makedirs(output_dir, exist_ok=True)
 
     image_files = sorted([f for f in os.listdir(input_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))])
     if not image_files:
-        print("Error: No images found in input directory.")
-        return
+        print("STAR Bridge ERROR: No images found in input directory.", file=sys.stderr)
+        sys.exit(1)
 
-    # 1. Initialize DA3 Model
+    # 1. Initialize DA3 Model — échec explicite si indisponible (audit B8),
+    #    sauf si --allow-heuristic est passé (profondeur approximative assumée).
+    model = None
     if not HAS_DA3:
-        print("Error: depth_anything_3 not found. Please install it using the InSpatio-World environment.")
-        return
-
-    print("STAR Bridge: Loading Depth-Anything-3...")
-    # Using 'giant' as default for high quality, fallback to 'large'
-    try:
-        model = DepthAnythingV2(encoder='vitg', features=256, out_channels=[256, 512, 1024, 2048])
-        # Note: In a real scenario, the user would provide the checkpoint path.
-        # Here we assume the model is ready or they have the path in their environment.
-        # This is a placeholder for the actual model loading logic from InSpatio.
-    except Exception as e:
-        print(f"Error loading model: {e}")
-        return
+        if not allow_heuristic:
+            print("STAR Bridge ERROR: depth_anything_3 not found. "
+                  "Install it (InSpatio-World env) or pass --allow-heuristic.", file=sys.stderr)
+            sys.exit(1)
+        print("STAR Bridge WARNING: DA3 missing — using heuristic depth (low quality).")
+    else:
+        if not checkpoint or not os.path.isfile(checkpoint):
+            if not allow_heuristic:
+                print("STAR Bridge ERROR: --checkpoint path to DA3 weights is required "
+                      "(random weights would produce garbage depth). "
+                      "Or pass --allow-heuristic.", file=sys.stderr)
+                sys.exit(1)
+            print("STAR Bridge WARNING: no valid checkpoint — using heuristic depth.")
+        else:
+            print(f"STAR Bridge: Loading Depth-Anything-3 from {checkpoint}...")
+            try:
+                model = DepthAnythingV2(encoder='vitg', features=256, out_channels=[256, 512, 1024, 2048])
+                model.load_state_dict(torch.load(checkpoint, map_location=device))
+                model = model.to(device).eval()
+            except Exception as e:
+                print(f"STAR Bridge ERROR: failed to load DA3 model: {e}", file=sys.stderr)
+                if not allow_heuristic:
+                    sys.exit(1)
+                model = None
+                print("STAR Bridge WARNING: falling back to heuristic depth.")
 
     # 2. Process Frames
     depth_atlas = []
     metadata = {
         "frames": [],
         "engine": "FoveaCore STAR-Lite",
-        "source": input_dir
+        "source": input_dir,
+        "depth_source": "da3" if model is not None else "heuristic",
+        "poses_are_placeholder": True
     }
 
     print(f"STAR Bridge: Processing {len(image_files)} frames...")
@@ -52,7 +69,7 @@ def process_star_monocular(input_dir, output_dir, device='cuda'):
         h, w = img.shape[:2]
 
         # Depth Estimation
-        if HAS_DA3:
+        if model is not None:
             try:
                 depth = model.infer_image(img)
             except Exception as e:
@@ -103,6 +120,9 @@ if __name__ == "__main__":
     parser.add_argument("--input", required=True, help="Input images directory")
     parser.add_argument("--output", required=True, help="Output workspace directory")
     parser.add_argument("--device", default="cuda", help="Computation device")
+    parser.add_argument("--checkpoint", default=None, help="Path to DA3 model weights (.pth)")
+    parser.add_argument("--allow-heuristic", action="store_true", dest="allow_heuristic",
+                        help="Allow low-quality heuristic depth when DA3/weights are unavailable")
     args = parser.parse_args()
 
-    process_star_monocular(args.input, args.output, args.device)
+    process_star_monocular(args.input, args.output, args.device, args.checkpoint, args.allow_heuristic)
