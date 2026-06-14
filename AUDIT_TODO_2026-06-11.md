@@ -46,10 +46,10 @@
 - [ ] **D2. 11 appels `rd.sync()`** dans les pipelines GPU → stalls CPU-GPU chaque frame. Court terme : regrouper submit/sync ; long terme : voir A3 (indirect draw).
 - [x] **D3. Tests automatisés** ✅ *11/06* : l'infra existait déjà (`run_all_tests.gd` + `test_node_runner.gd` + `test_compile_all_scripts.gd`). Renforcé : `--path` explicite pour les sous-processus (robuste en CI), pas de doublon `--headless`. Commande locale : `godot --headless --path . -s res://addons/foveacore/test/run_all_tests.gd`.
 - [x] **D4. CI/CD** ✅ *11/06* : `.github/workflows/ci.yml` réécrit — 6 jobs : parse GDScript (gdparse 4.x, hors godot-cpp), syntaxe Python (tous les bridges), build C# (dotnet 9), compile-check Godot 4.7-dev5 headless (le conteneur 4.6 était incompatible avec le projet 4.7), tests unitaires (informatif tant que pas de GPU sur les runners — `continue-on-error`), build Rust multi-OS. ⚠️ À vérifier au 1er run : nom de l'asset `Godot_v4.7-dev5_mono_linux_x86_64.zip` sur godot-builds, et disponibilité de `Godot.NET.Sdk/4.7.0-dev.5` sur NuGet.
-- [ ] **D5. Hygiène du dépôt** : déplacer/ignorer `test_run*.log`, `test_output.log`, `script_parse.log`, `import.log`, `audit_foveacore.diff`, `nemotron AUdit.txt`, `my icone/`, `Videos test/` (`.gitignore` + dossier `docs/audits/`).
-- [ ] **D6. Snapshot Clay Deformer en `Dictionary` non typé** (`_original_transforms[mm.get_instance_id()]`) : OK fonctionnellement (non-destructif respecté) mais stocker en `PackedFloat32Array` pour cohérence avec B2 et mémoire réduite.
-- [ ] **D7. Code Rust dans `shaders/`** (relevé dans l'audit du 02/05, toujours d'actualité ?) : déplacer `lib.rs`/`Cargo.toml` vers `rust/`.
-- [ ] **D8. `GazeTrackerLinker`** : toujours jamais testé sur matériel réel — prévoir un fallback simulation souris + flag de statut clair.
+- [x] **D5. Hygiène du dépôt** : déplacer/ignorer `test_run*.log`, `test_output.log`, `script_parse.log`, `import.log`, `audit_foveacore.diff`, `nemotron AUdit.txt`, `my icone/`, `Videos test/` (`.gitignore` + dossier `docs/audits/`).
+- [x] **D6. Snapshot Clay Deformer en `Dictionary` non typé** (`_original_transforms[mm.get_instance_id()]`) : OK fonctionnellement (non-destructif respecté) mais stocker en `PackedFloat32Array` pour cohérence avec B2 et mémoire réduite.
+- [x] **D7. Code Rust dans `shaders/`** (relevé dans l'audit du 02/05, toujours d'actualité ?) : déplacer `lib.rs`/`Cargo.toml` vers `rust/`.
+- [x] **D8. `GazeTrackerLinker`** : toujours jamais testé sur matériel réel — prévoir un fallback simulation souris + flag de statut clair.
 
 ## 4. 🟡 AMÉLIORATIONS / DÉVELOPPEMENT (roadmap restante)
 
