@@ -15,7 +15,10 @@ signal oom_detected(command: String, details: String)
 @export var python_path: String = "python"
 @export var gaussiantrain_script: String = "train.py"
 @export var star_bridge_script: String = "star_bridge.py"
+## Chemin vers les poids DA3 (.pth). Vide = repli heuristique (basse qualité, avertissement explicite).
+@export var star_da3_checkpoint: String = ""
 @export var worldmirror_bridge_script: String = "worldmirror_bridge.py"
+@export var artifixer_bridge_script: String = "artifixer_bridge.py"
 
 ## Timeout maximum en secondes pour chaque commande externe (0 = pas de timeout)
 @export var command_timeout_seconds: float = 1800.0  # 30 min par defaut
@@ -53,6 +56,12 @@ func _run_colmap_features(session: ReconstructionSession) -> void:
 		"--use_gpu", "1"
 	]
 	
+	# Pass masks to COLMAP if masks directory exists
+	var mask_path = abs_path + "/masks"
+	if DirAccess.dir_exists_absolute(mask_path):
+		args.append("--mask_path")
+		args.append(mask_path)
+	
 	_execute_command(colmap_path, args, "COLMAP: Full SfM Reconstruction", session)
 
 func _run_gaussian_training(session: ReconstructionSession) -> void:
@@ -87,7 +96,32 @@ func _run_star_monocular_path(session: ReconstructionSession) -> void:
 		"--output", abs_path + "/star_workspace",
 		"--device", "cuda"
 	]
+	# Poids DA3 requis pour une vraie inférence ; sinon repli heuristique explicite (audit B8)
+	if not star_da3_checkpoint.is_empty():
+		args.append_array(["--checkpoint", star_da3_checkpoint])
+	else:
+		args.append("--allow-heuristic")
+		push_warning("ReconstructionBackend: star_da3_checkpoint non défini — profondeur heuristique basse qualité.")
 	_execute_command(python_path, args, "STAR: Fast Monocular Depth (DA3)", session)
+
+## Runs ArtiFixer refinement on the current reconstruction
+func execute_artifixer(session: ReconstructionSession) -> void:
+	_run_artifixer_path(session)
+
+func _run_artifixer_path(session: ReconstructionSession) -> void:
+	var abs_path: String = ProjectSettings.globalize_path(session.output_directory)
+	var script_path = ProjectSettings.globalize_path("res://addons/foveacore/scripts/reconstruction").path_join(artifixer_bridge_script)
+	var args = [
+		script_path,
+		"--input", abs_path,
+		"--output", abs_path
+	]
+	if not session.artifixer_checkpoint.is_empty():
+		args.append_array(["--checkpoint", session.artifixer_checkpoint])
+	if session.dry_run:
+		args.append("--dry-run")
+	_execute_command(python_path, args, "ArtiFixer: Splat Refinement & Novel-view Synthesis", session)
+
 
 func _execute_command(executable: String, args: Array, task_name: String, session: ReconstructionSession = null) -> void:
 	command_started.emit(task_name)
