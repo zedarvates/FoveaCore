@@ -7,6 +7,13 @@ var style_inspector_plugin: EditorInspectorPlugin = null
 var splattable_inspector_plugin: EditorInspectorPlugin = null
 var splattable_gizmo_plugin: EditorNode3DGizmoPlugin = null
 
+# "Add FoveaSplat3D…" — always-visible viewport action to create a splat node
+# from a file (reliable alternative to viewport drag-and-drop, see PHASE0 E1).
+var add_splat_button: Button = null
+var add_splat_dialog: EditorFileDialog = null
+
+const FoveaSplat3DScript = preload("res://addons/foveacore/scripts/fovea_splat_3d.gd")
+
 const FoveaAssetFormatLoaderScript = preload("res://addons/foveacore/scripts/fovea_asset_loader.gd")
 const FoveaAssetFormatSaverScript = preload("res://addons/foveacore/scripts/fovea_asset_saver.gd")
 
@@ -118,6 +125,25 @@ func _enter_tree():
 	popup.id_pressed.connect(_on_menu_item_pressed)
 	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, fovea_menu)
 
+	# Always-visible "Add FoveaSplat3D…" button (file picker → new node).
+	add_splat_button = Button.new()
+	add_splat_button.text = "＋ FoveaSplat3D"
+	add_splat_button.flat = true
+	add_splat_button.tooltip_text = "Create a FoveaSplat3D in the current scene from a .ply / .fovea / .spz file"
+	add_splat_button.pressed.connect(_on_add_splat_pressed)
+	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, add_splat_button)
+
+	add_splat_dialog = EditorFileDialog.new()
+	add_splat_dialog.file_mode = EditorFileDialog.FILE_MODE_OPEN_FILE
+	add_splat_dialog.access = EditorFileDialog.ACCESS_RESOURCES
+	add_splat_dialog.clear_filters()
+	add_splat_dialog.add_filter("*.fovea", "Fovea asset")
+	add_splat_dialog.add_filter("*.ply", "Gaussian Splatting PLY")
+	add_splat_dialog.add_filter("*.spz", "SPZ splat")
+	add_splat_dialog.title = "Select a splat file"
+	add_splat_dialog.file_selected.connect(_on_splat_file_selected)
+	EditorInterface.get_base_control().add_child(add_splat_dialog)
+
 func _exit_tree():
 	if panel:
 		remove_control_from_docks(panel)
@@ -162,12 +188,56 @@ func _exit_tree():
 		fovea_menu.queue_free()
 		fovea_menu = null
 
+	# Clean up "Add FoveaSplat3D…" button + dialog
+	if add_splat_button:
+		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, add_splat_button)
+		add_splat_button.queue_free()
+		add_splat_button = null
+	if add_splat_dialog:
+		add_splat_dialog.queue_free()
+		add_splat_dialog = null
+
 	# Clean up Context Menu Plugin
 	if context_menu_plugin:
 		remove_context_menu_plugin(context_menu_plugin)
 		context_menu_plugin = null
 
 	print("FoveaCore unloaded")
+
+
+func _on_add_splat_pressed() -> void:
+	if add_splat_dialog:
+		add_splat_dialog.popup_centered_ratio(0.6)
+
+
+func _on_splat_file_selected(path: String) -> void:
+	var root: Node = EditorInterface.get_edited_scene_root()
+	if root == null:
+		push_warning("FoveaPlugin: Open or create a scene first, then add a FoveaSplat3D.")
+		return
+
+	# Parent to the current selection if it's a Node3D, else to the scene root.
+	var parent: Node = root
+	var sel: Array = EditorInterface.get_selection().get_selected_nodes()
+	if sel.size() == 1 and sel[0] is Node3D:
+		parent = sel[0]
+
+	var splat: Node3D = FoveaSplat3DScript.new()
+	splat.name = path.get_file().get_basename().to_pascal_case() + "Splat"
+	splat.set("source_path", path)
+
+	# Register with the editor's undo/redo so creation is reversible.
+	var ur: EditorUndoRedoManager = get_undo_redo()
+	ur.create_action("Add FoveaSplat3D")
+	ur.add_do_method(parent, "add_child", splat)
+	ur.add_do_method(splat, "set_owner", root)
+	ur.add_do_reference(splat)
+	ur.add_undo_method(parent, "remove_child", splat)
+	ur.commit_action()
+
+	EditorInterface.get_selection().clear()
+	EditorInterface.get_selection().add_node(splat)
+	print("FoveaPlugin: Added FoveaSplat3D '%s' from %s" % [splat.name, path])
 
 func _handles(object: Object) -> bool:
 	return object is FoveaSplattable
