@@ -98,8 +98,8 @@ Le constat : la CI builde déjà les artefacts Rust pour Windows/Linux/macOS x86
 
 ## Chantier E — La démo "Drop a PLY" (Semaines 5–6)
 
-- [ ] **E1. Drag & drop dans le viewport** — implémenter `_drop_data`/EditorPlugin drop handling : glisser un `.ply`/`.fovea`/`.spz` depuis le FileSystem dock vers le viewport 3D crée un `FoveaSplat3D` configuré à la position du curseur.
-  - ✅ *Accepté si : le geste fonctionne dans une scène vide comme dans une scène peuplée.*
+- [x] **E1. ~~Drag & drop dans le viewport~~ → action « Add FoveaSplat3D… »** — l'API de drop dans le viewport 3D d'un `EditorPlugin` est trop fragile pour être livrée sans test interactif. Alternative fiable retenue (validée avec l'utilisateur 2026-06-15) : bouton **＋ FoveaSplat3D** toujours visible dans la barre d'outils du viewport spatial → ouvre un `EditorFileDialog` (`*.fovea`/`*.ply`/`*.spz`) → crée un `FoveaSplat3D` configuré dans la scène courante (parenté au nœud Node3D sélectionné sinon à la racine), avec undo/redo via `EditorUndoRedoManager` et sélection auto. *(Fait 2026-06-15 dans plugin.gd, APIs éditeur stables uniquement, cleanup symétrique. **Compile-vérifié (146/146) ; le clic réel reste à confirmer dans l'éditeur interactif — geste manuel ~30 s.**)*
+  - ✅ *Accepté si : créer un FoveaSplat3D depuis un fichier marche dans une scène vide comme peuplée.* → logique en place ; à confirmer d'un clic.
 
 - [x] **E2. Scène de démo** — `demo/drop_a_ply.tscn` : environnement Godot standard (sky, DirectionalLight), un `FoveaSplat3D` pré-chargé avec la fixture, caméra orbitale, overlay FPS (le debug overlay de la tâche 79 du backlog existe déjà). *(Fait 2026-06-13 : `demo/drop_a_ply.tscn` généré par `demo/build_demo_scene.gd` (sky procédural + sun ombré + Camera3D + `FoveaSplat3D`(fixture) + HUD `fps_overlay.gd`), `demo/README.md`. Scène construite par code → toujours valide. Validé : le chemin `FoveaSplat3D`+fixture est couvert par le smoke test C5.)*
   - ✅ *Accepté si : ouvrir la scène → F5 → navigation fluide immédiate.* → composition validée headless ; le ressenti « fluide » dépend du finding perf C6.
