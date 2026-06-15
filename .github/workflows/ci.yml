@@ -171,6 +171,66 @@ jobs:
             exit 1
           fi
 
+  # ── 5d. Régression visuelle (lavapipe + Xvfb, informatif/bootstrap) ────
+  # Rend la scène de démo avec Mesa lavapipe (Vulkan logiciel) sous Xvfb et
+  # compare le PNG au golden `test/fixtures/golden_render.png` (RMSE perceptuel).
+  # Bootstrap : si le golden n'existe pas encore, le rendu est publié en
+  # artefact `render-baseline` à committer. Informatif (continue-on-error) tant
+  # que le golden n'est pas figé et le seuil calibré → passer en échec dur
+  # ensuite. (C4)
+  visual-regression:
+    name: Visual Regression (lavapipe, informational)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+      - name: Install software Vulkan (lavapipe), Xvfb, ImageMagick
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mesa-vulkan-drivers vulkan-tools xvfb imagemagick
+      - name: Download Godot ${{ env.GODOT_VERSION }} (mono)
+        run: |
+          curl -sSL -o godot.zip \
+            "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}/${GODOT_ZIP}"
+          unzip -q godot.zip
+          chmod +x "${GODOT_BIN}"
+      - name: Import project resources
+        run: |
+          xvfb-run -a "./${GODOT_BIN}" --headless --path . --import || true
+      - name: Capture render (Vulkan / lavapipe under Xvfb)
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          xvfb-run -a -s "-screen 0 800x600x24" \
+            "./${GODOT_BIN}" --rendering-driver vulkan --resolution 800x600 \
+            --path . -s res://addons/foveacore/test/capture_render.gd -- --out=capture.png
+          ls -l capture.png
+      - name: Compare to golden (or bootstrap baseline)
+        run: |
+          GOLDEN=test/fixtures/golden_render.png
+          if [ -f "$GOLDEN" ]; then
+            # Normalized RMSE in [0,1]; tolerate minor lavapipe noise.
+            RMSE=$(compare -metric RMSE "$GOLDEN" capture.png diff.png 2>&1 | sed -E 's/.*\(([0-9.]+)\).*/\1/' || echo "1")
+            echo "RMSE=$RMSE (threshold 0.05)"
+            awk -v r="$RMSE" 'BEGIN { exit (r+0 > 0.05) }' \
+              || { echo "::error::Visual regression: RMSE $RMSE exceeds 0.05"; exit 1; }
+          else
+            echo "::warning::No golden yet — publishing capture.png as the baseline to commit at test/fixtures/golden_render.png"
+          fi
+      - name: Upload render artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-baseline
+          path: |
+            capture.png
+            diff.png
+          if-no-files-found: ignore
+
   # ── 6. Build GDExtension Rust ───────────────────────────────────────────
   build-gdextension:
     name: Build GDExtension (Rust)
