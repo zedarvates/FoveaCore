@@ -1,0 +1,3372 @@
+{
+  "scriptCompleted": true,
+  "files": [
+    {
+      "path": ".gdlintrc",
+      "language": "unknown",
+      "sizeLines": 12,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".gitattributes",
+      "language": "unknown",
+      "sizeLines": 2,
+      "fileCategory": "code"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "language": "yaml",
+      "sizeLines": 214,
+      "fileCategory": "infra"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "language": "yaml",
+      "sizeLines": 138,
+      "fileCategory": "infra"
+    },
+    {
+      "path": ".kilocode/task_history.json",
+      "language": "json",
+      "sizeLines": 38,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".kilocode/tasks/1fcbed7b-752b-46e0-8f6a-f209aa257b17/api_conversation_history.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".kilocode/tasks/1fcbed7b-752b-46e0-8f6a-f209aa257b17/raw_api_payload_2026-04-20T18-28-17-669Z-attempt-0-uv9t2m.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".kilocode/tasks/1fcbed7b-752b-46e0-8f6a-f209aa257b17/raw_api_payload_2026-04-20T18-28-23-910Z-attempt-1-cr3o2y.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".kilocode/tasks/1fcbed7b-752b-46e0-8f6a-f209aa257b17/raw_api_payload_2026-04-20T18-28-36-618Z-attempt-2-1eibp2.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".kilocode/tasks/1fcbed7b-752b-46e0-8f6a-f209aa257b17/raw_api_payload_2026-04-20T18-28-45-882Z-attempt-3-moupat.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".kilocode/tasks/1fcbed7b-752b-46e0-8f6a-f209aa257b17/raw_api_payload_2026-04-20T18-29-01-323Z-attempt-4-rfk5vj.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".kilocode/tasks/1fcbed7b-752b-46e0-8f6a-f209aa257b17/raw_api_payload_2026-04-20T18-29-28-763Z-attempt-5-57eehp.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".kilocode/tasks/1fcbed7b-752b-46e0-8f6a-f209aa257b17/raw_api_payload_2026-04-20T18-30-10-477Z-attempt-6-d0bu1h.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".kilocode/tasks/1fcbed7b-752b-46e0-8f6a-f209aa257b17/raw_api_payload_2026-04-20T18-31-30-853Z-attempt-7-1m3ws8.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".kilocode/tasks/1fcbed7b-752b-46e0-8f6a-f209aa257b17/raw_api_payload_2026-04-20T18-34-06-845Z-attempt-8-fflftm.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".kilocode/tasks/1fcbed7b-752b-46e0-8f6a-f209aa257b17/raw_api_payload_2026-04-20T18-39-10-151Z-attempt-9-1je56a.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".kilocode/tasks/1fcbed7b-752b-46e0-8f6a-f209aa257b17/raw_api_payload_latest.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": ".kilocode/tasks/1fcbed7b-752b-46e0-8f6a-f209aa257b17/ui_messages.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": "addons/fovea_engine/core/FoveaSplatAnimator.cs",
+      "language": "csharp",
+      "sizeLines": 287,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/core/FoveaSplatAnimator.cs.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/core/FoveaSplatInstancer.cs",
+      "language": "csharp",
+      "sizeLines": 161,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/core/FoveaSplatInstancer.cs.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/core/FoveaSplatNode3D.cs",
+      "language": "csharp",
+      "sizeLines": 151,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/core/FoveaSplatNode3D.cs.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/core/FoveaSplatResource.cs",
+      "language": "csharp",
+      "sizeLines": 250,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/core/FoveaSplatResource.cs.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/editor/FoveaSplatBrushTool.cs",
+      "language": "csharp",
+      "sizeLines": 307,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/editor/FoveaSplatBrushTool.cs.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/editor/FoveaSplatEditorPlugin.cs",
+      "language": "csharp",
+      "sizeLines": 164,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/editor/FoveaSplatEditorPlugin.cs.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/editor/FoveaSplatSelectionTool.cs",
+      "language": "csharp",
+      "sizeLines": 121,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/editor/FoveaSplatSelectionTool.cs.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/export/FoveaSplatExporter.cs",
+      "language": "csharp",
+      "sizeLines": 182,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/export/FoveaSplatExporter.cs.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/import/FoveaSplatConverter.cs",
+      "language": "csharp",
+      "sizeLines": 581,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/import/FoveaSplatConverter.cs.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/import/FoveaSplatImporter.cs",
+      "language": "csharp",
+      "sizeLines": 80,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/import/FoveaSplatImporter.cs.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/plugin.cfg",
+      "language": "config",
+      "sizeLines": 7,
+      "fileCategory": "config"
+    },
+    {
+      "path": "addons/fovea_engine/render/FoveaSplatDecoder.cs",
+      "language": "csharp",
+      "sizeLines": 66,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/render/FoveaSplatDecoder.cs.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/render/FoveaSplatRenderer.cs",
+      "language": "csharp",
+      "sizeLines": 473,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/render/FoveaSplatRenderer.cs.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/render/FoveaSplatRenderer.gdshader",
+      "language": "gdshader",
+      "sizeLines": 187,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/render/FoveaSplatRenderer.gdshader.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/ui/FoveaSplatManagerUI.cs",
+      "language": "csharp",
+      "sizeLines": 273,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/ui/FoveaSplatManagerUI.cs.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_engine/ui/FoveaSplatManagerUI.tscn",
+      "language": "tscn",
+      "sizeLines": 128,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_labs/plugin.cfg",
+      "language": "config",
+      "sizeLines": 7,
+      "fileCategory": "config"
+    },
+    {
+      "path": "addons/fovea_labs/plugin.gd",
+      "language": "gd",
+      "sizeLines": 38,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/fovea_labs/plugin.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/COLOR_QUANTIZATION.md",
+      "language": "markdown",
+      "sizeLines": 182,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "addons/foveacore/foveacore.gdextension",
+      "language": "gdextension",
+      "sizeLines": 12,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/foveacore.gdextension.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/gdextension/.sconsign.dblite",
+      "language": "dblite",
+      "sizeLines": 111,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/gdextension/bin/~foveacore.dll~RF1560196.TMP",
+      "language": "tmp",
+      "sizeLines": 604,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/gdextension/bin/~foveacore.dll~RF1b2ce4d.TMP",
+      "language": "tmp",
+      "sizeLines": 604,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/gdextension/bin/~foveacore.dll~RF1c02d08.TMP",
+      "language": "tmp",
+      "sizeLines": 604,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/gdextension/bin/~foveacore.dll~RF1cccb32.TMP",
+      "language": "tmp",
+      "sizeLines": 604,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/gdextension/bin/~foveacore.dll~RF1cdf366.TMP",
+      "language": "tmp",
+      "sizeLines": 604,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/gdextension/bin/~foveacore.dll~RF2091806.TMP",
+      "language": "tmp",
+      "sizeLines": 604,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/gdextension/bin/~foveacore.dll~RF2121d69.TMP",
+      "language": "tmp",
+      "sizeLines": 604,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/gdextension/bin/~foveacore.dll~RF23505df.TMP",
+      "language": "tmp",
+      "sizeLines": 604,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/gdextension/bin/~foveacore.dll~RF23f4895.TMP",
+      "language": "tmp",
+      "sizeLines": 604,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/gdextension/bin/foveacore.dll",
+      "language": "dll",
+      "sizeLines": 9196,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/gdextension/bin/foveacore.exp",
+      "language": "exp",
+      "sizeLines": 2,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/gdextension/bin/foveacore.lib",
+      "language": "lib",
+      "sizeLines": 9,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/gdextension/README_BUILD.md",
+      "language": "markdown",
+      "sizeLines": 117,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "addons/foveacore/gdextension/SConstruct",
+      "language": "unknown",
+      "sizeLines": 45,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/gdextension/src/fovea_renderer.cpp",
+      "language": "cpp",
+      "sizeLines": 17,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/gdextension/src/fovea_renderer.h",
+      "language": "c",
+      "sizeLines": 36,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/gdextension/src/fovea_renderer.obj",
+      "language": "obj",
+      "sizeLines": 60,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/gdextension/src/fovea_renderer.obj.import",
+      "language": "import",
+      "sizeLines": 22,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/gdextension/src/register_types.cpp",
+      "language": "cpp",
+      "sizeLines": 42,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/gdextension/src/register_types.h",
+      "language": "c",
+      "sizeLines": 11,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/gdextension/src/register_types.obj",
+      "language": "obj",
+      "sizeLines": 395,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/gdextension/src/register_types.obj.import",
+      "language": "import",
+      "sizeLines": 22,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/icons/fovea_splattable.svg.import",
+      "language": "import",
+      "sizeLines": 43,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/OPTIMISATION_TRIANGLE_SPLAT.md",
+      "language": "markdown",
+      "sizeLines": 175,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "addons/foveacore/plugin.cfg",
+      "language": "config",
+      "sizeLines": 7,
+      "fileCategory": "config"
+    },
+    {
+      "path": "addons/foveacore/plugin.gd",
+      "language": "gd",
+      "sizeLines": 226,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/plugin.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/resources/xr_action_map.tres",
+      "language": "tres",
+      "sizeLines": 105,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/rust/Cargo.toml",
+      "language": "toml",
+      "sizeLines": 16,
+      "fileCategory": "config"
+    },
+    {
+      "path": "addons/foveacore/rust/splat_sorter/Cargo.toml",
+      "language": "toml",
+      "sizeLines": 17,
+      "fileCategory": "config"
+    },
+    {
+      "path": "addons/foveacore/rust/splat_sorter/gdextension.toml",
+      "language": "toml",
+      "sizeLines": 17,
+      "fileCategory": "config"
+    },
+    {
+      "path": "addons/foveacore/rust/splat_sorter/src/lib.rs",
+      "language": "rust",
+      "sizeLines": 90,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/rust/src/fovea_fast_path.rs",
+      "language": "rust",
+      "sizeLines": 783,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/rust/src/lib.rs",
+      "language": "rust",
+      "sizeLines": 11,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/rust/src/mod.rs",
+      "language": "rust",
+      "sizeLines": 2,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scenes/fovea_vr_rig.tscn",
+      "language": "tscn",
+      "sizeLines": 46,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scenes/splat_brush_playground.tscn",
+      "language": "tscn",
+      "sizeLines": 46,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scenes/studio_workspace.tscn",
+      "language": "tscn",
+      "sizeLines": 33,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_clay_deformer.gd",
+      "language": "gd",
+      "sizeLines": 308,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_clay_deformer.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_compositor_effect.gd",
+      "language": "gd",
+      "sizeLines": 62,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_compositor_effect.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_core_splat_renderer.gd",
+      "language": "gd",
+      "sizeLines": 857,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_core_splat_renderer.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_hlod_generator.gd",
+      "language": "gd",
+      "sizeLines": 110,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_hlod_generator.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_instanced_culler.gd",
+      "language": "gd",
+      "sizeLines": 248,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_instanced_culler.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_instanced_splat_renderer.gd",
+      "language": "gd",
+      "sizeLines": 513,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_instanced_splat_renderer.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_multimesh_bulk.gd",
+      "language": "gd",
+      "sizeLines": 64,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_multimesh_bulk.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_segmentation_bridge.gd",
+      "language": "gd",
+      "sizeLines": 528,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_segmentation_bridge.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_spatial_chunk.gd",
+      "language": "gd",
+      "sizeLines": 10,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_spatial_chunk.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_splat_cleaner.gd",
+      "language": "gd",
+      "sizeLines": 287,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_splat_cleaner.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_splat_cloth.gd",
+      "language": "gd",
+      "sizeLines": 292,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_splat_cloth.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_splat_dispatcher.gd",
+      "language": "gd",
+      "sizeLines": 708,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_splat_dispatcher.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_streaming_manager.gd",
+      "language": "gd",
+      "sizeLines": 315,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_streaming_manager.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_surface_deformer.gd",
+      "language": "gd",
+      "sizeLines": 117,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_surface_deformer.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_thread_pool.gd",
+      "language": "gd",
+      "sizeLines": 312,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_thread_pool.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_voxelizer.gd",
+      "language": "gd",
+      "sizeLines": 204,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/fovea_voxelizer.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/game_ready_optimizer.gd",
+      "language": "gd",
+      "sizeLines": 215,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/game_ready_optimizer.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/gaze_tracker_linker.gd",
+      "language": "gd",
+      "sizeLines": 142,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/gaze_tracker_linker.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/gpu_culler_pipeline.gd",
+      "language": "gd",
+      "sizeLines": 1156,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/gpu_culler_pipeline.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/hierarchical_splat_generator.gd",
+      "language": "gd",
+      "sizeLines": 123,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/hierarchical_splat_generator.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/layered_foveated_controller.gd",
+      "language": "gd",
+      "sizeLines": 60,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/layered_foveated_controller.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/layered_splat_generator.gd",
+      "language": "gd",
+      "sizeLines": 60,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/layered_splat_generator.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/neural_style_bridge.gd",
+      "language": "gd",
+      "sizeLines": 339,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/neural_style_bridge.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/physics_proxy_generator.gd",
+      "language": "gd",
+      "sizeLines": 41,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/physics_proxy_generator.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/proxy_face_renderer.gd",
+      "language": "gd",
+      "sizeLines": 149,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/proxy_face_renderer.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/splat_brush_engine.gd",
+      "language": "gd",
+      "sizeLines": 178,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/splat_brush_engine.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/splat_decal_tool.gd",
+      "language": "gd",
+      "sizeLines": 117,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/splat_decal_tool.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/splat_interaction_controller.gd",
+      "language": "gd",
+      "sizeLines": 122,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/splat_interaction_controller.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/splat_lighting_animator.gd",
+      "language": "gd",
+      "sizeLines": 101,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/splat_lighting_animator.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/splat_vr_brush.gd",
+      "language": "gd",
+      "sizeLines": 87,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/splat_vr_brush.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/textured_splat_generator.gd",
+      "language": "gd",
+      "sizeLines": 221,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/textured_splat_generator.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/triangle_splat_mesh.gd",
+      "language": "gd",
+      "sizeLines": 92,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/advanced/triangle_splat_mesh.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/color_quantization.gd",
+      "language": "gd",
+      "sizeLines": 436,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/color_quantization.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/editor/fovea_config_wizard.gd",
+      "language": "gd",
+      "sizeLines": 94,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/editor/fovea_config_wizard.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/editor/fovea_context_menu_plugin.gd",
+      "language": "gd",
+      "sizeLines": 56,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/editor/fovea_context_menu_plugin.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/editor/fovea_splattable_gizmo_plugin.gd",
+      "language": "gd",
+      "sizeLines": 90,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/editor/fovea_splattable_gizmo_plugin.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/editor/fovea_splattable_inspector_plugin.gd",
+      "language": "gd",
+      "sizeLines": 85,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/editor/fovea_splattable_inspector_plugin.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/editor/fovea_style_inspector_plugin.gd",
+      "language": "gd",
+      "sizeLines": 13,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/editor/fovea_style_inspector_plugin.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/editor/fovea_style_preview_control.gd",
+      "language": "gd",
+      "sizeLines": 128,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/editor/fovea_style_preview_control.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/eye_culler.gd",
+      "language": "gd",
+      "sizeLines": 136,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/eye_culler.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/fovea_asset_loader.gd",
+      "language": "gd",
+      "sizeLines": 204,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/fovea_asset_loader.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/fovea_asset_saver.gd",
+      "language": "gd",
+      "sizeLines": 179,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/fovea_asset_saver.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/fovea_asset_writer.gd",
+      "language": "gd",
+      "sizeLines": 420,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/fovea_asset_writer.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/fovea_asset.gd",
+      "language": "gd",
+      "sizeLines": 61,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/fovea_asset.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/fovea_foveated_subsystem.gd",
+      "language": "gd",
+      "sizeLines": 123,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/fovea_foveated_subsystem.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/fovea_material.gd",
+      "language": "gd",
+      "sizeLines": 29,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/fovea_material.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/fovea_splat_3d.gd",
+      "language": "gd",
+      "sizeLines": 145,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/fovea_splat_3d.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/fovea_splat_subsystem.gd",
+      "language": "gd",
+      "sizeLines": 176,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/fovea_splat_subsystem.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/fovea_splattable.gd",
+      "language": "gd",
+      "sizeLines": 470,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/fovea_splattable.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/fovea_style.gd",
+      "language": "gd",
+      "sizeLines": 47,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/fovea_style.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/fovea_vr_subsystem.gd",
+      "language": "gd",
+      "sizeLines": 50,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/fovea_vr_subsystem.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/foveacore_manager.gd",
+      "language": "gd",
+      "sizeLines": 353,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/foveacore_manager.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/foveated_controller.gd",
+      "language": "gd",
+      "sizeLines": 109,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/foveated_controller.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/frustum_utils.gd",
+      "language": "gd",
+      "sizeLines": 96,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/frustum_utils.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/hybrid_renderer.gd",
+      "language": "gd",
+      "sizeLines": 208,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/hybrid_renderer.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/materials/fovea_color_palette.gd",
+      "language": "gd",
+      "sizeLines": 83,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/materials/fovea_color_palette.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/materials/gpu_noise_generator.gd",
+      "language": "gd",
+      "sizeLines": 127,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/materials/gpu_noise_generator.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/materials/style_engine.gd",
+      "language": "gd",
+      "sizeLines": 360,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/materials/style_engine.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/mesh_simplifier.gd",
+      "language": "gd",
+      "sizeLines": 492,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/mesh_simplifier.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/network_interpolator.gd",
+      "language": "gd",
+      "sizeLines": 170,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/network_interpolator.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/neural_foveation.gd",
+      "language": "gd",
+      "sizeLines": 166,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/neural_foveation.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/occlusion_culler.gd",
+      "language": "gd",
+      "sizeLines": 132,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/occlusion_culler.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/ply_loader.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/predictive_splatter.gd",
+      "language": "gd",
+      "sizeLines": 151,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/predictive_splatter.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/proxy_face_renderer.gd",
+      "language": "gd",
+      "sizeLines": 282,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/proxy_face_renderer.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/chunked_point_cloud_loader.gd",
+      "language": "gd",
+      "sizeLines": 213,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/chunked_point_cloud_loader.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/colmap_sparse_importer.gd",
+      "language": "gd",
+      "sizeLines": 282,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/colmap_sparse_importer.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/dataset_exporter.gd",
+      "language": "gd",
+      "sizeLines": 178,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/dataset_exporter.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/diffsynth_bridge.py",
+      "language": "python",
+      "sizeLines": 253,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/enhanced_point_cloud.gd",
+      "language": "gd",
+      "sizeLines": 252,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/enhanced_point_cloud.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/floaters_detector.gd",
+      "language": "gd",
+      "sizeLines": 306,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/floaters_detector.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/gaussian_splat.gd",
+      "language": "gd",
+      "sizeLines": 182,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/gaussian_splat.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/generate_variance_masks.py",
+      "language": "python",
+      "sizeLines": 77,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/multi_source_processor.gd",
+      "language": "gd",
+      "sizeLines": 164,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/multi_source_processor.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/ply_loader.gd",
+      "language": "gd",
+      "sizeLines": 177,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/ply_loader.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/point_cloud_visualizer.gd",
+      "language": "gd",
+      "sizeLines": 91,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/point_cloud_visualizer.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/pre_reconstruction_validator.gd",
+      "language": "gd",
+      "sizeLines": 293,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/pre_reconstruction_validator.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/reconstruction_backend.gd",
+      "language": "gd",
+      "sizeLines": 344,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/reconstruction_backend.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/reconstruction_exporter.gd",
+      "language": "gd",
+      "sizeLines": 239,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/reconstruction_exporter.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/reconstruction_manager.gd",
+      "language": "gd",
+      "sizeLines": 849,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/reconstruction_manager.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/reconstruction_metrics.gd",
+      "language": "gd",
+      "sizeLines": 149,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/reconstruction_metrics.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/reconstruction_session.gd",
+      "language": "gd",
+      "sizeLines": 104,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/reconstruction_session.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/spatial_hash.gd",
+      "language": "gd",
+      "sizeLines": 140,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/spatial_hash.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/splat_processor_helper.gd",
+      "language": "gd",
+      "sizeLines": 83,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/splat_processor_helper.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/splat_renderer.gd",
+      "language": "gd",
+      "sizeLines": 363,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/splat_renderer.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/splat_sorter.gd",
+      "language": "gd",
+      "sizeLines": 297,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/splat_sorter.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/star_bridge.py",
+      "language": "python",
+      "sizeLines": 128,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/star_loader.gd",
+      "language": "gd",
+      "sizeLines": 84,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/star_loader.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/star_simulator.py",
+      "language": "python",
+      "sizeLines": 53,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/studio_dependency_checker.gd",
+      "language": "gd",
+      "sizeLines": 72,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/studio_dependency_checker.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/studio_preview_manager.gd",
+      "language": "gd",
+      "sizeLines": 147,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/studio_preview_manager.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/studio_processor.gd",
+      "language": "gd",
+      "sizeLines": 442,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/studio_processor.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/studio_roi_painter.gd",
+      "language": "gd",
+      "sizeLines": 142,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/studio_roi_painter.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/studio_to_3d_panel.gd",
+      "language": "gd",
+      "sizeLines": 1709,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/studio_to_3d_panel.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/studio_to_3d_panel.tscn",
+      "language": "tscn",
+      "sizeLines": 490,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/worldmirror_bridge.py",
+      "language": "python",
+      "sizeLines": 126,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/worldmirror_camera_importer.gd",
+      "language": "gd",
+      "sizeLines": 163,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/worldmirror_camera_importer.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/worldmirror_depth_loader.gd",
+      "language": "gd",
+      "sizeLines": 101,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/reconstruction/worldmirror_depth_loader.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/splat_generator.gd",
+      "language": "gd",
+      "sizeLines": 203,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/splat_generator.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/surface_extractor.gd",
+      "language": "gd",
+      "sizeLines": 246,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/surface_extractor.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/temporal_reprojector.gd",
+      "language": "gd",
+      "sizeLines": 215,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/temporal_reprojector.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/visibility_manager.gd",
+      "language": "gd",
+      "sizeLines": 103,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/visibility_manager.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/vr/fovea_multiplayer_sync.gd",
+      "language": "gd",
+      "sizeLines": 386,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/vr/fovea_multiplayer_sync.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/vr/fovea_orbit_camera.gd",
+      "language": "gd",
+      "sizeLines": 101,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/vr/fovea_orbit_camera.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/vr/fovea_proxy_manager.gd",
+      "language": "gd",
+      "sizeLines": 141,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/vr/fovea_proxy_manager.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/vr/fovea_vr_rig.gd",
+      "language": "gd",
+      "sizeLines": 104,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/vr/fovea_vr_rig.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/vr/fovea_xr_initializer.gd",
+      "language": "gd",
+      "sizeLines": 110,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/scripts/vr/fovea_xr_initializer.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/depth_precompute.glsl",
+      "language": "glsl",
+      "sizeLines": 99,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/depth_precompute.glsl.import",
+      "language": "import",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/fake_volume_shader.gdshader",
+      "language": "gdshader",
+      "sizeLines": 102,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/fake_volume_shader.gdshader.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/fake_volume.gdshader",
+      "language": "gdshader",
+      "sizeLines": 41,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/fake_volume.gdshader.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/gpu_culling_compute.glsl",
+      "language": "glsl",
+      "sizeLines": 134,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/gpu_culling_compute.glsl.import",
+      "language": "import",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/gpu_culling_instanced.glsl",
+      "language": "glsl",
+      "sizeLines": 130,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/gpu_culling_instanced.glsl.import",
+      "language": "import",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/gpu_culling_legacy.glsl",
+      "language": "glsl",
+      "sizeLines": 56,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/gpu_culling_legacy.glsl.import",
+      "language": "import",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/gpu_culling_multi.glsl",
+      "language": "glsl",
+      "sizeLines": 159,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/gpu_culling_multi.glsl.import",
+      "language": "import",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/gpu_culling.gdshader",
+      "language": "gdshader",
+      "sizeLines": 5,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/gpu_culling.gdshader.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/hiz_generator.glsl",
+      "language": "glsl",
+      "sizeLines": 35,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/hiz_generator.glsl.import",
+      "language": "import",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/mask_background_gpu.glsl",
+      "language": "glsl",
+      "sizeLines": 53,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/mask_background_gpu.glsl.import",
+      "language": "import",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/mask_preview.gdshader",
+      "language": "gdshader",
+      "sizeLines": 59,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/mask_preview.gdshader.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/procedural_noise.glsl",
+      "language": "glsl",
+      "sizeLines": 109,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/procedural_noise.glsl.import",
+      "language": "import",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/sort_bitonic_keyed.glsl",
+      "language": "glsl",
+      "sizeLines": 83,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/sort_bitonic_keyed.glsl.import",
+      "language": "import",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/sort_bitonic_splats.glsl",
+      "language": "glsl",
+      "sizeLines": 97,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/sort_bitonic_splats.glsl.import",
+      "language": "import",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/sort_compute.glsl",
+      "language": "glsl",
+      "sizeLines": 60,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/sort_compute.glsl.import",
+      "language": "import",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/splat_math.gdshaderinc",
+      "language": "gdshaderinc",
+      "sizeLines": 60,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/splat_math.gdshaderinc.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/splat_painter.gdshader",
+      "language": "gdshader",
+      "sizeLines": 56,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/splat_painter.gdshader.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/splat_render_artistic.gdshader",
+      "language": "gdshader",
+      "sizeLines": 529,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/splat_render_artistic.gdshader.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/splat_render_triangle_palette.gdshader",
+      "language": "gdshader",
+      "sizeLines": 302,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/splat_render_triangle_palette.gdshader.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/splat_render_triangle.gdshader",
+      "language": "gdshader",
+      "sizeLines": 296,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/splat_render_triangle.gdshader.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/splat_render.gdshader",
+      "language": "gdshader",
+      "sizeLines": 193,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/splat_render.gdshader.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/star_proxy.gdshader",
+      "language": "gdshader",
+      "sizeLines": 78,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/star_proxy.gdshader.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/surface_effects.gdshader",
+      "language": "gdshader",
+      "sizeLines": 94,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/surface_effects.gdshader.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/tile_rasterizer.glsl",
+      "language": "glsl",
+      "sizeLines": 256,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/tile_rasterizer.glsl.import",
+      "language": "import",
+      "sizeLines": 14,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/water_splat_particle.gdshader",
+      "language": "gdshader",
+      "sizeLines": 392,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/shaders/water_splat_particle.gdshader.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/.gdignore",
+      "language": "unknown",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/BENCHMARK_COLOR_FORMAT.md",
+      "language": "markdown",
+      "sizeLines": 219,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "addons/foveacore/test/benchmark_report.gd",
+      "language": "gd",
+      "sizeLines": 349,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/color_format_benchmark.gd",
+      "language": "gd",
+      "sizeLines": 667,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/color_format_test_scene.tscn",
+      "language": "tscn",
+      "sizeLines": 129,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/color_quantization_demo.gd",
+      "language": "gd",
+      "sizeLines": 141,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/color_quantization_test.gd",
+      "language": "gd",
+      "sizeLines": 238,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/fake_volume_test_scene.tscn",
+      "language": "tscn",
+      "sizeLines": 9,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/fake_volume_vr_test.tscn",
+      "language": "tscn",
+      "sizeLines": 32,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/fps_benchmark.gd",
+      "language": "gd",
+      "sizeLines": 183,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/performance_benchmark.gd",
+      "language": "gd",
+      "sizeLines": 296,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/performance_benchmark.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/performance_test_plan.md",
+      "language": "markdown",
+      "sizeLines": 55,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "addons/foveacore/test/README_TRANSPARENCY_TESTS.md",
+      "language": "markdown",
+      "sizeLines": 152,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "addons/foveacore/test/run_all_tests.gd",
+      "language": "gd",
+      "sizeLines": 138,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/run_color_benchmark.gd",
+      "language": "gd",
+      "sizeLines": 168,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/smoke_startup.gd",
+      "language": "gd",
+      "sizeLines": 63,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_auto_roi.gd",
+      "language": "gd",
+      "sizeLines": 112,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_clay_deformer.gd",
+      "language": "gd",
+      "sizeLines": 141,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_clay_deformer.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_color_format_benchmark.gd",
+      "language": "gd",
+      "sizeLines": 309,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_compile_all_scripts.gd",
+      "language": "gd",
+      "sizeLines": 69,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_desktop.tscn",
+      "language": "tscn",
+      "sizeLines": 134,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_fovea_asset.gd",
+      "language": "gd",
+      "sizeLines": 205,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_fovea_instanced_renderer.gd",
+      "language": "gd",
+      "sizeLines": 178,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_fovea_roundtrip.gd",
+      "language": "gd",
+      "sizeLines": 160,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_instanced_morphs.gd",
+      "language": "gd",
+      "sizeLines": 164,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_instanced_morphs.tscn",
+      "language": "tscn",
+      "sizeLines": 28,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_node_runner.gd",
+      "language": "gd",
+      "sizeLines": 44,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_physics_interaction.gd",
+      "language": "gd",
+      "sizeLines": 148,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_segmentation_bridge.gd",
+      "language": "gd",
+      "sizeLines": 121,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_specular_reflections.gd",
+      "language": "gd",
+      "sizeLines": 159,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_splat_brush_engine.gd",
+      "language": "gd",
+      "sizeLines": 168,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_splat_cloth.gd",
+      "language": "gd",
+      "sizeLines": 139,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_splat_decal_tool.gd",
+      "language": "gd",
+      "sizeLines": 99,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_splat_layers.gd",
+      "language": "gd",
+      "sizeLines": 185,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_studio_pipeline.gd",
+      "language": "gd",
+      "sizeLines": 184,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_style_engine.gd",
+      "language": "gd",
+      "sizeLines": 189,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_surface_deformer.gd",
+      "language": "gd",
+      "sizeLines": 138,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_surface_deformer.tscn",
+      "language": "tscn",
+      "sizeLines": 36,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_surface_extractor.gd",
+      "language": "gd",
+      "sizeLines": 159,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_temporal_reprojector.gd",
+      "language": "gd",
+      "sizeLines": 169,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/test_textured_splat_generator.gd",
+      "language": "gd",
+      "sizeLines": 163,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/transparency_blend_scene.tscn",
+      "language": "tscn",
+      "sizeLines": 56,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/transparency_blend_test.gd",
+      "language": "gd",
+      "sizeLines": 603,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/triangle_vs_quad_benchmark.gd",
+      "language": "gd",
+      "sizeLines": 139,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/ultimate_odyssey_demo.tscn",
+      "language": "tscn",
+      "sizeLines": 138,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/test/visual_validation.gd",
+      "language": "gd",
+      "sizeLines": 79,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/textures/drybrush.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/textures/sponge.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/foveacore/textures/stipple.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/core/funplay_client_config_writer.gd",
+      "language": "gd",
+      "sizeLines": 254,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/core/funplay_client_config_writer.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/core/funplay_core_tools.gd",
+      "language": "gd",
+      "sizeLines": 5044,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/core/funplay_core_tools.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/core/funplay_http_transport.gd",
+      "language": "gd",
+      "sizeLines": 221,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/core/funplay_http_transport.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/core/funplay_mcp_request_handler.gd",
+      "language": "gd",
+      "sizeLines": 237,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/core/funplay_mcp_request_handler.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/core/funplay_mcp_server.gd",
+      "language": "gd",
+      "sizeLines": 366,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/core/funplay_mcp_server.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/core/funplay_mcp_settings.gd",
+      "language": "gd",
+      "sizeLines": 154,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/core/funplay_mcp_settings.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/core/funplay_project_skill_manager.gd",
+      "language": "gd",
+      "sizeLines": 173,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/core/funplay_project_skill_manager.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/core/funplay_prompt_provider.gd",
+      "language": "gd",
+      "sizeLines": 278,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/core/funplay_prompt_provider.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/core/funplay_resource_provider.gd",
+      "language": "gd",
+      "sizeLines": 457,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/core/funplay_resource_provider.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/core/funplay_tool_registry.gd",
+      "language": "gd",
+      "sizeLines": 1272,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/core/funplay_tool_registry.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/core/funplay_update_checker.gd",
+      "language": "gd",
+      "sizeLines": 156,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/core/funplay_update_checker.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/icon.svg.import",
+      "language": "import",
+      "sizeLines": 43,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/plugin.cfg",
+      "language": "config",
+      "sizeLines": 6,
+      "fileCategory": "config"
+    },
+    {
+      "path": "addons/funplay_mcp/plugin.gd",
+      "language": "gd",
+      "sizeLines": 66,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/plugin.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/runtime/funplay_mcp_runtime_bridge.gd",
+      "language": "gd",
+      "sizeLines": 152,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/runtime/funplay_mcp_runtime_bridge.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/ui/funplay_mcp_dock.gd",
+      "language": "gd",
+      "sizeLines": 518,
+      "fileCategory": "code"
+    },
+    {
+      "path": "addons/funplay_mcp/ui/funplay_mcp_dock.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "ASSET_LIBRARY.md",
+      "language": "markdown",
+      "sizeLines": 73,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "AUDIT_AND_TASKS.md",
+      "language": "markdown",
+      "sizeLines": 464,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "AUDIT_COMPLET_2026-05-02.md",
+      "language": "markdown",
+      "sizeLines": 568,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "AUDIT_TODO_2026-06-11.md",
+      "language": "markdown",
+      "sizeLines": 73,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "language": "markdown",
+      "sizeLines": 165,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "CLAUDE.md",
+      "language": "markdown",
+      "sizeLines": 182,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "language": "markdown",
+      "sizeLines": 93,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "demo/build_demo_scene.gd",
+      "language": "gd",
+      "sizeLines": 76,
+      "fileCategory": "code"
+    },
+    {
+      "path": "demo/build_demo_scene.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "demo/drop_a_ply.tscn",
+      "language": "tscn",
+      "sizeLines": 41,
+      "fileCategory": "code"
+    },
+    {
+      "path": "demo/fps_overlay.gd",
+      "language": "gd",
+      "sizeLines": 6,
+      "fileCategory": "code"
+    },
+    {
+      "path": "demo/fps_overlay.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "demo/README.md",
+      "language": "markdown",
+      "sizeLines": 28,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "DEPENDENCIES.md",
+      "language": "markdown",
+      "sizeLines": 81,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/20 Tips I Wish I Knew When I Starte.txt",
+      "language": "txt",
+      "sizeLines": 24,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/3D GAUSSIAN SPLATTING with POSTSHOT.txt",
+      "language": "txt",
+      "sizeLines": 5,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/About Gaussian Splats — They Just B.txt",
+      "language": "txt",
+      "sizeLines": 0,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/ARCHITECTURE.md",
+      "language": "markdown",
+      "sizeLines": 61,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/benchmark.md",
+      "language": "markdown",
+      "sizeLines": 58,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/developer_reference.md",
+      "language": "markdown",
+      "sizeLines": 103,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/RD_ANALYSE_3DGS_2026.md",
+      "language": "markdown",
+      "sizeLines": 294,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/Removing Splats and cleaning 3DGS m.txt",
+      "language": "txt",
+      "sizeLines": 20,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/splat_rendering_tests_report.md",
+      "language": "markdown",
+      "sizeLines": 72,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "docs/star_integration.md",
+      "language": "markdown",
+      "sizeLines": 38,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "FINAL_EVALUATION.md",
+      "language": "markdown",
+      "sizeLines": 1081,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "FoveaEngine.csproj",
+      "language": "csproj",
+      "sizeLines": 8,
+      "fileCategory": "config"
+    },
+    {
+      "path": "icon.svg.import",
+      "language": "import",
+      "sizeLines": 43,
+      "fileCategory": "code"
+    },
+    {
+      "path": "PLAN_VOLINGA_PARITY.md",
+      "language": "markdown",
+      "sizeLines": 157,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/advanced_features_plan.md",
+      "language": "markdown",
+      "sizeLines": 109,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/analyse_vista4d_anyrecon.md",
+      "language": "markdown",
+      "sizeLines": 241,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/architecture_overview.md",
+      "language": "markdown",
+      "sizeLines": 75,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/diagnostic_technique_foveacore.md",
+      "language": "markdown",
+      "sizeLines": 197,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/fake_volume_shader_test.md",
+      "language": "markdown",
+      "sizeLines": 80,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/fovea_fast_path.h",
+      "language": "c",
+      "sizeLines": 38,
+      "fileCategory": "code"
+    },
+    {
+      "path": "plans/fovea_format_spec.md",
+      "language": "markdown",
+      "sizeLines": 149,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/foveacore_audit.md",
+      "language": "markdown",
+      "sizeLines": 40,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/foveacore-architecture.md",
+      "language": "markdown",
+      "sizeLines": 1089,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/integration_worldmirror2.md",
+      "language": "markdown",
+      "sizeLines": 375,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/layered_splatting_doc.md",
+      "language": "markdown",
+      "sizeLines": 56,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/multiplayer_sync_spec.md",
+      "language": "markdown",
+      "sizeLines": 85,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/PHASE0_FONDATION_TASKS.md",
+      "language": "markdown",
+      "sizeLines": 133,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/ply_format_spec.md",
+      "language": "markdown",
+      "sizeLines": 131,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/prompts.md",
+      "language": "markdown",
+      "sizeLines": 72,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/proxy_reconstruction_plan.md",
+      "language": "markdown",
+      "sizeLines": 74,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/proxy_shader_prototype.md",
+      "language": "markdown",
+      "sizeLines": 38,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/reconstruction_prompts.md",
+      "language": "markdown",
+      "sizeLines": 58,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/studio_to_3d_plan.md",
+      "language": "markdown",
+      "sizeLines": 140,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "plans/technical_fix_plan.md",
+      "language": "markdown",
+      "sizeLines": 56,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "project.godot",
+      "language": "godot",
+      "sizeLines": 52,
+      "fileCategory": "code"
+    },
+    {
+      "path": "README_CN.md",
+      "language": "markdown",
+      "sizeLines": 291,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "README.md",
+      "language": "markdown",
+      "sizeLines": 311,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "reconstructions/.gitkeep",
+      "language": "unknown",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "ROADMAP_COMPLETE_BACKLOG.md",
+      "language": "markdown",
+      "sizeLines": 492,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "ROADMAP.md",
+      "language": "markdown",
+      "sizeLines": 72,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "scripts/requirements_worldmirror.txt",
+      "language": "txt",
+      "sizeLines": 14,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "scripts/run_benchmark.ps1",
+      "language": "powershell",
+      "sizeLines": 44,
+      "fileCategory": "script"
+    },
+    {
+      "path": "scripts/setup_diffsynth.bat",
+      "language": "batch",
+      "sizeLines": 49,
+      "fileCategory": "script"
+    },
+    {
+      "path": "scripts/setup_diffsynth.sh",
+      "language": "shell",
+      "sizeLines": 48,
+      "fileCategory": "script"
+    },
+    {
+      "path": "scripts/setup_worldmirror.bat",
+      "language": "batch",
+      "sizeLines": 53,
+      "fileCategory": "script"
+    },
+    {
+      "path": "scripts/setup_worldmirror.sh",
+      "language": "shell",
+      "sizeLines": 51,
+      "fileCategory": "script"
+    },
+    {
+      "path": "server.json",
+      "language": "json",
+      "sizeLines": 51,
+      "fileCategory": "config"
+    },
+    {
+      "path": "test_foveacore.gd",
+      "language": "gd",
+      "sizeLines": 213,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_foveacore.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_foveacore.tscn",
+      "language": "tscn",
+      "sizeLines": 51,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0000.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0001.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0002.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0003.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0004.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0005.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0006.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0007.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0008.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0009.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0010.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0011.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0012.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0013.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0014.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0015.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0016.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0017.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0018.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0019.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0020.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0021.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0022.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/sim_depth_0023.png.import",
+      "language": "import",
+      "sizeLines": 40,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test_reconstruction/star_workspace/star_metadata.json",
+      "language": "json",
+      "sizeLines": 345,
+      "fileCategory": "config"
+    },
+    {
+      "path": "test/demo_bonsai.ply",
+      "language": "ply",
+      "sizeLines": 1012,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test/demo_bonsai.ply.import",
+      "language": "import",
+      "sizeLines": 16,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test/fixtures/generate_fixtures.gd",
+      "language": "gd",
+      "sizeLines": 180,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test/fixtures/generate_fixtures.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test/fixtures/MANIFEST.md",
+      "language": "markdown",
+      "sizeLines": 18,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "test/fixtures/pathological_nan.ply",
+      "language": "ply",
+      "sizeLines": 34,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test/fixtures/reference_3dgs.fovea",
+      "language": "fovea",
+      "sizeLines": 418,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test/fixtures/reference_3dgs.ply",
+      "language": "ply",
+      "sizeLines": 1854,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test/fixtures/truncated_header.ply",
+      "language": "ply",
+      "sizeLines": 5,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test/generate_render_videos.gd",
+      "language": "gd",
+      "sizeLines": 208,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test/generate_render_videos.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test/generate_render_videos.tscn",
+      "language": "tscn",
+      "sizeLines": 6,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test/palette_benchmark.gd",
+      "language": "gd",
+      "sizeLines": 256,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test/palette_benchmark.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test/star_test/star_test_scene.tscn",
+      "language": "tscn",
+      "sizeLines": 39,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test/test_fovea_splat.tscn",
+      "language": "tscn",
+      "sizeLines": 6,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test/test_multiplayer_sync.gd",
+      "language": "gd",
+      "sizeLines": 173,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test/test_multiplayer_sync.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test/test_multiplayer_sync.tscn",
+      "language": "tscn",
+      "sizeLines": 6,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test/test_style_engine_desktop.tscn",
+      "language": "tscn",
+      "sizeLines": 31,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test/test_water_splats.gd",
+      "language": "gd",
+      "sizeLines": 170,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test/test_water_splats.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test/test_water_splats.tscn",
+      "language": "tscn",
+      "sizeLines": 69,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test/TestFoveaSplat.cs",
+      "language": "csharp",
+      "sizeLines": 385,
+      "fileCategory": "code"
+    },
+    {
+      "path": "test/TestFoveaSplat.cs.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tools/auto_roi.py",
+      "language": "python",
+      "sizeLines": 202,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tools/benchmark.gd",
+      "language": "gd",
+      "sizeLines": 134,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tools/benchmark.gd.uid",
+      "language": "uid",
+      "sizeLines": 1,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tools/download_test_videos.py",
+      "language": "python",
+      "sizeLines": 34,
+      "fileCategory": "code"
+    },
+    {
+      "path": "train.py",
+      "language": "python",
+      "sizeLines": 202,
+      "fileCategory": "code"
+    },
+    {
+      "path": "tutorials/3dgs_training.md",
+      "language": "markdown",
+      "sizeLines": 83,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "tutorials/get_started.md",
+      "language": "markdown",
+      "sizeLines": 55,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "tutorials/reconstruction_setup.md",
+      "language": "markdown",
+      "sizeLines": 97,
+      "fileCategory": "docs"
+    }
+  ],
+  "totalFiles": 553,
+  "filteredByIgnore": 0,
+  "estimatedComplexity": "very-large",
+  "stats": {
+    "filesScanned": 553,
+    "byCategory": {
+      "code": 467,
+      "infra": 2,
+      "config": 24,
+      "docs": 55,
+      "script": 5
+    },
+    "byLanguage": {
+      "unknown": 5,
+      "yaml": 2,
+      "json": 16,
+      "csharp": 14,
+      "uid": 157,
+      "config": 4,
+      "gdshader": 13,
+      "tscn": 21,
+      "gd": 159,
+      "markdown": 50,
+      "gdextension": 1,
+      "dblite": 1,
+      "tmp": 9,
+      "dll": 1,
+      "exp": 1,
+      "lib": 1,
+      "cpp": 2,
+      "c": 3,
+      "obj": 2,
+      "import": 45,
+      "tres": 1,
+      "toml": 3,
+      "rust": 4,
+      "python": 8,
+      "glsl": 12,
+      "gdshaderinc": 1,
+      "txt": 5,
+      "csproj": 1,
+      "godot": 1,
+      "powershell": 1,
+      "batch": 2,
+      "shell": 2,
+      "ply": 4,
+      "fovea": 1
+    }
+  }
+}

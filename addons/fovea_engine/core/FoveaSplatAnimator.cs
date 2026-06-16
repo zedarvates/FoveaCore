@@ -102,11 +102,23 @@ namespace FoveaEngine
             int countB = MorphTargetResource.SplatCount;
             int maxCount = Math.Max(countA, countB);
 
-            var morphPositions = new Vector3[maxCount];
-            var morphRotations = new Quaternion[maxCount];
-            var morphScales = new Vector3[maxCount];
-            var morphColors = new Color[maxCount];
-            var morphOpacities = new float[maxCount];
+            // Re-allocate mutable resource arrays only when shape/count changes
+            if (_animatedResource.Positions == null || _animatedResource.Positions.Length != maxCount)
+            {
+                _animatedResource.Positions = new Vector3[maxCount];
+                _animatedResource.RotationsFlat = new float[maxCount * 4];
+                _animatedResource.Scales = new Vector3[maxCount];
+                _animatedResource.Colors = new Color[maxCount];
+                _animatedResource.Opacities = new float[maxCount];
+                _animatedResource.Normals = new Vector3[maxCount];
+            }
+
+            var posDest = _animatedResource.Positions;
+            var rotFlatDest = _animatedResource.RotationsFlat;
+            var scaleDest = _animatedResource.Scales;
+            var colDest = _animatedResource.Colors;
+            var opDest = _animatedResource.Opacities;
+            var normDest = _animatedResource.Normals;
 
             var posA = _baseResource.Positions;
             var rotA = _baseResource.Rotations;
@@ -126,37 +138,52 @@ namespace FoveaEngine
             {
                 if (i < countA && i < countB)
                 {
-                    morphPositions[i] = posA[i].Lerp(posB[i], t);
-                    morphRotations[i] = rotA[i].Slerp(rotB[i], t);
-                    morphScales[i] = scaleA[i].Lerp(scaleB[i], t);
-                    morphColors[i] = colA[i].Lerp(colB[i], t);
-                    morphOpacities[i] = Mathf.Lerp(opA[i], opB[i], t);
+                    posDest[i] = posA[i].Lerp(posB[i], t);
+                    
+                    Quaternion r = rotA[i].Slerp(rotB[i], t);
+                    rotFlatDest[i * 4] = r.X;
+                    rotFlatDest[i * 4 + 1] = r.Y;
+                    rotFlatDest[i * 4 + 2] = r.Z;
+                    rotFlatDest[i * 4 + 3] = r.W;
+
+                    scaleDest[i] = scaleA[i].Lerp(scaleB[i], t);
+                    colDest[i] = colA[i].Lerp(colB[i], t);
+                    opDest[i] = Mathf.Lerp(opA[i], opB[i], t);
+                    normDest[i] = r * Vector3.Forward;
                 }
                 else if (i < countA) // Fade out remaining splats from cloud A
                 {
-                    morphPositions[i] = posA[i];
-                    morphRotations[i] = rotA[i];
-                    morphScales[i] = scaleA[i];
-                    morphColors[i] = colA[i];
-                    morphOpacities[i] = Mathf.Lerp(opA[i], 0f, t);
+                    posDest[i] = posA[i];
+                    
+                    Quaternion r = rotA[i];
+                    rotFlatDest[i * 4] = r.X;
+                    rotFlatDest[i * 4 + 1] = r.Y;
+                    rotFlatDest[i * 4 + 2] = r.Z;
+                    rotFlatDest[i * 4 + 3] = r.W;
+
+                    scaleDest[i] = scaleA[i];
+                    colDest[i] = colA[i];
+                    opDest[i] = Mathf.Lerp(opA[i], 0f, t);
+                    normDest[i] = r * Vector3.Forward;
                 }
                 else // Fade in remaining splats from cloud B
                 {
-                    morphPositions[i] = posB[i];
-                    morphRotations[i] = rotB[i];
-                    morphScales[i] = scaleB[i];
-                    morphColors[i] = colB[i];
-                    morphOpacities[i] = Mathf.Lerp(0f, opB[i], t);
+                    posDest[i] = posB[i];
+                    
+                    Quaternion r = rotB[i];
+                    rotFlatDest[i * 4] = r.X;
+                    rotFlatDest[i * 4 + 1] = r.Y;
+                    rotFlatDest[i * 4 + 2] = r.Z;
+                    rotFlatDest[i * 4 + 3] = r.W;
+
+                    scaleDest[i] = scaleB[i];
+                    colDest[i] = colB[i];
+                    opDest[i] = Mathf.Lerp(0f, opB[i], t);
+                    normDest[i] = r * Vector3.Forward;
                 }
             }
 
-            _animatedResource.Positions = morphPositions;
-            _animatedResource.Rotations = morphRotations;
-            _animatedResource.Scales = morphScales;
-            _animatedResource.Colors = morphColors;
-            _animatedResource.Opacities = morphOpacities;
             _animatedResource.RecalculateBounds();
-
             TargetNode.SplatResource = _animatedResource;
         }
 

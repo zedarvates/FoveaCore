@@ -1,7 +1,7 @@
 class_name FoveaStreamingManager
 extends RefCounted
 
-const GPUCullerPipelineScript = preload("res://addons/foveacore/scripts/advanced/gpu_culler_pipeline.gd")
+const FoveaSpatialChunkScript = preload("res://addons/foveacore/scripts/advanced/fovea_spatial_chunk.gd")
 
 ## FoveaEngine : FoveaStreamingManager
 ## Gère le chargement out-of-core asynchrone des chunks spatiaux de splats.
@@ -108,9 +108,8 @@ func _precompute_slices(asset: StreamingAsset, bytes: PackedByteArray, aabb_min:
 	chunks.resize(4096)
 	
 	var size_cell := (aabb_max - aabb_min) / 16.0
-	var SpatialChunkScript = GPUCullerPipelineScript.SpatialChunk
 	for i in range(4096):
-		var chunk = SpatialChunkScript.new()
+		var chunk = FoveaSpatialChunkScript.new()
 		chunk.index = i
 		var cx := i & 15
 		var cy := (i >> 4) & 15
@@ -244,8 +243,22 @@ func _async_load_thread_func(asset: StreamingAsset, chunk, key: String, thread: 
 			chunk_bytes.append_array(file.get_buffer(slice.size))
 		file.close()
 
+	var lod0_count := chunk_bytes.size() / 16
+	var chunk_bytes_lod1 := PackedByteArray()
+	var chunk_bytes_lod2 := PackedByteArray()
+	var chunk_bytes_lod3 := PackedByteArray()
+	
+	if lod0_count > 0:
+		# Décimation asynchrone pour les LOD
+		chunk_bytes_lod1 = FoveaSplatCleaner.decimate(chunk_bytes, int(lod0_count * 0.5))
+		chunk_bytes_lod2 = FoveaSplatCleaner.decimate(chunk_bytes, int(lod0_count * 0.2))
+		chunk_bytes_lod3 = FoveaSplatCleaner.decimate(chunk_bytes, int(lod0_count * 0.05))
+
 	_lock.lock()
 	chunk.raw_bytes = chunk_bytes
+	chunk.raw_bytes_lod1 = chunk_bytes_lod1
+	chunk.raw_bytes_lod2 = chunk_bytes_lod2
+	chunk.raw_bytes_lod3 = chunk_bytes_lod3
 	chunk.is_loaded = true
 	has_newly_loaded_chunks = true
 	_loading_keys.erase(key)

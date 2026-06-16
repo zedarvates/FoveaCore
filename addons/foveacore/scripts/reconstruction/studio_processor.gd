@@ -161,8 +161,14 @@ func _init_gpu() -> void:
 	
 	var shader_file = preload("res://addons/foveacore/shaders/mask_background_gpu.glsl")
 	var shader_spirv: RDShaderSPIRV = shader_file.get_spirv()
+	var err = shader_spirv.get_stage_compile_error(RenderingDevice.SHADER_STAGE_COMPUTE)
+	if not err.is_empty():
+		push_error("StudioProcessor: Error compiling mask_background_gpu.glsl: " + err)
 	_shader = _rd.shader_create_from_spirv(shader_spirv)
-	_pipeline = _rd.compute_pipeline_create(_shader)
+	if _shader.is_valid():
+		_pipeline = _rd.compute_pipeline_create(_shader)
+	else:
+		push_error("StudioProcessor: Failed to create _shader RID")
 
 
 func _free_gpu() -> void:
@@ -183,7 +189,7 @@ func _notification(what: int) -> void:
 
 func _mask_background_gpu(image: Image, mode: String, threshold: float, roi: Rect2i) -> Image:
 	_init_gpu()
-	if not _rd: return null
+	if not _rd or not _pipeline.is_valid(): return null
 	
 	var width = image.get_width()
 	var height = image.get_height()

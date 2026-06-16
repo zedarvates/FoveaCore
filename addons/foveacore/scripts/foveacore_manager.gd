@@ -23,25 +23,40 @@ const _ProxyFaceRendererScript = preload("res://addons/foveacore/scripts/advance
 # ─────────────────────────────────────────────────────────────
 
 @export_group("VR Settings")
+## If [code]true[/code], initializes VR mode using OpenXR. Falls back to desktop mode if unavailable.
 @export var vr_enabled := true
+## The targeted refresh rate for the VR headset (e.g. 90 Hz, 120 Hz).
 @export var target_fps := 90
+## If [code]true[/code], enables foveated rendering (varying splat density depending on gaze location).
 @export var foveated_enabled := true
+## If [code]true[/code], applies custom XR shaders optimized for VR rendering.
 @export var xr_shader_enabled := true
 
 @export_group("Splatting Settings")
+## Global multiplier for splat rendering density (e.g., 1.0 is default, lower values improve performance).
 @export var global_splat_density := 1.0
+## The maximum number of splats that can be rendered in a single frame.
 @export var max_splats_per_frame := 100000
+## If [code]true[/code], culls splats that are outside the camera frustum or occluded.
 @export var visible_only_culling := true
 
 @export_group("Style Settings")
+## The active visual style resource used to render the splats.
 @export var active_style: FoveaStyle = null
+## The mode used to style splats (e.g. "procedural" or "texture").
 @export var style_mode := "procedural"
 
 @export_group("Foveated Settings")
+## The angular radius of the fovea (central high-detail region) in radians/meters.
 @export var foveal_radius := 0.15
+## Density multiplier applied to splats within the foveal (gaze target) area.
 @export var foveal_density_multiplier := 2.0
+## Density multiplier applied to splats in the transition (parafoveal) zone.
 @export var parafoveal_density_multiplier := 1.0
+## Density multiplier applied to splats in the peripheral vision zone.
 @export var peripheral_density_multiplier := 0.3
+## If [code]true[/code], enables multi-layered splatting passes (base, specular, details).
+@export var enable_layered_splatting := true
 
 # ─────────────────────────────────────────────────────────────
 #  Sous-systèmes (instances gérées en interne)
@@ -57,6 +72,10 @@ var _foveated: FoveaFoveatedSubsystem = null
 var _foveated_controller: FoveatedController:
 	get:
 		return _foveated.get_controller() if _foveated else null
+
+var _layered_foveated_controller: LayeredFoveatedController:
+	get:
+		return _foveated.get_layered_controller() if _foveated else null
 
 ## Sous-système Pipeline Splat (génération → tri → rendu)
 var _splat_pipeline: FoveaSplatSubsystem = null
@@ -159,19 +178,48 @@ func _run_culling_pass() -> void:
 	if _visibility_manager == null:
 		return
 
-	# Feed viewport texture to build Hi-Z depth pyramid for occlusion culling (Task 3)
-	if _occlusion_culler and visible_only_culling:
-		var vp := get_viewport()
-		if vp:
-			var vp_tex := vp.get_texture()
-			if vp_tex:
-				var img := vp_tex.get_image()
-				if img:
-					_occlusion_culler.build_hi_z_pyramid(img)
-
-	var visibility_result = _visibility_manager.extract_visible_surfaces()
 	var camera := get_viewport().get_camera_3d()
 	var camera_pos := _get_main_camera_position()
+
+	# Dynamically update eye culling camera and frustums
+	if camera and _eye_culler and _visibility_manager:
+		var left_proj := camera.get_camera_projection()
+		var right_proj := camera.get_camera_projection()
+		var left_trans := camera.global_transform
+		var right_trans := camera.global_transform
+		
+		if _vr and _vr.is_xr_active:
+			var xr_interface: XRInterface = XRServer.primary_interface
+			if xr_interface:
+				left_trans = xr_interface.get_transform_for_view(0, camera.global_transform)
+				right_trans = xr_interface.get_transform_for_view(1, camera.global_transform)
+				var aspect := 1.0
+				var vp := camera.get_viewport()
+				if vp:
+					aspect = float(vp.size.x) / float(max(1, vp.size.y))
+				left_proj = xr_interface.get_projection_for_view(0, aspect, camera.near, camera.far)
+				right_proj = xr_interface.get_projection_for_view(1, aspect, camera.near, camera.far)
+				
+		_eye_culler.update_frustums(left_proj, left_trans, right_proj, right_trans)
+		_visibility_manager.update_camera_positions(left_trans.origin, left_trans, right_trans.origin, right_trans)
+
+	# Feed viewport texture to build Hi-Z depth pyramid for occlusion culling (Task 3)
+	# NOTE: Viewport image readback causes GPU stall, so it is disabled by default for performance.
+	# GPU-side culling is handled natively via FoveaCompositorEffect.
+	# if _occlusion_culler and visible_only_culling and DisplayServer.get_name() != "headless":
+	# 	var vp := get_viewport()
+	# 	if vp:
+	# 		var vp_tex := vp.get_texture()
+	# 		if vp_tex:
+	# 			var img := vp_tex.get_image()
+	# 			if img:
+	# 				_occlusion_culler.build_hi_z_pyramid(img)
+
+	# Skip culling pass if we are in MESH_ONLY mode to save CPU cycles
+	if _hybrid_renderer and _hybrid_renderer.current_mode == HybridRenderer.RenderMode.MESH_ONLY:
+		return
+
+	var visibility_result: VisibilityManager.FrameVisibilityResult = _visibility_manager.extract_visible_surfaces()
 
 	# Hybrid setup (optionnel)
 	if _hybrid_renderer:
@@ -184,7 +232,7 @@ func _run_culling_pass() -> void:
 
 	# Passe foveated (filtrage par densité + minimize_overdraw)
 	if foveated_enabled:
-		_splat_pipeline.apply_foveated_pass(_foveated.get_controller())
+		_splat_pipeline.apply_foveated_pass(_foveated.get_controller(), _layered_foveated_controller, enable_layered_splatting)
 
 	if _frame_count % 60 == 0:
 		print("FoveaCore: %d splats rendus ce frame." % _splat_pipeline.current_splats.size())
@@ -193,7 +241,8 @@ func _run_culling_pass() -> void:
 #  API publique (compatibilité ascendante garantie)
 # ─────────────────────────────────────────────────────────────
 
-## Enregistrer un FoveaSplattable dans le pipeline de culling + LOD
+## Registers a [FoveaSplattable] node into the culling, LOD, and global instancing system.
+## Handles automatic attachment of proxy Level of Detail (LOD) nodes and manages instanced renderers for [code].fovea[/code] assets.
 func register_splattable(node: FoveaSplattable) -> void:
 	if _eye_culler:
 		_eye_culler.register_splattable(node)
@@ -204,7 +253,7 @@ func register_splattable(node: FoveaSplattable) -> void:
 	if node.splat_file_path.ends_with(".fovea") and node.enable_instancing:
 		var path := node.splat_file_path
 		if not _instanced_renderers.has(path):
-			var instanced_renderer = FoveaInstancedSplatRenderer.new()
+			var instanced_renderer: FoveaInstancedSplatRenderer = FoveaInstancedSplatRenderer.new()
 			instanced_renderer.name = "InstancedRenderer_" + path.get_file().get_basename()
 			instanced_renderer.asset_path = path
 			instanced_renderer.sort_distance_threshold = 0.1
@@ -220,7 +269,8 @@ func register_splattable(node: FoveaSplattable) -> void:
 		proxy.switch_distance = 30.0
 		node.add_child(proxy)
 
-## Désenregistrer un FoveaSplattable
+## Unregisters a [FoveaSplattable] node from the culling and visibility systems.
+## Cleans up any attached LOD proxy nodes or unused instanced renderers.
 func unregister_splattable(node: FoveaSplattable) -> void:
 	if _eye_culler:
 		_eye_culler.unregister_splattable(node)
@@ -235,38 +285,39 @@ func unregister_splattable(node: FoveaSplattable) -> void:
 		call_deferred("_check_and_cleanup_unused_instanced_renderers")
 
 func _check_and_cleanup_unused_instanced_renderers() -> void:
-	var active_nodes = get_tree().get_nodes_in_group("splattables")
-	var active_paths := []
+	var active_nodes: Array[Node] = get_tree().get_nodes_in_group("splattables")
+	var active_paths: Array[String] = []
 	for n in active_nodes:
 		if n is FoveaSplattable and n.enable_instancing and n.splat_file_path.ends_with(".fovea"):
 			if not active_paths.has(n.splat_file_path):
 				active_paths.append(n.splat_file_path)
 	
-	var paths_to_remove := []
-	for path in _instanced_renderers:
+	var paths_to_remove: Array[String] = []
+	for path: String in _instanced_renderers:
 		if not active_paths.has(path):
 			paths_to_remove.append(path)
-			
-	for path in paths_to_remove:
-		var renderer = _instanced_renderers[path]
+
+	for path: String in paths_to_remove:
+		var renderer: FoveaInstancedSplatRenderer = _instanced_renderers[path]
 		if is_instance_valid(renderer):
 			renderer.queue_free()
 		_instanced_renderers.erase(path)
 		print("FoveaCoreManager: Libération du FoveaInstancedSplatRenderer inutilisé pour '%s'" % path.get_file())
 
-## Changer le style global de rendu
+## Changes the global rendering style to the specified [FoveaStyle] resource.
 func set_style(style: FoveaStyle) -> void:
 	active_style = style
 	print("FoveaCore style changed: ", style.mode)
 
-## Modifier la densité globale des splats
+## Modifies the global splat density multiplier.
+## Clamps the value between [code]0.1[/code] (lowest density) and [code]5.0[/code] (highest density).
 func set_splat_density(density: float) -> void:
 	global_splat_density = clamp(density, 0.1, 5.0)
 	_splat_pipeline.global_splat_density = global_splat_density
 	if _foveated:
 		_foveated.mark_dirty()
 
-## Activer / désactiver le foveated rendering
+## Dynamically activates or deactivates foveated rendering at runtime.
 func toggle_foveated(enabled: bool) -> void:
 	foveated_enabled = enabled
 	if _foveated:
@@ -274,7 +325,7 @@ func toggle_foveated(enabled: bool) -> void:
 		if not enabled:
 			_foveated.disable()
 
-## Basculer le mode hybride mesh + splat
+## Toggles the hybrid rendering mode between combined mesh + splat rendering and splat-only rendering.
 func toggle_hybrid_mode() -> void:
 	hybrid_mode_enabled = not hybrid_mode_enabled
 	if _hybrid_renderer:

@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://br4taqi3rcpw7"
+path="res://.godot/imported/tile_rasterizer.glsl-5bc425a72243ebe6db085b4191edefba.res"
+
+[deps]
+
+source_file="res://addons/foveacore/shaders/tile_rasterizer.glsl"
+dest_files=["res://.godot/imported/tile_rasterizer.glsl-5bc425a72243ebe6db085b4191edefba.res"]
+
+[params]
+

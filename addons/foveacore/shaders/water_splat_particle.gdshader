@@ -33,11 +33,23 @@ uniform float max_distance = 8.0; // Distance max parcourue avant recyclage
 uniform float water_opacity = 0.6;
 
 // --- PARAMÈTRES DE L'OBSTACLE (COLLISION & SPLASH) ---
-uniform vec3 obstacle_position = vec3(2.0, 0.0, 0.0); // Pierre
+uniform vec3 obstacle_position = vec3(2.0, 0.0, 0.0); // Pierre 1
 uniform float obstacle_radius = 1.0;
+uniform vec3 obstacle_position_2 = vec3(-9999.0, 0.0, 0.0); // Pierre 2
+uniform float obstacle_radius_2 = 0.0;
+uniform bool box_obstacle_enabled = false;
+uniform vec3 box_obstacle_min = vec3(-0.5, -0.5, -0.5);
+uniform vec3 box_obstacle_max = vec3(0.5, 0.5, 0.5);
+
 uniform vec3 splash_velocity = vec3(1.5, 4.0, 0.5); // Rebond
 uniform float gravity = 9.8;
 uniform float splash_duration = 1.2; // Temps en l'air avant disparition
+
+// --- TERRAIN HEIGHTMAP ---
+uniform bool use_heightmap = false;
+uniform sampler2D heightmap_texture : hint_default_black;
+uniform vec3 heightmap_size = vec3(10.0, 2.0, 10.0);
+uniform vec3 heightmap_offset = vec3(-5.0, -1.0, -5.0);
 
 // --- EFFETS OPTIQUES DE L'EAU (RÉFRACTION & TRANSPARENCE) ---
 uniform sampler2D screen_texture : hint_screen_texture, filter_linear_mipmap;
@@ -125,16 +137,70 @@ void vertex() {
     float u_current = phase * local_max_dist;
     vec3 current_pos = start_pos + flow_dir_norm * u_current;
 
-    // Détection d'impact analytique par rapport à start_pos
-    vec3 to_obstacle = obstacle_position - start_pos;
-    float u_closest = dot(to_obstacle, flow_dir_norm);
-    vec3 perp_vec = to_obstacle - u_closest * flow_dir_norm;
-    float perp_dist_sq = dot(perp_vec, perp_vec);
-    float r_sq = obstacle_radius * obstacle_radius;
-
-    // Détection de l'intersection de la trajectoire locale avec l'obstacle
-    bool will_hit = (perp_dist_sq < r_sq) && (u_closest > 0.0) && (u_closest < local_max_dist);
-    float u_impact = will_hit ? (u_closest - sqrt(r_sq - perp_dist_sq)) : 99999.0;
+    // --- DÉTECTION MULTI-OBSTACLES (SPHÈRES & BOÎTES) ---
+    float u_impact = 99999.0;
+    bool will_hit = false;
+    vec3 hit_obstacle_position = vec3(0.0);
+    float hit_obstacle_radius = 0.0; // > 0 si sphère, 0 si boîte (AABB)
+    
+    // 1. Test Obstacle Sphérique 1
+    if (obstacle_radius > 0.01) {
+        vec3 to_obs = obstacle_position - start_pos;
+        float u_cl = dot(to_obs, flow_dir_norm);
+        vec3 perp = to_obs - u_cl * flow_dir_norm;
+        float perp_d2 = dot(perp, perp);
+        float r2 = obstacle_radius * obstacle_radius;
+        bool hit = (perp_d2 < r2) && (u_cl > 0.0) && (u_cl < local_max_dist);
+        if (hit) {
+            float u_imp = u_cl - sqrt(r2 - perp_d2);
+            if (u_imp < u_impact) {
+                u_impact = u_imp;
+                hit_obstacle_position = obstacle_position;
+                hit_obstacle_radius = obstacle_radius;
+                will_hit = true;
+            }
+        }
+    }
+    
+    // 2. Test Obstacle Sphérique 2
+    if (obstacle_radius_2 > 0.01) {
+        vec3 to_obs = obstacle_position_2 - start_pos;
+        float u_cl = dot(to_obs, flow_dir_norm);
+        vec3 perp = to_obs - u_cl * flow_dir_norm;
+        float perp_d2 = dot(perp, perp);
+        float r2 = obstacle_radius_2 * obstacle_radius_2;
+        bool hit = (perp_d2 < r2) && (u_cl > 0.0) && (u_cl < local_max_dist);
+        if (hit) {
+            float u_imp = u_cl - sqrt(r2 - perp_d2);
+            if (u_imp < u_impact) {
+                u_impact = u_imp;
+                hit_obstacle_position = obstacle_position_2;
+                hit_obstacle_radius = obstacle_radius_2;
+                will_hit = true;
+            }
+        }
+    }
+    
+    // 3. Test Obstacle Boîte (AABB)
+    if (box_obstacle_enabled) {
+        vec3 inv_dir = 1.0 / (flow_dir_norm + vec3(1e-6));
+        vec3 t0 = (box_obstacle_min - start_pos) * inv_dir;
+        vec3 t1 = (box_obstacle_max - start_pos) * inv_dir;
+        vec3 tmin = min(t0, t1);
+        vec3 tmax = max(t0, t1);
+        float t_near = max(max(tmin.x, tmin.y), tmin.z);
+        float t_far = min(min(tmax.x, tmax.y), tmax.z);
+        
+        if (t_near < t_far && t_far > 0.0 && t_near < local_max_dist) {
+            float u_imp = t_near > 0.0 ? t_near : 0.0;
+            if (u_imp < u_impact) {
+                u_impact = u_imp;
+                hit_obstacle_position = start_pos + flow_dir_norm * u_imp; // Point d'impact fictif
+                hit_obstacle_radius = 0.0; // Indicateur AABB
+                will_hit = true;
+            }
+        }
+    }
 
     vec3 final_sim_pos = current_pos;
     float current_opacity = original_opacity * water_opacity;
@@ -149,11 +215,33 @@ void vertex() {
             is_splashing = true;
             decay_factor = clamp(1.0 - (t_splash / splash_duration), 0.0, 1.0);
             
-            // Trajectoire balistique parabolique : position d'impact + V*t - 0.5*g*t^2
             vec3 impact_point = start_pos + flow_dir_norm * u_impact;
             
-            // Vitesse de projection avec perturbation aléatoire pour l'aspect volatil
-            vec3 randomized_velocity = splash_velocity + vec3(
+            // Calcul de la normale de contact au point d'impact
+            vec3 normal_at_impact = vec3(0.0, 1.0, 0.0);
+            if (hit_obstacle_radius > 0.01) {
+                normal_at_impact = normalize(impact_point - hit_obstacle_position);
+            } else {
+                // Normale AABB
+                vec3 center = (box_obstacle_min + box_obstacle_max) * 0.5;
+                vec3 extents = (box_obstacle_max - box_obstacle_min) * 0.5;
+                vec3 local_hit = impact_point - center;
+                vec3 d_val = abs(local_hit) / (extents + vec3(1e-5));
+                if (d_val.x > d_val.y && d_val.x > d_val.z) {
+                    normal_at_impact = vec3(sign(local_hit.x), 0.0, 0.0);
+                } else if (d_val.y > d_val.x && d_val.y > d_val.z) {
+                    normal_at_impact = vec3(0.0, sign(local_hit.y), 0.0);
+                } else {
+                    normal_at_impact = vec3(0.0, 0.0, sign(local_hit.z));
+                }
+            }
+            
+            // Réflexion physique avec rebond
+            vec3 reflected = reflect(flow_dir_norm * flow_speed, normal_at_impact);
+            vec3 bounce_velocity = mix(reflected, vec3(reflected.x, splash_velocity.y, reflected.z), 0.5);
+            
+            // Vitesse de projection perturbée aléatoirement
+            vec3 randomized_velocity = bounce_velocity + vec3(
                 sin(float(INSTANCE_ID) * 45.1) * 0.4,
                 cos(float(INSTANCE_ID) * 12.5) * 0.5,
                 sin(float(INSTANCE_ID) * 78.9) * 0.4
@@ -162,13 +250,26 @@ void vertex() {
             final_sim_pos = impact_point + randomized_velocity * t_splash - vec3(0.0, 0.5 * gravity * t_splash * t_splash, 0.0);
             current_opacity *= decay_factor; // Fade-out progressif
         } else {
-            // Splash expiré : invisible avant téléportation
             current_opacity = 0.0;
         }
     } else {
         // Enveloppe de fondu pour l'amont et l'aval du cycle de la micro-boucle
         float fade_envelope = sin(phase * 3.14159);
         current_opacity *= fade_envelope;
+        
+        // --- SUIVI DE TERRAIN HEIGHTMAP (uniquement si non-splashing) ---
+        if (use_heightmap) {
+            vec2 terrain_uv = (final_sim_pos.xz - heightmap_offset.xz) / (heightmap_size.xz + vec2(1e-6));
+            if (terrain_uv.x >= 0.0 && terrain_uv.x <= 1.0 && terrain_uv.y >= 0.0 && terrain_uv.y <= 1.0) {
+                float h_val = textureLod(heightmap_texture, terrain_uv, 0.0).r;
+                float terrain_height = heightmap_offset.y + h_val * heightmap_size.y;
+                if (final_sim_pos.y < terrain_height) {
+                    final_sim_pos.y = terrain_height + 0.05; // Glisse au-dessus
+                    // Effet de vague/ondulation temporelle
+                    final_sim_pos.y += sin(TIME * 4.0 + final_sim_pos.x * 12.0 + final_sim_pos.z * 12.0) * 0.02;
+                }
+            }
+        }
     }
 
     v_opacity = current_opacity;

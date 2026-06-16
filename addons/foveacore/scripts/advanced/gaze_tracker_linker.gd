@@ -11,6 +11,12 @@ signal focus_detected(point: Vector3)
 @export var manager: Node = null # FoveaCoreManager
 @export var debug_visualization := false
 
+## Statut du suivi oculaire
+## 0 = Désactivé / Non initialisé
+## 1 = Actif (Matériel réel détecté)
+## 2 = Émulé / Simulé (Fallback souris Desktop)
+@export_enum("Disabled:0", "Hardware Active:1", "Simulated:2") var gaze_status: int = 0
+
 # Reference to the XRInterface
 var _xr_interface: XRInterface = null
 var _last_gaze_point: Vector3 = Vector3.ZERO
@@ -25,12 +31,17 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if eye_tracking_enabled:
 		_update_eye_data()
+	else:
+		gaze_status = 0
 
 func _update_eye_data() -> void:
 	var gaze_vec := _fetch_openxr_gaze()
 	
-	# Si aucun tracker n'est trouvé, on utilise la position de la souris pour simuler le regard sur Desktop (Tâche 4)
-	if gaze_vec == Vector3.ZERO:
+	if gaze_vec != Vector3.ZERO:
+		gaze_status = 1 # Actif
+	else:
+		# Fallback simulation souris (Desktop)
+		gaze_status = 2 # Émulé
 		var camera := get_viewport().get_camera_3d()
 		if camera:
 			var mouse_pos := get_viewport().get_mouse_position()
@@ -44,10 +55,17 @@ func _update_eye_data() -> void:
 		_last_gaze_point = _calculate_gaze_world_hit(gaze_vec)
 		
 		# Link to the foveated renderer in FoveaCoreManager
-		if manager and manager._foveated_controller:
-			manager._foveated_controller.update_gaze(_last_gaze_point, gaze_vec)
+		if manager:
+			if manager._foveated_controller:
+				manager._foveated_controller.update_gaze(_last_gaze_point, gaze_vec)
+			if manager.get("_layered_foveated_controller") != null:
+				var layered_ctrl = manager.get("_layered_foveated_controller")
+				if layered_ctrl:
+					layered_ctrl.set_gaze_point(_last_gaze_point)
 			eye_updated.emit(gaze_vec, 2) # Combined gaze
 			focus_detected.emit(_last_gaze_point)
+	else:
+		gaze_status = 0 # Aucun regard valide
 
 func _calculate_gaze_world_hit(gaze_vec_world: Vector3) -> Vector3:
 	var camera = get_viewport().get_camera_3d()

@@ -66,6 +66,8 @@ func cull_all() -> Dictionary:
 	for node in _splattable_nodes:
 		if not is_instance_valid(node):
 			continue
+		if not node.visible or not node.splatting_enabled:
+			continue
 
 		var aabb: AABB = _get_world_aabb(node)
 		var left_visible: bool = _left_frustum.contains_aabb(aabb)

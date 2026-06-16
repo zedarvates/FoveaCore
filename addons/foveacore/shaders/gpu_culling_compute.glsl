@@ -1,5 +1,5 @@
 #[compute]
-version 450
+#version 450
 
 // FoveaEngine: Splat Pre-Culling Compute Shader
 // Exécuté avant le tri (Sorting) pour éliminer le travail inutile.

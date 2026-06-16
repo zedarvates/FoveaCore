@@ -20,6 +20,7 @@ namespace FoveaEngine
             int count = node.SplatCount;
             int bestIdx = -1;
             float minRayDist = 0.2f; // Selection tolerance
+            float minRayDistSq = minRayDist * minRayDist;
 
             Vector3 localOrigin = node.GlobalTransform.AffineInverse() * rayOrigin;
             Vector3 localDir = node.GlobalTransform.AffineInverse().Basis * rayDirection;
@@ -34,11 +35,11 @@ namespace FoveaEngine
                 if (t < 0 || t > maxDistance) continue;
 
                 Vector3 proj = localOrigin + localDir * t;
-                float d = p.DistanceTo(proj);
+                float d2 = p.DistanceSquaredTo(proj);
 
-                if (d < minRayDist)
+                if (d2 < minRayDistSq)
                 {
-                    minRayDist = d;
+                    minRayDistSq = d2;
                     bestIdx = i;
                 }
             }
@@ -63,9 +64,10 @@ namespace FoveaEngine
             int count = node.SplatCount;
             Vector3 localCenter = node.GlobalTransform.AffineInverse() * center;
 
+            float radiusSq = radius * radius;
             for (int i = 0; i < count; i++)
             {
-                if (pos[i].DistanceTo(localCenter) <= radius)
+                if (pos[i].DistanceSquaredTo(localCenter) <= radiusSq)
                 {
                     SelectedIndices.Add(i);
                 }

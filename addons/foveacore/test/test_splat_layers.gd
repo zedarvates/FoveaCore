@@ -135,6 +135,25 @@ func _run_tests() -> void:
 		_assert("Subsystem applied origin_offset to final splat position", final_splat.position.is_equal_approx(expected_pos))
 		_assert("Subsystem copied LayerType", final_splat.layer_type == GaussianSplat.LayerType.SHADOW)
 	
+	# --- Test 4: Auto-connection to Godot light source ---
+	print("\n--- Test 4: Auto-connection to Godot light source ---")
+	var auto_animator: SplatLightingAnimator = SplatLightingAnimator.new()
+	var test_light: DirectionalLight3D = DirectionalLight3D.new()
+	test_light.name = "TestDirectionalLight"
+	test_light.rotation = Vector3(deg_to_rad(-90.0), 0.0, 0.0) # pointing straight down
+	
+	root.add_child(test_light)
+	root.add_child(auto_animator)
+	
+	# Force process tick to trigger _auto_discover_light
+	auto_animator._process(0.01)
+	
+	_assert("Animator automatically discovered DirectionalLight3D", auto_animator.main_light == test_light)
+	
+	# Cleanup Test 4
+	test_light.queue_free()
+	auto_animator.queue_free()
+	
 	# Cleanup
 	splattable.queue_free()
 	animator.queue_free()

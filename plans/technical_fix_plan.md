@@ -18,7 +18,7 @@ Cet "Implementation Plan" fait suite à l'audit critique identifiant les murs te
 **Action :**
 - [x] Remplacer les simulations par des appels réels via `OS.execute_with_pipe`.
 - [x] Capturer `stdout` et `stderr` en temps réel pour mettre à jour la logbox du panneau.
-- [ ] Gérer les erreurs CUDA/OOM (Out Of Memory) et les rapporter à l'UI.
+- [x] Gérer les erreurs CUDA/OOM (Out Of Memory) et les rapporter à l'UI.
 
 ## 🔴 Priorité 3 : Lecture des Assets Gaussian Splatting (.PLY)
 **Cible :** Nouveau format `.fovea` et `FoveaAssetLoader` (Rust)
@@ -40,9 +40,9 @@ Cet "Implementation Plan" fait suite à l'audit critique identifiant les murs te
 **Cible :** `reconstruction_manager.gd`
 **Problème :** Chemins codés en dur et détection fragile.
 **Action :**
-- [ ] Utiliser `where` (Windows) ou `which` (Linux/Mac) pour l'auto-détection des binaires dans le PATH.
-- [ ] Ajouter une validation de version (ex: `ffmpeg -version`) avant de commencer.
-- [ ] Permettre la sauvegarde des chemins d'outils dans les `Settings` persistants de l'utilisateur.
+- [x] Utiliser `where` (Windows) ou `which` (Linux/Mac) pour l'auto-détection des binaires dans le PATH.
+- [x] Ajouter une validation de version (ex: `ffmpeg -version`) avant de commencer.
+- [x] Permettre la sauvegarde des chemins d'outils dans les `Settings` persistants de l'utilisateur.
 
 ---
 

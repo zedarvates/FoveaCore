@@ -490,7 +490,6 @@ func _create_splat_plane(position: Vector3, color: Color, count: int) -> FoveaCo
 			var data: PackedByteArray = palette.to_packed_rgb_array()
 			var img := Image.create_from_data(1, palette.colors.size(), false, Image.FORMAT_RGBA8, data)
 			var tex := ImageTexture.create_from_image(img)
-			tex.filter_clip = true
 			material.set_shader_parameter("palette_texture", tex)
 			material.set_shader_parameter("palette_size", palette.colors.size())
 	
@@ -547,7 +546,7 @@ func _get_palette() -> FoveaColorPalette:
 		_: 
 			var p = FoveaColorPalette.new()
 			p.palette_name = "Test Palette"
-			p.colors = [
+			var arr: Array[Color] = [
 				Color(0, 0, 0),
 				Color(0.2, 0.2, 0.2),
 				Color(0.4, 0.4, 0.4),
@@ -565,6 +564,7 @@ func _get_palette() -> FoveaColorPalette:
 				Color(0, 0, 0.5),
 				Color(0.5, 0.5, 0.5)
 			]
+			p.colors = arr
 			return p
 
 func _quantize_rgb565(color: Color) -> Color:

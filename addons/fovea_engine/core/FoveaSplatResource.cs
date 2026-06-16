@@ -10,8 +10,20 @@ namespace FoveaEngine
         [Export]
         public Vector3[] Positions { get; set; } = Array.Empty<Vector3>();
 
+        private float[] _rotationsFlat = Array.Empty<float>();
+        private Quaternion[] _rotationsCache = null;
+        private bool _cacheDirty = true;
+
         [Export]
-        public float[] RotationsFlat { get; set; } = Array.Empty<float>();
+        public float[] RotationsFlat
+        {
+            get => _rotationsFlat;
+            set
+            {
+                _rotationsFlat = value;
+                _cacheDirty = true;
+            }
+        }
 
         [Export]
         public Vector3[] Scales { get; set; } = Array.Empty<Vector3>();
@@ -26,6 +38,15 @@ namespace FoveaEngine
         public Vector3[] Normals { get; set; } = Array.Empty<Vector3>();
 
         [Export]
+        public byte[] LayerTypes { get; set; } = Array.Empty<byte>();
+
+        [Export]
+        public byte[] DitherSeeds { get; set; } = Array.Empty<byte>();
+
+        [Export]
+        public byte[] BrushTypes { get; set; } = Array.Empty<byte>();
+
+        [Export]
         public Aabb BBox { get; set; } = new Aabb();
 
         public int SplatCount => Positions?.Length ?? 0;
@@ -34,29 +55,63 @@ namespace FoveaEngine
         {
             get
             {
-                int count = RotationsFlat.Length / 4;
-                var result = new Quaternion[count];
-                for (int i = 0; i < count; i++)
+                if (_cacheDirty || _rotationsCache == null || _rotationsCache.Length != _rotationsFlat.Length / 4)
                 {
-                    result[i] = new Quaternion(
-                        RotationsFlat[i * 4],
-                        RotationsFlat[i * 4 + 1],
-                        RotationsFlat[i * 4 + 2],
-                        RotationsFlat[i * 4 + 3]
-                    );
+                    int count = _rotationsFlat.Length / 4;
+                    _rotationsCache = new Quaternion[count];
+                    for (int i = 0; i < count; i++)
+                    {
+                        _rotationsCache[i] = new Quaternion(
+                            _rotationsFlat[i * 4],
+                            _rotationsFlat[i * 4 + 1],
+                            _rotationsFlat[i * 4 + 2],
+                            _rotationsFlat[i * 4 + 3]
+                        );
+                    }
+                    _cacheDirty = false;
                 }
-                return result;
+                return _rotationsCache;
             }
             set
             {
-                RotationsFlat = new float[value.Length * 4];
+                _rotationsCache = value;
+                _rotationsFlat = new float[value.Length * 4];
                 for (int i = 0; i < value.Length; i++)
                 {
-                    RotationsFlat[i * 4] = value[i].X;
-                    RotationsFlat[i * 4 + 1] = value[i].Y;
-                    RotationsFlat[i * 4 + 2] = value[i].Z;
-                    RotationsFlat[i * 4 + 3] = value[i].W;
+                    _rotationsFlat[i * 4] = value[i].X;
+                    _rotationsFlat[i * 4 + 1] = value[i].Y;
+                    _rotationsFlat[i * 4 + 2] = value[i].Z;
+                    _rotationsFlat[i * 4 + 3] = value[i].W;
                 }
+                _cacheDirty = false;
+            }
+        }
+
+        public Quaternion GetRotation(int index)
+        {
+            int offset = index * 4;
+            if (_rotationsFlat != null && offset + 3 < _rotationsFlat.Length)
+            {
+                return new Quaternion(
+                    _rotationsFlat[offset],
+                    _rotationsFlat[offset + 1],
+                    _rotationsFlat[offset + 2],
+                    _rotationsFlat[offset + 3]
+                );
+            }
+            return Quaternion.Identity;
+        }
+
+        public void SetRotation(int index, Quaternion q)
+        {
+            int offset = index * 4;
+            if (_rotationsFlat != null && offset + 3 < _rotationsFlat.Length)
+            {
+                _rotationsFlat[offset] = q.X;
+                _rotationsFlat[offset + 1] = q.Y;
+                _rotationsFlat[offset + 2] = q.Z;
+                _rotationsFlat[offset + 3] = q.W;
+                _cacheDirty = true;
             }
         }
 
@@ -146,12 +201,18 @@ namespace FoveaEngine
             var newColors = new Color[count];
             var newOpacities = new float[count];
             var newNormals = new Vector3[count];
+            var newLayerTypes = new byte[count];
+            var newDitherSeeds = new byte[count];
+            var newBrushTypes = new byte[count];
 
             bool hasNormals = Normals != null && Normals.Length == count;
             bool hasRotations = RotationsFlat != null && RotationsFlat.Length == count * 4;
             bool hasScales = Scales != null && Scales.Length == count;
             bool hasColors = Colors != null && Colors.Length == count;
             bool hasOpacities = Opacities != null && Opacities.Length == count;
+            bool hasLayers = LayerTypes != null && LayerTypes.Length == count;
+            bool hasDithers = DitherSeeds != null && DitherSeeds.Length == count;
+            bool hasBrushes = BrushTypes != null && BrushTypes.Length == count;
 
             for (int i = 0; i < count; i++)
             {
@@ -170,6 +231,9 @@ namespace FoveaEngine
                 if (hasColors)   newColors[i]   = Colors[srcIdx];
                 if (hasOpacities) newOpacities[i] = Opacities[srcIdx];
                 if (hasNormals)  newNormals[i]  = Normals[srcIdx];
+                if (hasLayers)   newLayerTypes[i] = LayerTypes[srcIdx];
+                if (hasDithers)  newDitherSeeds[i] = DitherSeeds[srcIdx];
+                if (hasBrushes)  newBrushTypes[i] = BrushTypes[srcIdx];
             }
 
             Positions = newPositions;
@@ -178,6 +242,9 @@ namespace FoveaEngine
             Colors = newColors;
             Opacities = newOpacities;
             if (hasNormals) Normals = newNormals;
+            if (hasLayers) LayerTypes = newLayerTypes;
+            if (hasDithers) DitherSeeds = newDitherSeeds;
+            if (hasBrushes) BrushTypes = newBrushTypes;
         }
     }
 }

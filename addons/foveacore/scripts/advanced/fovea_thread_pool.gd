@@ -53,7 +53,11 @@ static func decode_parallel(
 	instance_transforms: Array[Transform3D] = [],
 	instance_colors: Array[Color] = [],
 	instance_scales: Array[float] = [],
-	instance_alphas: Array[float] = []
+	instance_alphas: Array[float] = [],
+	instance_morph_types: Array[int] = [],
+	instance_morph_weights: Array[float] = [],
+	instance_morph_frequencies: Array[float] = [],
+	instance_morph_amplitudes: Array[float] = []
 ) -> DecodeResult:
 	var result: DecodeResult = DecodeResult.new()
 	result.splat_count = num_splats
@@ -78,7 +82,8 @@ static func decode_parallel(
 	if num_splats < 4096 or thread_count <= 1:
 		_decode_chunk(culled_bytes, result.xf_array, result.cd_array,
 				result.original_transforms, 0, num_splats, aabb_min, aabb_max,
-				instance_transforms, instance_colors, instance_scales, instance_alphas)
+				instance_transforms, instance_colors, instance_scales, instance_alphas,
+				instance_morph_types, instance_morph_weights, instance_morph_frequencies, instance_morph_amplitudes)
 		return result
 
 	# Découper en chunks et dispatcher
@@ -110,10 +115,15 @@ static func decode_parallel(
 		var _inst_col := instance_colors
 		var _inst_scl := instance_scales
 		var _inst_alp := instance_alphas
+		var _inst_m_type := instance_morph_types
+		var _inst_m_weight := instance_morph_weights
+		var _inst_m_freq := instance_morph_frequencies
+		var _inst_m_amp := instance_morph_amplitudes
 
 		thread.start(func() -> void:
 			_decode_chunk(_culled, _xf, _cd, _orig, _start, _end, _min, _max,
-					_inst_xf, _inst_col, _inst_scl, _inst_alp)
+					_inst_xf, _inst_col, _inst_scl, _inst_alp,
+					_inst_m_type, _inst_m_weight, _inst_m_freq, _inst_m_amp)
 		)
 
 	# Attendre tous les threads
@@ -138,8 +148,15 @@ static func _decode_chunk(
 		instance_transforms:  Array[Transform3D] = [],
 		instance_colors:      Array[Color] = [],
 		instance_scales:      Array[float] = [],
-		instance_alphas:      Array[float] = []
+		instance_alphas:      Array[float] = [],
+		instance_morph_types: Array[int] = [],
+		instance_morph_weights: Array[float] = [],
+		instance_morph_frequencies: Array[float] = [],
+		instance_morph_amplitudes: Array[float] = []
 ) -> void:
+	var temp_buf := PackedByteArray()
+	temp_buf.resize(4)
+
 	for i: int in range(start, end):
 		var src: int = i * SPLAT_BYTE_SIZE
 
@@ -152,23 +169,74 @@ static func _decode_chunk(
 		var py: float = aabb_min.y + qy * (aabb_max.y - aabb_min.y)
 		var pz: float = aabb_min.z + qz * (aabb_max.z - aabb_min.z)
 
-		var world_pos := Vector3(px, py, pz)
-		var basis_x := Vector3.RIGHT
-		var basis_y := Vector3.UP
-		var basis_z := Vector3.BACK
+		var local_pos := Vector3(px, py, pz)
+		var local_basis_x := Vector3.RIGHT
+		var local_basis_y := Vector3.UP
+		var local_basis_z := Vector3.BACK
 		
 		var instance_id: int = -1
+		var morph_type: int = 0
+		var morph_weight: float = 0.0
+		var morph_freq: float = 1.0
+		var morph_amp: float = 0.5
 
 		if not instance_transforms.is_empty():
 			# Lire l'instance_id taggé dans les 16 bits de poids fort de data3
 			var data3: int = culled_bytes.decode_u32(src + 12)
 			instance_id = (data3 >> 16) & 0xFFFF
-			if instance_id < instance_transforms.size():
-				var xf_inst: Transform3D = instance_transforms[instance_id]
-				world_pos = xf_inst * world_pos
-				basis_x = xf_inst.basis.x
-				basis_y = xf_inst.basis.y
-				basis_z = xf_inst.basis.z
+			
+			if instance_id >= 0 and instance_id < instance_morph_types.size():
+				morph_type = instance_morph_types[instance_id]
+				morph_weight = instance_morph_weights[instance_id]
+				morph_freq = instance_morph_frequencies[instance_id]
+				morph_amp = instance_morph_amplitudes[instance_id]
+
+		# Appliquer le morphing local si configuré
+		if morph_type > 0 and morph_weight > 0.0:
+			match morph_type:
+				1: # Bend
+					var offset_x = sin(local_pos.y * morph_freq) * morph_amp * morph_weight
+					local_pos.x += offset_x
+					# Courbure d'orientation
+					var angle = cos(local_pos.y * morph_freq) * morph_amp * morph_weight * morph_freq
+					local_basis_y = local_basis_y.rotated(Vector3.FORWARD, angle)
+					local_basis_x = local_basis_x.rotated(Vector3.FORWARD, angle)
+				2: # Twist
+					var angle = local_pos.y * morph_freq * morph_weight * morph_amp
+					var cos_a = cos(angle)
+					var sin_a = sin(angle)
+					local_pos = Vector3(
+						local_pos.x * cos_a - local_pos.z * sin_a,
+						local_pos.y,
+						local_pos.x * sin_a + local_pos.z * cos_a
+					)
+					local_basis_x = Vector3(cos_a, 0.0, sin_a)
+					local_basis_z = Vector3(-sin_a, 0.0, cos_a)
+				3: # Squish
+					var factor_y = 1.0 - (morph_weight * morph_amp)
+					var factor_xz = 1.0 + (morph_weight * morph_amp * 0.5)
+					local_pos.y *= factor_y
+					local_pos.x *= factor_xz
+					local_pos.z *= factor_xz
+					local_basis_y *= factor_y
+					local_basis_x *= factor_xz
+					local_basis_z *= factor_xz
+				4: # Wave
+					var wave_angle = (local_pos.x + local_pos.z) * morph_freq
+					local_pos.y += sin(wave_angle) * morph_amp * morph_weight
+					# Ne change pas la base, juste translation y
+
+		var world_pos := local_pos
+		var basis_x := local_basis_x
+		var basis_y := local_basis_y
+		var basis_z := local_basis_z
+
+		if instance_id >= 0 and instance_id < instance_transforms.size():
+			var xf_inst: Transform3D = instance_transforms[instance_id]
+			world_pos = xf_inst * local_pos
+			basis_x = xf_inst.basis * local_basis_x
+			basis_y = xf_inst.basis * local_basis_y
+			basis_z = xf_inst.basis * local_basis_z
 
 		# Appliquer le multiplicateur d'échelle d'instance
 		if instance_id >= 0 and instance_id < instance_scales.size():
@@ -186,12 +254,16 @@ static func _decode_chunk(
 		xf_array[xf_off + 2]  = basis_z
 		xf_array[xf_off + 3]  = world_pos
 
+		var w2: int = culled_bytes.decode_u32(src + 8)
+		var w3: int = culled_bytes.decode_u32(src + 12)
+		var w2_modified := false
+		var w3_modified := false
+
 		# Appliquer la teinte de couleur de l'instance (seulement si non-quantisé dans l'asset)
 		if instance_id >= 0 and instance_id < instance_colors.size():
 			var tint: Color = instance_colors[instance_id]
 			if not is_equal_approx(tint.r, 1.0) or not is_equal_approx(tint.g, 1.0) or not is_equal_approx(tint.b, 1.0):
-				var data2_uint := culled_bytes.decode_u32(src + 8)
-				var color_index := data2_uint & 0xFFFF
+				var color_index := w2 & 0xFFFF
 				var r_val := float((color_index >> 11) & 0x1F) / 31.0
 				var g_val := float((color_index >> 5) & 0x3F) / 63.0
 				var b_val := float(color_index & 0x1F) / 31.0
@@ -202,26 +274,38 @@ static func _decode_chunk(
 				var b5 := int(clamp(col.b * 31.0, 0, 31))
 				var new_rgb565 := (r5 << 11) | (g6 << 5) | b5
 				
-				data2_uint = (data2_uint & 0xFFFF0000) | new_rgb565
-				culled_bytes.encode_u32(src + 8, data2_uint)
+				w2 = (w2 & 0xFFFF0000) | new_rgb565
+				w2_modified = true
 
 		# Appliquer l'opacité / visibilité de l'instance
 		if instance_id >= 0 and instance_id < instance_alphas.size():
 			var alpha_mult: float = instance_alphas[instance_id]
 			if not is_equal_approx(alpha_mult, 1.0):
-				var data3_uint := culled_bytes.decode_u32(src + 12)
-				var op_val := float(data3_uint & 0xFF) / 255.0
+				var op_val := float(w3 & 0xFF) / 255.0
 				op_val *= alpha_mult
 				var new_op := int(clamp(op_val * 255.0, 0, 255))
-				data3_uint = (data3_uint & 0xFFFFFF00) | new_op
-				culled_bytes.encode_u32(src + 12, data3_uint)
+				w3 = (w3 & 0xFFFFFF00) | new_op
+				w3_modified = true
 
 		# Remplir custom_data_array avec les bits bruts des 4 mots de 32 bits (data0-data3)
 		# Re-interprétés en floats via decode_float pour correspondre aux floatBitsToUint du Shader
 		var r: float = culled_bytes.decode_float(src)
 		var g: float = culled_bytes.decode_float(src + 4)
-		var b: float = culled_bytes.decode_float(src + 8)
-		var a: float = culled_bytes.decode_float(src + 12)
+		var b: float
+		var a: float
+
+		if w2_modified:
+			temp_buf.encode_u32(0, w2)
+			b = temp_buf.decode_float(0)
+		else:
+			b = culled_bytes.decode_float(src + 8)
+
+		if w3_modified:
+			temp_buf.encode_u32(0, w3)
+			a = temp_buf.decode_float(0)
+		else:
+			a = culled_bytes.decode_float(src + 12)
+
 		cd_array[i] = Color(r, g, b, a)
 
 		# Cache des originaux pour le FoveaClayDeformer (non-destructif)

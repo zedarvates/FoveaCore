@@ -41,8 +41,8 @@ layout(set = 0, binding = 1, std430) buffer DepthBuffer {
 
 // Push constants : 32 bytes (pas d'AABB nécessaire – depths[] précalculées)
 layout(push_constant, std430) uniform SortParams {
-    uint  total_count;   // Nombre de splats valides (≤ padded_count)
-    uint  padded_count;  // Puissance de 2 ≥ total_count
+    uint  total_count;   // Gardé pour la compatibilité d'alignement push constants
+    uint  padded_count;  // Puissance de 2
     uint  step_size;     // Étape courante du bitonic (j dans l'algo classique)
     uint  stage;         // Bloc courant (k dans l'algo classique)
     uint  frame_mask;    // Masque temporel interleaved (0/1/3 pour 1/2/4 frames)
@@ -62,13 +62,9 @@ void main() {
     // Ne comparer que si ixj > gid (évite les doublons)
     if (ixj <= gid) return;
 
-    // Splats hors des bornes réelles → distance infinie (repoussés en fin de liste)
-    bool gid_valid = (gid < pc.total_count);
-    bool ixj_valid = (ixj < pc.total_count);
-
-    // LECTURE RAPIDE : 1 float par splat au lieu de 3 uint16 + 10 ALU
-    float dist_gid = gid_valid ? depths[gid] : 1.0e38;
-    float dist_ixj = ixj_valid ? depths[ixj] : 1.0e38;
+    // LECTURE ULTRA-RAPIDE SANS BRANCHES : depths[] est pré-rempli jusqu'à padded_count
+    float dist_gid = depths[gid];
+    float dist_ixj = depths[ixj];
 
     // Direction du tri bitonique : descendant (back-to-front pour le blending alpha 3DGS)
     bool descending = ((gid & pc.stage) != 0u);

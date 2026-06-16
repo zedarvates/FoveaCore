@@ -50,9 +50,14 @@ layout(set = 0, binding = 2, std430) restrict readonly buffer AssetDataBuffer {
     AssetData assets[];
 };
 
+// Compteur atomique pour savoir combien ont survécu au culling
+layout(set = 0, binding = 3, std430) restrict readonly buffer CounterBuffer {
+    uint valid_splat_count;
+};
+
 // Push constants : 32 bytes
 layout(push_constant, std430) uniform Params {
-    uint  total_count;   // Nombre de splats valides
+    uint  padded_count;  // Puissance de 2 ≥ total_count
     float cam_x;         // Position caméra monde
     float cam_y;
     float cam_z;
@@ -64,7 +69,13 @@ layout(push_constant, std430) uniform Params {
 
 void main() {
     uint idx = gl_GlobalInvocationID.x;
-    if (idx >= pc.total_count) return;
+    if (idx >= pc.padded_count) return;
+
+    if (idx >= valid_splat_count) {
+        // Splats hors des bornes réelles survivantes -> distance infinie
+        depths[idx] = 1.0e38;
+        return;
+    }
 
     PackedSplat s = splats[idx];
 

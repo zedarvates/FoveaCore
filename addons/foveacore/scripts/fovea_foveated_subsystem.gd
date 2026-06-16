@@ -16,6 +16,7 @@ var peripheral_density: float = 0.3
 
 ## Contrôleur sous-jacent (créé en interne)
 var _controller: FoveatedController = null
+var _layered_controller: LayeredFoveatedController = null
 
 ## Cache pour détecter les changements de paramètres
 var _cached_radius: float = -1.0
@@ -27,7 +28,7 @@ var _dirty: bool = true
 func _ready() -> void:
 	# S'assurer que les uniforms shader globaux sont déclarés
 	if Engine.is_editor_hint():
-		var existing = RenderingServer.global_shader_parameter_get_list()
+		var existing: PackedStringArray = RenderingServer.global_shader_parameter_get_list()
 		if not existing.has("fovea_gaze_left"):
 			RenderingServer.global_shader_parameter_add("fovea_gaze_left", RenderingServer.GLOBAL_VAR_TYPE_VEC2, Vector2(0.5, 0.5))
 		if not existing.has("fovea_gaze_right"):
@@ -46,7 +47,13 @@ func setup(r: float, foveal: float, parafoveal: float, peripheral: float) -> voi
 	_controller = FoveatedController.new()
 	_controller.setup_zones(r, foveal, parafoveal, peripheral)
 	add_child(_controller)
-	print("FoveaFoveatedSubsystem: Zones initialisées. Foveal radius=%.2f" % r)
+	
+	_layered_controller = LayeredFoveatedController.new()
+	_layered_controller.foveal_radius = r
+	_layered_controller.manager = get_node_or_null("/root/FoveaCoreManager")
+	add_child(_layered_controller)
+	
+	print("FoveaFoveatedSubsystem: Zones et LayeredFoveatedController initialisés. Foveal radius=%.2f" % r)
 
 ## Appeler chaque frame — met à jour les zones si les paramètres ont changé
 func update(enabled: bool) -> void:
@@ -61,6 +68,8 @@ func update(enabled: bool) -> void:
 		or not is_equal_approx(peripheral_density, _cached_peripheral)):
 
 		_controller.setup_zones(foveal_radius, foveal_density, parafoveal_density, peripheral_density)
+		if _layered_controller:
+			_layered_controller.foveal_radius = foveal_radius
 		_cached_radius      = foveal_radius
 		_cached_foveal      = foveal_density
 		_cached_parafoveal  = parafoveal_density
@@ -74,6 +83,8 @@ func update(enabled: bool) -> void:
 			var forward := -camera.global_transform.basis.z
 			var target  := camera.global_transform.origin + forward * 10.0
 			_controller.update_gaze(target, forward)
+			if _layered_controller:
+				_layered_controller.set_gaze_point(target)
 
 	# Projection 3D -> 2D (écran) du point de regard pour les shaders GPU
 	var camera := get_viewport().get_camera_3d()
@@ -92,6 +103,9 @@ func update(enabled: bool) -> void:
 ## Accès au contrôleur (pour FoveaSplatSubsystem.apply_foveated_pass)
 func get_controller() -> FoveatedController:
 	return _controller
+
+func get_layered_controller() -> LayeredFoveatedController:
+	return _layered_controller
 
 ## Point de regard courant (monde)
 func get_gaze_point() -> Vector3:
