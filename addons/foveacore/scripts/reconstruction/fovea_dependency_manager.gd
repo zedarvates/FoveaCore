@@ -18,6 +18,7 @@ const TOOLS_DIR := "user://fovea_tools"
 const TOOLS := {
 	"ffmpeg": {
 		"bin": "ffmpeg",
+		"setting": "fovea/tools/ffmpeg_path",
 		"probe_args": ["-version"],
 		"version_regex": "ffmpeg version ([^ ]+)",
 		"urls": {
@@ -28,6 +29,7 @@ const TOOLS := {
 	},
 	"colmap": {
 		"bin": "colmap",
+		"setting": "fovea/tools/colmap_path",
 		"probe_args": ["--help"],
 		"version_regex": "COLMAP ([0-9][^ \n]*)",
 		"urls": {
@@ -38,6 +40,7 @@ const TOOLS := {
 	},
 	"python": {
 		"bin": "python",
+		"setting": "fovea/tools/python_path",
 		"probe_args": ["--version"],
 		"version_regex": "Python ([0-9][^ \n]*)",
 		"urls": {
@@ -50,28 +53,22 @@ const TOOLS := {
 }
 
 
-## Returns the path to invoke [param name]: a local TOOLS_DIR binary if present,
-## otherwise the bare command (resolved via the system PATH at run time).
+## Returns the command/path used to invoke [param name]. Resolution order:
+## explicit project setting → local TOOLS_DIR binary → bare command (system PATH).
 static func resolve(name: String) -> String:
-	if not TOOLS.has(name):
-		return name
-	var bin: String = TOOLS[name]["bin"]
-	var local := _local_binary_path(name, bin)
-	if local != "":
-		return local
-	return bin
+	return _resolved(name)["path"]
 
 
 ## Probes a single tool. Returns {found: bool, version: String, path: String,
-## source: "local"|"path"|"", download_url: String}.
+## source: "setting"|"local"|"path"|"", download_url: String}.
 static func probe(name: String) -> Dictionary:
 	var result := {"found": false, "version": "", "path": "", "source": "", "download_url": download_url(name)}
 	if not TOOLS.has(name):
 		return result
 
 	var info: Dictionary = TOOLS[name]
-	var local := _local_binary_path(name, info["bin"])
-	var exe := local if local != "" else String(info["bin"])
+	var res := _resolved(name)
+	var exe: String = res["path"]
 
 	var output: Array = []
 	var code := OS.execute(exe, info["probe_args"], output, true, false)
@@ -80,7 +77,7 @@ static func probe(name: String) -> Dictionary:
 
 	result["found"] = true
 	result["path"] = exe
-	result["source"] = "local" if local != "" else "path"
+	result["source"] = res["source"]
 	result["version"] = _extract_version(output, info.get("version_regex", ""))
 	return result
 
@@ -107,6 +104,33 @@ static func minimal_pipeline_ready() -> bool:
 
 
 # ── internals ───────────────────────────────────────────────────────────────
+
+## Resolves a tool to {path, source}. Order: explicit project setting →
+## local TOOLS_DIR install → bare command name (system PATH).
+static func _resolved(name: String) -> Dictionary:
+	if not TOOLS.has(name):
+		return {"path": name, "source": "path"}
+	var info: Dictionary = TOOLS[name]
+
+	# 1. Explicit project setting (a deliberate user choice wins).
+	var setting_key: String = info.get("setting", "")
+	if setting_key != "" and ProjectSettings.has_setting(setting_key):
+		var configured := String(ProjectSettings.get_setting(setting_key)).strip_edges()
+		if configured != "":
+			# An absolute/relative path must exist; a bare command is taken as-is.
+			if ("/" in configured) or ("\\" in configured):
+				if FileAccess.file_exists(configured):
+					return {"path": configured, "source": "setting"}
+			else:
+				return {"path": configured, "source": "setting"}
+
+	# 2. Binary installed by the integrated downloader under user://fovea_tools/.
+	var local := _local_binary_path(name, info["bin"])
+	if local != "":
+		return {"path": local, "source": "local"}
+
+	# 3. Fall back to the bare command (resolved via PATH at run time).
+	return {"path": String(info["bin"]), "source": "path"}
 
 static func _local_binary_path(name: String, bin: String) -> String:
 	var ext := ".exe" if OS.get_name() == "Windows" else ""

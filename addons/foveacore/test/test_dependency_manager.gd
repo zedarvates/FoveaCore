@@ -29,8 +29,8 @@ func _init() -> void:
 		# Consistency: if found, a path and source must be set.
 		if p["found"]:
 			_assert("%s found ⇒ path set" % name, String(p["path"]) != "", str(p["path"]))
-			_assert("%s found ⇒ source in {local,path}" % name,
-				p["source"] in ["local", "path"], str(p["source"]))
+			_assert("%s found ⇒ source in {setting,local,path}" % name,
+				p["source"] in ["setting", "local", "path"], str(p["source"]))
 
 	# resolve() returns the bare command when nothing is installed locally.
 	_assert("resolve(ffmpeg) non-empty", DepMgr.resolve("ffmpeg") != "", DepMgr.resolve("ffmpeg"))
