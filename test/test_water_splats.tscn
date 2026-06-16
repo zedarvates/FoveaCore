@@ -13,6 +13,13 @@ ambient_light_color = Color(0.3, 0.3, 0.3, 1.0)
 radius = 1.0
 height = 2.0
 
+[sub_resource type="SphereMesh" id="SphereMesh_rock2"]
+radius = 0.8
+height = 1.6
+
+[sub_resource type="BoxMesh" id="BoxMesh_obstacle"]
+size = Vector3(1.2, 0.8, 1.2)
+
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_rock"]
 albedo_color = Color(0.25, 0.25, 0.28, 1.0)
 roughness = 0.8
@@ -22,6 +29,9 @@ script = ExtResource("1_test_scene")
 water_renderer = NodePath("WaterRenderer")
 obstacle_node = NodePath("ObstacleStone")
 obstacle_radius = 1.0
+obstacle_node_2 = NodePath("ObstacleStone2")
+obstacle_radius_2 = 0.8
+box_obstacle_node = NodePath("ObstacleBox")
 flow_direction = Vector3(1.0, 0.0, 0.0)
 flow_speed = 3.0
 flow_cycle_duration = 3.5
@@ -46,4 +56,14 @@ splat_subdivisions = 16
 [node name="ObstacleStone" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 0, 0)
 mesh = SubResource("SphereMesh_rock")
+surface_material_override/0 = SubResource("StandardMaterial3D_rock")
+
+[node name="ObstacleStone2" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.2, 0, 0.4)
+mesh = SubResource("SphereMesh_rock2")
+surface_material_override/0 = SubResource("StandardMaterial3D_rock")
+
+[node name="ObstacleBox" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.0, -0.4, -0.5)
+mesh = SubResource("BoxMesh_obstacle")
 surface_material_override/0 = SubResource("StandardMaterial3D_rock")

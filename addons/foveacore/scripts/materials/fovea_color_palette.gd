@@ -7,7 +7,7 @@ const DEFAULT_PALETTE_NAME := "Standard 16-color Watercolor"
 static func watercolor_16() -> FoveaColorPalette:
 	var p = FoveaColorPalette.new()
 	p.palette_name = DEFAULT_PALETTE_NAME
-	p.colors = [
+	var arr: Array[Color] = [
 		Color(0.05, 0.05, 0.08),   # 0  ombre profonde / noir bleute
 		Color(0.25, 0.22, 0.20),   # 1  terre sombre / sepia
 		Color(0.45, 0.35, 0.25),   # 2  ocre / bois
@@ -25,18 +25,20 @@ static func watercolor_16() -> FoveaColorPalette:
 		Color(0.40, 0.30, 0.45),   # 14 violet terreux / lavande ombre
 		Color(0.60, 0.50, 0.60),   # 15 mauve / gris colore
 	]
+	p.colors = arr
 	return p
 
 
 static func grayscale_4() -> FoveaColorPalette:
 	var p = FoveaColorPalette.new()
 	p.palette_name = "4-color Grayscale"
-	p.colors = [
+	var arr: Array[Color] = [
 		Color(0.05, 0.05, 0.05),
 		Color(0.35, 0.35, 0.35),
 		Color(0.65, 0.65, 0.65),
 		Color(0.95, 0.95, 0.95),
 	]
+	p.colors = arr
 	return p
 
 

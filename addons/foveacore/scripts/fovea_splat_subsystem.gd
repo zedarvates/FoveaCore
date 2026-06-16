@@ -22,7 +22,7 @@ var global_splat_density: float = 1.0
 var temporal_reprojector: TemporalReprojector = null
 var occlusion_culler: OcclusionCuller = null
 var splat_sorter: SplatSorter = null
-var splat_renderer: FoveaCoreSplatRenderer = null
+var splat_renderer: Node = null
 
 ## Position caméra du frame précédent (pour reprojection temporelle)
 var _previous_camera_position: Vector3 = Vector3.ZERO
@@ -80,8 +80,8 @@ func _generate_and_filter(visibility_result, camera: Camera3D, camera_pos: Vecto
 					else:
 						break
 			else:
-				var extraction = visibility_result.per_node_results[node]
-				var filtered_triangles = _filter_occlusion(extraction.visible_triangles, camera)
+				var extraction: SurfaceExtractor.ExtractionResult = visibility_result.per_node_results[node]
+				var filtered_triangles: Array = _filter_occlusion(extraction.visible_triangles, camera)
 				var reprojected: Array[GaussianSplat] = temporal_reprojector.reproject_splats(
 					node, [], camera_pos, _previous_camera_position, filtered_triangles)
 				for splat in reprojected:
@@ -91,8 +91,28 @@ func _generate_and_filter(visibility_result, camera: Camera3D, camera_pos: Vecto
 					else:
 						break
 	else:
-		var splats = SplatGenerator.generate_all_splats(
-			visibility_result, camera_pos, splat_config, global_splat_density)
+		var use_hierarchical: bool = splat_renderer != null and splat_renderer.get("enable_hlod") == true
+		var splats: Array[GaussianSplat] = []
+		if use_hierarchical:
+			for node in visibility_result.per_node_results:
+				if not (node is FoveaSplattable and node.has_ply_splats and not node.loaded_splats.is_empty()):
+					if node is FoveaSplattable and node._mesh_instance_ref and node._mesh_instance_ref.mesh:
+						var node_splats := HierarchicalSplatGenerator.generate_hierarchical_splats(node._mesh_instance_ref.mesh)
+						var gtr: Transform3D = node.global_transform
+						var gtr_rot: Quaternion = gtr.basis.get_rotation_quaternion()
+						var gtr_scale: Vector3 = gtr.basis.get_scale()
+						for s: GaussianSplat in node_splats:
+							s.position = gtr * s.position
+							s.rotation = (gtr_rot * s.rotation).normalized()
+							s.scale = gtr_scale * s.scale
+							s.normal = (gtr.basis * s.normal).normalized()
+							s.surface_normal = (gtr.basis * s.surface_normal).normalized()
+							s.depth = s.position.distance_to(camera_pos)
+							splats.append(s)
+		
+		if splats.is_empty():
+			splats = SplatGenerator.generate_all_splats(
+				visibility_result, camera_pos, splat_config, global_splat_density)
 		for splat in splats:
 			if current_idx < max_splats:
 				current_splats[current_idx] = splat
@@ -133,9 +153,18 @@ func _submit_to_renderer() -> int:
 	return splat_renderer.render_splats(current_splats)
 
 ## Appliquer les poids foveated et filtrer par opacité
-func apply_foveated_pass(foveated_controller: FoveatedController) -> void:
+func apply_foveated_pass(foveated_controller: FoveatedController, layered_controller: LayeredFoveatedController = null, enable_layered: bool = false) -> void:
 	if foveated_controller == null:
 		return
+		
+	if enable_layered and layered_controller != null:
+		var camera := get_viewport().get_camera_3d()
+		var cam_pos := camera.global_position if camera else Vector3.ZERO
+		var gaze_pt := foveated_controller.get_gaze_point()
+		current_splats = layered_controller.optimize_layered_splats(current_splats, gaze_pt, cam_pos)
+		current_splats = SplatSorter.minimize_overdraw(current_splats)
+		return
+		
 	var foveated_splats: Array[GaussianSplat] = []
 	for splat in current_splats:
 		var weight := foveated_controller.get_foveal_weight(splat.position)

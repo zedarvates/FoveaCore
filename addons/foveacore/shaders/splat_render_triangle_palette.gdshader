@@ -38,6 +38,22 @@ uniform int splat_subdivisions = 16;
 uniform bool use_dithering = true;
 uniform float dither_strength = 1.0;
 
+// Layered Splatting toggle
+uniform bool enable_layered_splatting = true;
+
+// Surface Waves (Dynamic, Repeating & Looping)
+uniform bool  enable_waves          = false;
+uniform float wave_speed            = 1.0;
+uniform float wave_amplitude        = 0.2;
+uniform float wave_frequency        = 0.5;
+uniform float wave_tiling_size      = 10.0;
+uniform float wave_loop_period      = 4.0;
+
+// Dynamic Specular Highlights
+uniform vec3  light_direction     = vec3(0.0, -1.0, 0.0);
+uniform float specular_strength   = 0.5;
+uniform float specular_shininess  = 32.0;
+
 // Données transmises du Vertex au Fragment
 varying flat vec3 v_color;        // Couleur interpolée (RGB)
 varying flat float v_opacity;     // Opacité
@@ -46,8 +62,10 @@ varying vec2 v_uv;                // UV du vertex (0..1)
 varying vec3 v_local_pos;         // Position locale dans le splat
 varying vec3 v_conic;             // Covariance inverse
 varying vec2 v_screen_pos;        // Position écran pour dithering
+varying float v_specular;
 
 void vertex() {
+    v_specular = 0.0;
     // --- 1. DÉCODAGE DES 16 OCTETS (Spatial & Vector Quantization) ---
     uint data0 = floatBitsToUint(INSTANCE_CUSTOM.x);
     uint data1 = floatBitsToUint(INSTANCE_CUSTOM.y);
@@ -58,11 +76,13 @@ void vertex() {
     vec3 world_pos = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 
     // Extraction de l'index de palette (8 bits) au lieu de RGB565
-    // L'index est stocké dans les 8 bits de poids faible de data2
     v_palette_index = int(data2 & 0xFFu);
     
     // Extraction de l'opacité (8 bits)
     v_opacity = float(data3 & 0xFFu) / 255.0;
+    
+    // Extraction du type de couche (layer_type)
+    uint layer_type = (data3 >> 8u) & 0xFFu;
 
     // --- 2. CALCUL DE LA COVARIANCE (Anisotropie via Codebook) ---
     uint covar_index = (data2 >> 16u) & 0xFFFFu;
@@ -82,7 +102,16 @@ void vertex() {
     mat3 MV = mat3(MODELVIEW_MATRIX);
     cov3d = MV * cov3d * transpose(MV);
     
-    vec3 center_cam = (MODELVIEW_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+    vec3 wave_offset = vec3(0.0);
+    if (enable_waves) {
+        float looped_time = mod(TIME, wave_loop_period);
+        float tiled_x = mod(world_pos.x, wave_tiling_size);
+        float tiled_z = mod(world_pos.z, wave_tiling_size);
+        float wave_angle = (tiled_x + tiled_z) * wave_frequency + (looped_time * wave_speed * (2.0 * PI / wave_loop_period));
+        wave_offset.y = sin(wave_angle) * wave_amplitude;
+    }
+    
+    vec3 center_cam = (MODELVIEW_MATRIX * vec4(wave_offset, 1.0)).xyz;
     vec3 cov2d = compute_cov2d(center_cam, cov3d, PROJECTION_MATRIX, VIEWPORT_SIZE);
     
     float det = (cov2d.x * cov2d.z) - (cov2d.y * cov2d.y);
@@ -90,8 +119,6 @@ void vertex() {
     v_conic = vec3(cov2d.z, -cov2d.y, cov2d.x) * inv_det;
 
     // --- 3. TRANSFORMATION DU MAILLAGE TRIANGLE ---
-    // VERTEX.xy est la position locale dans le cercle unité (-1..1)
-    
     float a = cov2d.x;
     float b = cov2d.y;
     float c = cov2d.z;
@@ -114,16 +141,48 @@ void vertex() {
     float cos_t = cos(theta);
     float sin_t = sin(theta);
     
-    vec2 local_pos = VERTEX.xy;
+    // Calcul de la distance au regard basée sur le centre du splat
+    vec4 center_clip = PROJECTION_MATRIX * vec4(center_cam, 1.0);
+    vec2 center_ndc = center_clip.xy / center_clip.w;
+    vec2 aspect_uv = center_ndc * 0.5 + 0.5;
+    aspect_uv.x *= VIEWPORT_SIZE.x / VIEWPORT_SIZE.y;
     
-    // Appliquer échelle puis rotation
+    vec2 aspect_gaze = (VIEW_INDEX == 0) ? fovea_gaze_left : fovea_gaze_right;
+    aspect_gaze.x *= VIEWPORT_SIZE.x / VIEWPORT_SIZE.y;
+    
+    float dist_to_gaze = distance(aspect_uv, aspect_gaze);
+    bool is_in_focus = dist_to_gaze <= fovea_inner_radius;
+    
+    // Dynamic Foveated Layer Weight Calculation
+    float layer_weight = 1.0;
+    if (enable_layered_splatting) {
+        if (layer_type == 0u) {
+            layer_weight = is_in_focus ? 0.8 : 0.3;
+        } else if (layer_type == 1u) {
+            layer_weight = is_in_focus ? 1.0 : 0.0;
+        } else if (layer_type == 2u) {
+            layer_weight = is_in_focus ? 1.2 : 0.1;
+        } else if (layer_type == 3u) {
+            layer_weight = is_in_focus ? 1.0 : 0.0;
+        } else {
+            layer_weight = is_in_focus ? 0.8 : 0.3;
+        }
+        
+        v_opacity *= layer_weight;
+        
+        // Étirement du rayon pour masquer les trous
+        float scale_factor = 1.0 + (dist_to_gaze / fovea_inner_radius);
+        radius1 *= scale_factor;
+        radius2 *= scale_factor;
+    }
+    
+    vec2 local_pos = VERTEX.xy;
     vec2 scaled = vec2(local_pos.x * radius1, local_pos.y * radius2);
     vec2 rotated = vec2(
         scaled.x * cos_t - scaled.y * sin_t,
         scaled.x * sin_t + scaled.y * cos_t
     );
     
-    // Conversion en offset NDC
     vec2 pixel_extent = vec2(radius1, radius2);
     vec2 ndc_offset = (rotated) / VIEWPORT_SIZE * 2.0;
     
@@ -134,33 +193,37 @@ void vertex() {
     v_screen_pos = clip_pos.xy / clip_pos.w;  // Pour dithering
     
     vec2 ndc_pos = clip_pos.xy / clip_pos.w;
-    vec2 aspect_uv = ndc_pos * 0.5 + 0.5;
-    aspect_uv.x *= VIEWPORT_SIZE.x / VIEWPORT_SIZE.y;
-    
-    vec2 aspect_gaze = (VIEW_INDEX == 0) ? fovea_gaze_left : fovea_gaze_right;
-    aspect_gaze.x *= VIEWPORT_SIZE.x / VIEWPORT_SIZE.y;
-    
-    float dist_to_gaze = distance(aspect_uv, aspect_gaze);
     float random_val = fract(sin(float(INSTANCE_ID) * 12.9898) * 43758.5453);
     
-    if (dist_to_gaze > fovea_outer_radius && random_val > 0.25) {
+    if (layer_weight <= 0.01) {
+        POSITION = vec4(0.0);
+    } else if (dist_to_gaze > fovea_outer_radius && random_val > 0.25) {
         POSITION = vec4(0.0);
     } else if (dist_to_gaze > fovea_inner_radius && random_val > 0.50) {
         POSITION = vec4(0.0);
     } else {
         if (length(ndc_pos) > 1.25) {
             POSITION = vec4(0.0);
+        } else {
             POSITION = clip_pos;
             v_uv = local_pos * 0.5 + 0.5;
             v_local_pos = vec3(rotated / pixel_extent, 0.0);
             
-            // Calcul de la normale de surface depuis le quaternion de rotation 3DGS (Lumière dynamique)
             vec3 splat_normal = vec3(
                 2.0 * (rot.y * rot.w + rot.x * rot.z),
                 2.0 * (rot.z * rot.w - rot.x * rot.y),
                 1.0 - 2.0 * (rot.y * rot.y + rot.z * rot.z)
             );
             NORMAL = (VIEW_MATRIX * vec4(normalize(splat_normal), 0.0)).xyz;
+            
+            // Dynamic specular reflections per-splat/per-vertex
+            vec3 V = -normalize(center_cam);
+            vec3 L_view = (VIEW_MATRIX * vec4(-normalize(light_direction), 0.0)).xyz;
+            vec3 H = normalize(V + L_view);
+            vec3 N = normalize(NORMAL);
+            float NdotH = clamp(dot(N, H), 0.0, 1.0);
+            v_specular = pow(NdotH, specular_shininess) * specular_strength;
+        }
     }
 }
 
@@ -220,7 +283,7 @@ void fragment() {
     
     ALBEDO = dithered_color;
     ALPHA = alpha;
-    EMISSION = dithered_color * 0.01;
+    EMISSION = dithered_color * 0.01 + vec3(v_specular);
     
     // Dithering sur l'alpha aussi pour les bords transparents
     ALPHA = apply_floyd_steinberg_dither(v_screen_pos, alpha);

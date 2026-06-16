@@ -118,6 +118,45 @@ namespace FoveaEngine
             resource.Normals = normals;
         }
 
+        private struct PlyProperty
+        {
+            public string Name;
+            public string Type;
+        }
+
+        private static float ReadPropertyVal(BinaryReader br, string type)
+        {
+            switch (type)
+            {
+                case "char":
+                case "int8":
+                    return br.ReadSByte();
+                case "uchar":
+                case "uint8":
+                    return br.ReadByte();
+                case "short":
+                case "int16":
+                    return br.ReadInt16();
+                case "ushort":
+                case "uint16":
+                    return br.ReadUInt16();
+                case "int":
+                case "int32":
+                    return br.ReadInt32();
+                case "uint":
+                case "uint32":
+                    return br.ReadUInt32();
+                case "float":
+                case "float32":
+                    return br.ReadSingle();
+                case "double":
+                case "float64":
+                    return (float)br.ReadDouble();
+                default:
+                    return br.ReadSingle();
+            }
+        }
+
         private static FoveaSplatResource LoadPly(string globalPath)
         {
             using (var fs = new FileStream(globalPath, FileMode.Open, System.IO.FileAccess.Read))
@@ -128,7 +167,7 @@ namespace FoveaEngine
                 if (line != "ply") throw new Exception("Not a valid PLY file.");
 
                 int vertexCount = 0;
-                var properties = new List<string>();
+                var properties = new List<PlyProperty>();
 
                 while (true)
                 {
@@ -145,7 +184,7 @@ namespace FoveaEngine
                         var parts = line.Split(' ');
                         if (parts.Length >= 3)
                         {
-                            properties.Add(parts[2]);
+                            properties.Add(new PlyProperty { Name = parts[2], Type = parts[1] });
                         }
                     }
                 }
@@ -153,7 +192,7 @@ namespace FoveaEngine
                 var propMap = new Dictionary<string, int>();
                 for (int i = 0; i < properties.Count; i++)
                 {
-                    propMap[properties[i]] = i;
+                    propMap[properties[i].Name] = i;
                 }
 
                 var positions = new Vector3[vertexCount];
@@ -170,7 +209,7 @@ namespace FoveaEngine
                     float[] data = new float[propCount];
                     for (int p = 0; p < propCount; p++)
                     {
-                        data[p] = br.ReadSingle();
+                        data[p] = ReadPropertyVal(br, properties[p].Type);
                     }
 
                     Vector3 pos = Vector3.Zero;
@@ -404,7 +443,7 @@ namespace FoveaEngine
 
         private static FoveaSplatResource LoadNpy(string globalPath)
         {
-            // Simple Nerfstudio/Numpy array parser
+            // Nerfstudio/Numpy array parser
             using (var fs = new FileStream(globalPath, FileMode.Open, System.IO.FileAccess.Read))
             using (var br = new BinaryReader(fs))
             {
@@ -419,12 +458,33 @@ namespace FoveaEngine
                 byte[] headerBytes = br.ReadBytes(headerLen);
                 string header = Encoding.ASCII.GetString(headerBytes);
 
-                // We assume floats/doubles representation in row-major order.
-                // Standard Nerfstudio splat clouds (.npy) contain flattened splat attributes.
-                // For simplicity, we fallback to a small point-cloud if Nerfstudio struct cannot be resolved
-                int count = 1000; // Mock count or read based on file size
+                // Extract shape
+                int count = 1000;
+                int dim = 3; // Default fallback to XYZ
+                
+                var shapeIdx = header.IndexOf("'shape'");
+                if (shapeIdx == -1) shapeIdx = header.IndexOf("\"shape\"");
+                if (shapeIdx != -1)
+                {
+                    var startTuple = header.IndexOf('(', shapeIdx);
+                    var endTuple = header.IndexOf(')', startTuple);
+                    if (startTuple != -1 && endTuple != -1)
+                    {
+                        var tupleStr = header.Substring(startTuple + 1, endTuple - startTuple - 1);
+                        var parts = tupleStr.Split(',');
+                        if (parts.Length > 0 && int.TryParse(parts[0].Trim(), out int parsedCount))
+                        {
+                            count = parsedCount;
+                        }
+                        if (parts.Length > 1 && int.TryParse(parts[1].Trim(), out int parsedDim))
+                        {
+                            dim = parsedDim;
+                        }
+                    }
+                }
+
                 long remainingBytes = fs.Length - fs.Position;
-                if (remainingBytes > 0)
+                if (remainingBytes > 0 && dim <= 3)
                 {
                     count = (int)(remainingBytes / (3 * 4)); // Assume 3 floats per point (XYZ)
                 }
@@ -438,18 +498,60 @@ namespace FoveaEngine
 
                 for (int i = 0; i < count; i++)
                 {
-                    if (fs.Position + 12 <= fs.Length)
+                    if (fs.Position + dim * 4 > fs.Length) break;
+
+                    float[] row = new float[dim];
+                    for (int d = 0; d < dim; d++)
                     {
-                        float px = br.ReadSingle();
-                        float py = br.ReadSingle();
-                        float pz = br.ReadSingle();
-                        positions[i] = new Vector3(px, py, pz);
+                        row[d] = br.ReadSingle();
                     }
-                    rotations[i] = Quaternion.Identity;
-                    scales[i] = new Vector3(0.03f, 0.03f, 0.03f);
-                    colors[i] = Colors.White;
-                    opacities[i] = 1.0f;
-                    normals[i] = Vector3.Forward;
+
+                    positions[i] = new Vector3(row[0], row[1], row[2]);
+
+                    if (dim >= 6)
+                    {
+                        // f_dc_0, f_dc_1, f_dc_2 -> SH to RGB
+                        float r = 0.5f + 0.28209f * row[3];
+                        float g = 0.5f + 0.28209f * row[4];
+                        float b = 0.5f + 0.28209f * row[5];
+                        colors[i] = new Color(r, g, b);
+                    }
+                    else
+                    {
+                        colors[i] = Colors.White;
+                    }
+
+                    if (dim >= 7)
+                    {
+                        // opacity logit -> sigmoid
+                        float logit = row[6];
+                        opacities[i] = 1.0f / (1.0f + Mathf.Exp(-logit));
+                    }
+                    else
+                    {
+                        opacities[i] = 1.0f;
+                    }
+
+                    if (dim >= 10)
+                    {
+                        scales[i] = new Vector3(Mathf.Exp(row[7]), Mathf.Exp(row[8]), Mathf.Exp(row[9]));
+                    }
+                    else
+                    {
+                        scales[i] = new Vector3(0.05f, 0.05f, 0.05f);
+                    }
+
+                    if (dim >= 14)
+                    {
+                        // rotation [w, x, y, z] -> Godot Quaternion (x, y, z, w)
+                        rotations[i] = new Quaternion(row[11], row[12], row[13], row[10]).Normalized();
+                    }
+                    else
+                    {
+                        rotations[i] = Quaternion.Identity;
+                    }
+
+                    normals[i] = rotations[i] * Vector3.Forward;
                 }
 
                 return new FoveaSplatResource

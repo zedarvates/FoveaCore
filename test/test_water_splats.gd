@@ -5,6 +5,13 @@ extends Node3D
 
 @export var water_renderer: MultiMeshInstance3D
 @export var obstacle_node: Node3D
+@export var obstacle_node_2: Node3D
+@export var obstacle_radius_2 := 0.8
+@export var box_obstacle_node: Node3D
+@export var use_heightmap := false
+@export var heightmap_texture: Texture2D
+@export var heightmap_size := Vector3(10.0, 2.0, 10.0)
+@export var heightmap_offset := Vector3(-5.0, -1.0, -5.0)
 
 @export_group("Flux d'Eau")
 @export var flow_direction := Vector3(1.0, 0.0, 0.0)
@@ -25,6 +32,7 @@ extends Node3D
 @export var obstacle_animation_speed := 1.2
 var _time_passed := 0.0
 var _obstacle_base_pos := Vector3.ZERO
+var _obstacle_base_pos_2 := Vector3.ZERO
 
 func _ready() -> void:
 	if water_renderer == null:
@@ -88,6 +96,8 @@ func _ready() -> void:
 	# 3. Enregistrer la position de base de l'obstacle
 	if obstacle_node:
 		_obstacle_base_pos = obstacle_node.position
+	if obstacle_node_2:
+		_obstacle_base_pos_2 = obstacle_node_2.position
 
 func _process(delta: float) -> void:
 	_time_passed += delta
@@ -97,6 +107,9 @@ func _process(delta: float) -> void:
 	if obstacle_node and animate_obstacle:
 		var z_offset = sin(_time_passed * obstacle_animation_speed) * 0.8
 		obstacle_node.position = _obstacle_base_pos + Vector3(0.0, 0.0, z_offset)
+	if obstacle_node_2 and animate_obstacle:
+		var z_offset = cos(_time_passed * obstacle_animation_speed * 0.9) * 0.7
+		obstacle_node_2.position = _obstacle_base_pos_2 + Vector3(0.0, 0.0, z_offset)
 
 	# Auto-quit pour la validation automatisée
 	if OS.has_feature("headless") or "--quit" in OS.get_cmdline_args():
@@ -104,7 +117,7 @@ func _process(delta: float) -> void:
 			print("test_water_splats.gd: Validation automatique complétée. Fermeture.")
 			get_tree().quit()
 
-	if water_renderer == null or obstacle_node == null:
+	if water_renderer == null or water_renderer.material_override == null:
 		return
 		
 	var mat = water_renderer.material_override as ShaderMaterial
@@ -112,8 +125,41 @@ func _process(delta: float) -> void:
 		return
 
 	# Synchroniser les uniforms du shader
-	mat.set_shader_parameter("obstacle_position", obstacle_node.global_position)
-	mat.set_shader_parameter("obstacle_radius", obstacle_radius)
+	if obstacle_node:
+		mat.set_shader_parameter("obstacle_position", obstacle_node.global_position)
+		mat.set_shader_parameter("obstacle_radius", obstacle_radius)
+	else:
+		mat.set_shader_parameter("obstacle_radius", 0.0)
+
+	if obstacle_node_2:
+		mat.set_shader_parameter("obstacle_position_2", obstacle_node_2.global_position)
+		mat.set_shader_parameter("obstacle_radius_2", obstacle_radius_2)
+	else:
+		mat.set_shader_parameter("obstacle_radius_2", 0.0)
+
+	if box_obstacle_node:
+		mat.set_shader_parameter("box_obstacle_enabled", true)
+		var mesh_instance = box_obstacle_node as MeshInstance3D
+		if mesh_instance and mesh_instance.mesh:
+			var aabb: AABB = mesh_instance.mesh.get_aabb()
+			var world_aabb_min = box_obstacle_node.global_transform * aabb.position
+			var world_aabb_max = box_obstacle_node.global_transform * aabb.end
+			mat.set_shader_parameter("box_obstacle_min", world_aabb_min.min(world_aabb_max))
+			mat.set_shader_parameter("box_obstacle_max", world_aabb_min.max(world_aabb_max))
+		else:
+			var box_min = box_obstacle_node.global_position - Vector3(0.5, 0.5, 0.5)
+			var box_max = box_obstacle_node.global_position + Vector3(0.5, 0.5, 0.5)
+			mat.set_shader_parameter("box_obstacle_min", box_min)
+			mat.set_shader_parameter("box_obstacle_max", box_max)
+	else:
+		mat.set_shader_parameter("box_obstacle_enabled", false)
+
+	mat.set_shader_parameter("use_heightmap", use_heightmap)
+	if use_heightmap:
+		mat.set_shader_parameter("heightmap_texture", heightmap_texture)
+		mat.set_shader_parameter("heightmap_size", heightmap_size)
+		mat.set_shader_parameter("heightmap_offset", heightmap_offset)
+
 	mat.set_shader_parameter("flow_direction", flow_direction)
 	mat.set_shader_parameter("flow_speed", flow_speed)
 	mat.set_shader_parameter("flow_cycle_duration", flow_cycle_duration)

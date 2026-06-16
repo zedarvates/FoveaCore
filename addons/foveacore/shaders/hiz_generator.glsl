@@ -9,7 +9,7 @@
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 layout(set = 0, binding = 0) uniform sampler2D src_tex;
-layout(set = 0, binding = 1, image2D) uniform writeonly image2D dest_tex;
+layout(set = 0, binding = 1, r32f) uniform writeonly image2D dest_tex;
 
 layout(push_constant) uniform Params {
     vec2 src_pixel_size; // 1.0 / resolution_source

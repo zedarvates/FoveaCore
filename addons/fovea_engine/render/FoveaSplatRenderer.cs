@@ -162,6 +162,9 @@ namespace FoveaEngine
             var colors = new Color[count];
             var opacities = new float[count];
             var normals = new Vector3[count];
+            var layerTypes = new byte[count];
+            var ditherSeeds = new byte[count];
+            var brushTypes = new byte[count];
 
             for (int i = 0; i < count; i++)
             {
@@ -176,6 +179,15 @@ namespace FoveaEngine
                     
                     var normalVar = s.Get("normal");
                     normals[i] = normalVar.VariantType != Variant.Type.Nil ? normalVar.AsVector3() : Vector3.Forward;
+
+                    var layerVar = s.Get("layer_type");
+                    layerTypes[i] = (byte)(layerVar.VariantType != Variant.Type.Nil ? layerVar.AsInt32() : 0);
+
+                    var ditherVar = s.Get("dither_seed");
+                    ditherSeeds[i] = (byte)(ditherVar.VariantType != Variant.Type.Nil ? ditherVar.AsInt32() : 0);
+
+                    var brushVar = s.Get("brush_type");
+                    brushTypes[i] = (byte)(brushVar.VariantType != Variant.Type.Nil ? brushVar.AsInt32() : 0);
                 }
             }
 
@@ -186,7 +198,10 @@ namespace FoveaEngine
                 Scales = scales,
                 Colors = colors,
                 Opacities = opacities,
-                Normals = normals
+                Normals = normals,
+                LayerTypes = layerTypes,
+                DitherSeeds = ditherSeeds,
+                BrushTypes = brushTypes
             };
             resource.RecalculateBounds();
 
@@ -313,7 +328,22 @@ namespace FoveaEngine
             {
                 // Call culler pipeline
                 // In Godot C#, calling GDScript methods requires Call()
-                Rid depthTex = new Rid(); // Mock depth tex
+                Rid depthTex = new Rid();
+                if (camera.HasMethod("get_camera_attributes") && camera.Call("get_camera_attributes").AsGodotObject() is var attrs && attrs != null)
+                {
+                    if (attrs.HasMethod("get_depth_texture"))
+                    {
+                        depthTex = attrs.Call("get_depth_texture").AsRid();
+                    }
+                }
+                else if (camera.Get("attributes").AsGodotObject() is var attrs2 && attrs2 != null)
+                {
+                    if (attrs2.HasMethod("get_depth_texture"))
+                    {
+                        depthTex = attrs2.Call("get_depth_texture").AsRid();
+                    }
+                }
+
                 Vector3 aabbMin = _splatResource != null ? _splatResource.BBox.Position : new Vector3(-10, -10, -10);
                 Vector3 aabbMax = _splatResource != null ? _splatResource.BBox.End : new Vector3(10, 10, 10);
 
@@ -384,8 +414,14 @@ namespace FoveaEngine
             var col = resource.Colors;
             var op = resource.Opacities;
             var normals = resource.Normals;
+            var layerTypes = resource.LayerTypes;
+            var ditherSeeds = resource.DitherSeeds;
+            var brushTypes = resource.BrushTypes;
 
             bool hasNormals = normals != null && normals.Length == count;
+            bool hasLayers = layerTypes != null && layerTypes.Length == count;
+            bool hasDithers = ditherSeeds != null && ditherSeeds.Length == count;
+            bool hasBrushes = brushTypes != null && brushTypes.Length == count;
 
             for (int i = 0; i < count; i++)
             {
@@ -417,9 +453,9 @@ namespace FoveaEngine
                 byte opacityByte = (byte)Math.Clamp(op[i] * 255.0f, 0f, 255f);
                 bytes[src + 12] = opacityByte;
 
-                bytes[src + 13] = 0;
-                bytes[src + 14] = 0;
-                bytes[src + 15] = 0;
+                bytes[src + 13] = hasLayers ? layerTypes[i] : (byte)0;
+                bytes[src + 14] = hasDithers ? ditherSeeds[i] : (byte)0;
+                bytes[src + 15] = hasBrushes ? brushTypes[i] : (byte)0;
             }
 
             return bytes;

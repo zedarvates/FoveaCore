@@ -40,16 +40,16 @@ func process_instanced_splats(
         return { "buffer_rid": RID(), "count": 0, "active_instance_indices": [] }
 
     # 1. CPU Frustum Culling on Instances (Instance-Level)
-    var frustum = FrustumUtils.Frustum.new()
+    var frustum: FrustumUtils.Frustum = FrustumUtils.Frustum.new()
     frustum.from_matrix(camera.get_camera_projection(), camera.global_transform)
 
     var active_transforms: Array[Transform3D] = []
     var active_instance_indices: Array[int] = []
-    var local_aabb = AABB(aabb_min, aabb_max - aabb_min).grow(0.1)
+    var local_aabb: AABB = AABB(aabb_min, aabb_max - aabb_min).grow(0.1)
 
     for i in range(instance_transforms.size()):
-        var xf = instance_transforms[i]
-        var world_aabb = xf * local_aabb
+        var xf: Transform3D = instance_transforms[i]
+        var world_aabb: AABB = xf * local_aabb
         if frustum.contains_aabb(world_aabb):
             active_transforms.append(xf)
             active_instance_indices.append(i)
@@ -57,73 +57,73 @@ func process_instanced_splats(
     if active_transforms.is_empty():
         return { "buffer_rid": RID(), "count": 0, "active_instance_indices": [] }
 
-    var asset_splat_count = raw_bytes.size() / SPLAT_BYTE_SIZE
-    var active_instances_count = active_transforms.size()
+    var asset_splat_count: int = raw_bytes.size() / SPLAT_BYTE_SIZE
+    var active_instances_count: int = active_transforms.size()
 
     # 2. Serialize Active Instance Matrices
-    var transforms_bytes = serialize_transforms(active_transforms)
+    var transforms_bytes: PackedByteArray = serialize_transforms(active_transforms)
 
     # 3. Create GPU Buffers
-    var input_buffer = rd.storage_buffer_create(raw_bytes.size(), raw_bytes)
-    var transforms_buffer = rd.storage_buffer_create(transforms_bytes.size(), transforms_bytes)
-    var output_buffer = rd.storage_buffer_create(active_instances_count * raw_bytes.size())
+    var input_buffer: RID = rd.storage_buffer_create(raw_bytes.size(), raw_bytes)
+    var transforms_buffer: RID = rd.storage_buffer_create(transforms_bytes.size(), transforms_bytes)
+    var output_buffer: RID = rd.storage_buffer_create(active_instances_count * raw_bytes.size())
     
-    var counter_bytes = PackedByteArray()
+    var counter_bytes: PackedByteArray = PackedByteArray()
     counter_bytes.resize(4)
-    var counter_buffer = rd.storage_buffer_create(4, counter_bytes)
+    var counter_buffer: RID = rd.storage_buffer_create(4, counter_bytes)
 
     # Set 0: Buffers (input, transforms, output, counter)
-    var uniform_input = RDUniform.new()
+    var uniform_input: RDUniform = RDUniform.new()
     uniform_input.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
     uniform_input.binding = 0
     uniform_input.add_id(input_buffer)
 
-    var uniform_transforms = RDUniform.new()
+    var uniform_transforms: RDUniform = RDUniform.new()
     uniform_transforms.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
     uniform_transforms.binding = 1
     uniform_transforms.add_id(transforms_buffer)
 
-    var uniform_output = RDUniform.new()
+    var uniform_output: RDUniform = RDUniform.new()
     uniform_output.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
     uniform_output.binding = 2
     uniform_output.add_id(output_buffer)
 
-    var uniform_counter = RDUniform.new()
+    var uniform_counter: RDUniform = RDUniform.new()
     uniform_counter.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
     uniform_counter.binding = 3
     uniform_counter.add_id(counter_buffer)
 
-    var uniform_set = rd.uniform_set_create(
+    var uniform_set: RID = rd.uniform_set_create(
         [uniform_input, uniform_transforms, uniform_output, uniform_counter],
         shader_rid, 0
     )
 
     # Set 1: Depth map + Camera UBO
-    var sampler_state = RDSamplerState.new()
+    var sampler_state: RDSamplerState = RDSamplerState.new()
     sampler_state.min_filter = RenderingDevice.SAMPLER_FILTER_NEAREST
     sampler_state.mag_filter = RenderingDevice.SAMPLER_FILTER_NEAREST
-    var sampler_rid = rd.sampler_create(sampler_state)
+    var sampler_rid: RID = rd.sampler_create(sampler_state)
 
     # Setup fallback 1x1 depth texture if invalid
-    var actual_depth_tex = depth_texture
-    var dummy_tex = RID()
+    var actual_depth_tex: RID = depth_texture
+    var dummy_tex: RID = RID()
     if not actual_depth_tex.is_valid():
         dummy_tex = _create_dummy_depth_texture()
         actual_depth_tex = dummy_tex
 
-    var uniform_depth = RDUniform.new()
+    var uniform_depth: RDUniform = RDUniform.new()
     uniform_depth.uniform_type = RenderingDevice.UNIFORM_TYPE_SAMPLER_WITH_TEXTURE
     uniform_depth.binding = 0
     uniform_depth.add_id(sampler_rid)
     uniform_depth.add_id(actual_depth_tex)
 
     # Camera Data UBO
-    var cam_pos = camera.global_position
-    var view_matrix = camera.get_camera_transform().affine_inverse()
-    var proj_matrix = camera.get_camera_projection()
-    var view_proj = proj_matrix * view_matrix
+    var cam_pos: Vector3 = camera.global_position
+    var view_matrix: Transform3D = camera.get_camera_transform().affine_inverse()
+    var proj_matrix: Projection = camera.get_camera_projection()
+    var view_proj: Projection = proj_matrix * Projection(view_matrix)
 
-    var camera_data_bytes = PackedByteArray()
+    var camera_data_bytes: PackedByteArray = PackedByteArray()
     camera_data_bytes.resize(128)
     for col_idx in 4:
         for row_idx in 4:
@@ -131,16 +131,16 @@ func process_instanced_splats(
             # Right eye (fallback)
             camera_data_bytes.encode_float(64 + (col_idx * 16) + (row_idx * 4), view_proj[col_idx][row_idx])
 
-    var camera_ubo = rd.storage_buffer_create(128, camera_data_bytes)
-    var uniform_camera = RDUniform.new()
+    var camera_ubo: RID = rd.storage_buffer_create(128, camera_data_bytes)
+    var uniform_camera: RDUniform = RDUniform.new()
     uniform_camera.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
     uniform_camera.binding = 1
     uniform_camera.add_id(camera_ubo)
 
-    var uniform_set_depth = rd.uniform_set_create([uniform_depth, uniform_camera], shader_rid, 1)
+    var uniform_set_depth: RID = rd.uniform_set_create([uniform_depth, uniform_camera], shader_rid, 1)
 
     # Push Constants: 56 bytes
-    var push_bytes = PackedByteArray()
+    var push_bytes: PackedByteArray = PackedByteArray()
     push_bytes.resize(56)
     push_bytes.encode_float(0, cam_pos.x)
     push_bytes.encode_float(4, cam_pos.y)
@@ -158,10 +158,10 @@ func process_instanced_splats(
     push_bytes.encode_float(52, 0.0) # pad1
 
     # Dispatch Compute Shader
-    var total_threads = asset_splat_count * active_instances_count
-    var workgroups = ceili(float(total_threads) / 256.0)
+    var total_threads: int = asset_splat_count * active_instances_count
+    var workgroups: int = ceili(float(total_threads) / 256.0)
 
-    var compute_list = rd.compute_list_begin()
+    var compute_list: int = rd.compute_list_begin()
     rd.compute_list_bind_compute_pipeline(compute_list, pipeline_rid)
     rd.compute_list_bind_uniform_set(compute_list, uniform_set, 0)
     rd.compute_list_bind_uniform_set(compute_list, uniform_set_depth, 1)
@@ -173,15 +173,19 @@ func process_instanced_splats(
     rd.sync()
 
     # Read Counter
-    var result_counter_bytes = rd.buffer_get_data(counter_buffer)
-    var valid_splat_count = result_counter_bytes.decode_u32(0)
+    var result_counter_bytes: PackedByteArray = rd.buffer_get_data(counter_buffer)
+    var valid_splat_count: int = result_counter_bytes.decode_u32(0)
 
-    # Cleanup intermediate buffers (keep output_buffer)
+    # Cleanup intermediate buffers and uniform sets (keep output_buffer)
     rd.free_rid(input_buffer)
     rd.free_rid(transforms_buffer)
     rd.free_rid(counter_buffer)
     rd.free_rid(camera_ubo)
     rd.free_rid(sampler_rid)
+    if uniform_set.is_valid():
+        rd.free_rid(uniform_set)
+    if uniform_set_depth.is_valid():
+        rd.free_rid(uniform_set_depth)
     if dummy_tex.is_valid():
         rd.free_rid(dummy_tex)
 
@@ -192,11 +196,11 @@ func process_instanced_splats(
     }
 
 static func serialize_transforms(transforms: Array[Transform3D]) -> PackedByteArray:
-    var bytes = PackedByteArray()
+    var bytes: PackedByteArray = PackedByteArray()
     bytes.resize(transforms.size() * 64)
     for i in range(transforms.size()):
-        var xf = transforms[i]
-        var base = i * 64
+        var xf: Transform3D = transforms[i]
+        var base: int = i * 64
         # Column 0
         bytes.encode_float(base + 0, xf.basis.x.x)
         bytes.encode_float(base + 4, xf.basis.x.y)

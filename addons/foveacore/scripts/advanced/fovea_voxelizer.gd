@@ -61,8 +61,12 @@ static func generate_voxel_mesh(fovea_path: String, voxel_size_meters: float = 0
 	if ClassDB.can_instantiate("FoveaAssetLoader"):
 		loader = ClassDB.instantiate("FoveaAssetLoader")
 		if loader:
-			aabb = loader.get_asset_aabb(fovea_path)
-			raw_bytes = loader.load_fast_path(fovea_path)
+			var aabb_val = loader.get_asset_aabb(fovea_path)
+			if aabb_val is AABB:
+				aabb = aabb_val
+			var bytes_val = loader.load_fast_path(fovea_path)
+			if bytes_val is PackedByteArray:
+				raw_bytes = bytes_val
 			
 	if raw_bytes.is_empty():
 		# Fallback de secours si Rust n'est pas chargé

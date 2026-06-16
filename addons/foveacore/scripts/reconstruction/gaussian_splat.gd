@@ -17,7 +17,9 @@ enum LayerType {
 enum BrushType {
 	STONE = 0,
 	SPONGE = 1,
-	GAUSSIAN = 2
+	GAUSSIAN = 2,
+	DRYBRUSH = 3,
+	STIPPLE = 4
 }
 
 var position: Vector3 = Vector3.ZERO
@@ -113,7 +115,9 @@ func to_dict() -> Dictionary:
 		"layer_type": layer_type,
 		"brush_type": brush_type,
 		"surface_normal": surface_normal,
-		"origin_offset": origin_offset
+		"origin_offset": origin_offset,
+		"stiffness": stiffness,
+		"velocity": velocity
 	}
 
 func from_dict(data: Dictionary) -> void:
@@ -131,6 +135,8 @@ func from_dict(data: Dictionary) -> void:
 	brush_type = data.get("brush_type", BrushType.GAUSSIAN)
 	surface_normal = data.get("surface_normal", Vector3.UP)
 	origin_offset = data.get("origin_offset", Vector3.ZERO)
+	stiffness = data.get("stiffness", 4.0)
+	velocity = data.get("velocity", Vector3.ZERO)
 
 static func create_from_triangle(
 	pos: Vector3, 

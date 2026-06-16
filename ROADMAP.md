@@ -56,6 +56,13 @@ This document outlines the roadmap to transform FoveaCore into a world-class hyb
 - [x] **Fast-Path Binary Asset Format (`.fovea`)**: Native container ready for GPU (Direct Memory Upload) without CPU parsing, implemented in Rust.
 - [x] **Dynamic Lighting**: Dynamic shadows adapting to Godot light sources.
 - [ ] **Static vs Dynamic Splat Separation**: Differential processing (Baking/Octree for static decor, Compute Skinning & Deformation for mobile entities).
+- [x] **Splat Soft-Surface Physics & Interactions** *(partial)*:
+  - [x] Localized spring-mass-damper deformations (squish & bounce) via `FoveaSplatCloth3D`
+  - [x] Surface wave ripples (Gerstner waves, noise field, capillary ripples) via `FoveaSurfaceDeformer`
+  - [x] Volume conservation — Poisson's ratio (compress normal axis, expand tangent plane)
+  - [x] Analytical slope derivatives for per-splat orientation alignment on dynamic surfaces
+  - [ ] **Splat Cutting & Tearing**: Dynamic mesh topology splits when force exceeds a threshold
+
 
 ## 🟣 Phase 4: Artificial Intelligence & Cloud
 *Objective: Automate asset creation.*

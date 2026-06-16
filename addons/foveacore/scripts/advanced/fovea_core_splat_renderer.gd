@@ -5,12 +5,25 @@ extends MultiMeshInstance3D
 ## VERSION TRIANGLE - Utilise un maillage triangulaire au lieu de quads
 ## Optimisation : réduction drastique du coût du fragment shader
 
-@export_file("*.fovea") var asset_path: String = ""
+@export_file("*.fovea") var asset_path: String = "":
+    set(val):
+        var old_path := asset_path
+        asset_path = val
+        if old_path != "" and old_path != val:
+            if culler_pipeline:
+                culler_pipeline.unload_asset_buffers(old_path)
+        if is_inside_tree() and asset_path != "":
+            load_and_render_splats()
+            if enable_palette:
+                load_palette_from_fovea()
+            update_material_shader()
+            call_deferred("_upload_covar_codebook")
 @export var cull_threshold: float = 0.0 # 0.0 = Cull tout ce qui dépasse 90 degrés
 @export var use_triangle_mesh: bool = true  # Utiliser le maillage triangle optimisé
 @export var splat_subdivisions: int = 16    # Nombre de segments pour l'ellipse
 @export var sort_distance_threshold: float = 0.1  # Distance minimale de déplacement de la caméra pour recalculer le tri/culling
 @export var chunk_load_radius: float = 20.0  # Distance maximum pour charger un chunk spatial
+@export var enable_layered_splatting: bool = true
 
 @export_group("Cleaning (FoveaSplatCleaner)")
 ## Activer le filtrage des floaters et NaN apres le GPU culling
@@ -104,10 +117,47 @@ extends MultiMeshInstance3D
 @export var hlod_voxel_sizes: Array[float] = [0.2, 0.8, 3.0]
 ## Seuils de distance de caméra pour transiter entre les niveaux HLOD
 @export var hlod_distances: Array[float] = [8.0, 18.0, 30.0]
+## Activer le rendu par tuiles d'écran (16x16) via Compute Shader (Tile-Based Rasterization)
+@export var enable_tile_rasterizer := false
+
+@export_group("Surface Waves (Dynamic, Repeating & Looping)")
+## Activer les vagues de surface dynamique (GPU)
+@export var enable_waves: bool = false:
+    set(val):
+        enable_waves = val
+        update_material_shader()
+## Vitesse des vagues
+@export var wave_speed: float = 1.0:
+    set(val):
+        wave_speed = val
+        update_material_shader()
+## Amplitude (hauteur) des vagues
+@export var wave_amplitude: float = 0.2:
+    set(val):
+        wave_amplitude = val
+        update_material_shader()
+## Fréquence (densité) spatiale des vagues
+@export var wave_frequency: float = 0.5:
+    set(val):
+        wave_frequency = val
+        update_material_shader()
+## Taille de pavage spatial (tiling)
+@export var wave_tiling_size: float = 10.0:
+    set(val):
+        wave_tiling_size = val
+        update_material_shader()
+## Période de bouclage temporel (en secondes)
+@export var wave_loop_period: float = 4.0:
+    set(val):
+        wave_loop_period = val
+        update_material_shader()
 
 var hlod_levels := {}
 var _current_hlod_level := 0
 var _original_splats: Array[GaussianSplat] = []
+
+var _compositor_effect_added := false
+var _compositor_effect: FoveaCompositorEffect = null
 
 var culler_pipeline: GPUCullerPipeline
 var splat_mesh: ArrayMesh
@@ -126,7 +176,9 @@ var _last_camera_pos: Vector3 = Vector3.ZERO
 var _prev_cam_pos: Vector3   = Vector3.ZERO
 var _motion_lod_applied: float = 1.0  # Cache du lod_ratio courant pour éviter les envois inutiles
 
-func _ready():
+var _cached_main_light: DirectionalLight3D = null
+
+func _ready() -> void:
     culler_pipeline = GPUCullerPipeline.new()
     culler_pipeline.interleave_factor = sort_interleave_factor
     _propagate_cleaning_parameters()
@@ -139,10 +191,10 @@ func _ready():
         splat_mesh = triangle_mesh_generator.generate_triangle_splat_mesh_optimized()
     else:
         # Fallback: QuadMesh classique (ancienne méthode)
-        var quad_mesh = QuadMesh.new()
+        var quad_mesh: QuadMesh = QuadMesh.new()
         quad_mesh.size = Vector2(1.0, 1.0)
         # Convertir le quad en ArrayMesh pour compatibilité
-        var st = SurfaceTool.new()
+        var st: SurfaceTool = SurfaceTool.new()
         st.begin(Mesh.PRIMITIVE_TRIANGLES)
         st.add_vertex(Vector3(-0.5, -0.5, 0))
         st.add_vertex(Vector3(0.5, -0.5, 0))
@@ -158,7 +210,7 @@ func _ready():
     multimesh.mesh = splat_mesh
     
     # Attribuer le shader triangle optimisé
-    var material = ShaderMaterial.new()
+    var material: ShaderMaterial = ShaderMaterial.new()
     material.shader = preload("res://addons/foveacore/shaders/splat_render_triangle.gdshader")
     material.set_shader_parameter("splat_subdivisions", splat_subdivisions)
     material.set_shader_parameter("use_palette", false)
@@ -181,19 +233,61 @@ func _process(_delta: float) -> void:
     if camera == null or material_override == null:
         return
 
+    if camera and not _compositor_effect_added:
+        _setup_compositor_effect(camera)
+
+    if _compositor_effect and _compositor_effect.culler_pipeline:
+        _compositor_effect.cached_hlod_distances = hlod_distances
+        _compositor_effect.enable_tile_rasterizer = enable_tile_rasterizer
+        _compositor_effect.fovea_asset_path = asset_path
+        _compositor_effect.target_camera = camera
+        
+        var c_pipe: GPUCullerPipeline = _compositor_effect.culler_pipeline
+        c_pipe.last_model_transform = global_transform
+        c_pipe.last_use_palette = enable_palette
+        
+        var mat := material_override as ShaderMaterial
+        if mat:
+            var covar_tex: Variant = mat.get_shader_parameter("covar_texture")
+            var palette_tex: Variant = mat.get_shader_parameter("palette_texture")
+            if covar_tex:
+                c_pipe.last_covar_texture_rid = covar_tex.get_rid()
+            if palette_tex:
+                c_pipe.last_palette_texture_rid = palette_tex.get_rid()
+            
+            var aabb_min_val: Variant = mat.get_shader_parameter("aabb_min")
+            if aabb_min_val != null:
+                c_pipe.last_aabb_min = aabb_min_val
+            var aabb_max_val: Variant = mat.get_shader_parameter("aabb_max")
+            if aabb_max_val != null:
+                c_pipe.last_aabb_max = aabb_max_val
+                
+            var palette_size_val: Variant = mat.get_shader_parameter("palette_size")
+            if palette_size_val != null:
+                c_pipe.last_palette_size = int(palette_size_val)
+
     # Mettre à jour le culling/tri en temps réel si la caméra bouge (rendu par fichier uniquement)
     # ou si de nouveaux chunks ont été chargés asynchronement.
-    var cam_pos = camera.global_position
+    var cam_pos: Vector3 = camera.global_position
     var camera_moved := (cam_pos - _last_camera_pos).length() > sort_distance_threshold
     var new_chunks_loaded := false
-    if culler_pipeline and culler_pipeline.streaming_manager:
-        if culler_pipeline.streaming_manager.has_newly_loaded_chunks:
+    var streaming_mgr: RefCounted = culler_pipeline.streaming_manager if culler_pipeline else null
+    if _compositor_effect and _compositor_effect.culler_pipeline:
+        streaming_mgr = _compositor_effect.culler_pipeline.streaming_manager
+        
+    if streaming_mgr:
+        if streaming_mgr.has_newly_loaded_chunks:
             new_chunks_loaded = true
-            culler_pipeline.streaming_manager.has_newly_loaded_chunks = false
+            streaming_mgr.has_newly_loaded_chunks = false
 
     if asset_path != "" and (camera_moved or new_chunks_loaded):
         _last_camera_pos = cam_pos
-        load_and_render_splats()
+        if enable_tile_rasterizer:
+            multimesh.instance_count = 0
+            if streaming_mgr:
+                streaming_mgr.update_streaming(camera, chunk_load_radius)
+        else:
+            load_and_render_splats()
 
     # Gérer la transition HLOD pour les splats procéduraux
     if enable_hlod and not hlod_levels.is_empty():
@@ -250,11 +344,42 @@ func _process(_delta: float) -> void:
                         mat.set_shader_parameter("motion_stretch_factor", 0.0)
 
         mat.set_shader_parameter("lod_ratio", lod)
+        mat.set_shader_parameter("enable_layered_splatting", enable_layered_splatting)
+        
+        # Update light direction in shader for dynamic specular calculations
+        var main_light: DirectionalLight3D = _find_main_light()
+        if main_light:
+            var light_dir: Vector3 = -main_light.global_transform.basis.z.normalized()
+            mat.set_shader_parameter("light_direction", light_dir)
+            
         _prev_cam_pos = cam_pos
 
     # Passe de déformation Clay (non-destructif : opère sur les originaux)
     if deformer and deformer.enabled and multimesh and multimesh.instance_count > 0:
         deformer.deform_multimesh(multimesh)
+
+func _setup_compositor_effect(camera: Camera3D) -> void:
+    if camera == null:
+        return
+    if camera.compositor == null:
+        camera.compositor = Compositor.new()
+    
+    # Vérifier si l'effet est déjà présent
+    for effect in camera.compositor.compositor_effects:
+        if effect is FoveaCompositorEffect:
+            _compositor_effect = effect
+            _compositor_effect_added = true
+            _compositor_effect.target_renderer = self
+            _compositor_effect.fovea_asset_path = asset_path
+            return
+            
+    _compositor_effect = FoveaCompositorEffect.new()
+    _compositor_effect.target_camera = camera
+    _compositor_effect.fovea_asset_path = asset_path
+    _compositor_effect.target_renderer = self
+    camera.compositor.compositor_effects.append(_compositor_effect)
+    _compositor_effect_added = true
+    print("FoveaCoreSplatRenderer: FoveaCompositorEffect successfully registered on camera compositor.")
 
 ## Configure le rendu avec une palette de couleurs (Digital Painting style)
 func setup_palette(palette: FoveaColorPalette) -> void:
@@ -315,7 +440,7 @@ func _upload_covar_codebook() -> void:
     # Tentative de chargement via GDExtension Rust
     var codebook_bytes: PackedByteArray = PackedByteArray()
     if ClassDB.can_instantiate("FoveaAssetLoader"):
-        var loader = ClassDB.instantiate("FoveaAssetLoader")
+        var loader: Object = ClassDB.instantiate("FoveaAssetLoader")
         if loader and loader.has_method("load_covariance_codebook"):
             codebook_bytes = loader.load_covariance_codebook(asset_path)
 
@@ -391,9 +516,19 @@ func update_material_shader() -> void:
     if not mat:
         return
     
+    if mat.shader and mat.shader.resource_path.ends_with("splat_render_artistic.gdshader"):
+        TexturedSplatGenerator.apply_brush_textures(mat)
+        mat.set_shader_parameter("enable_waves", enable_waves)
+        mat.set_shader_parameter("wave_speed", wave_speed)
+        mat.set_shader_parameter("wave_amplitude", wave_amplitude)
+        mat.set_shader_parameter("wave_frequency", wave_frequency)
+        mat.set_shader_parameter("wave_tiling_size", wave_tiling_size)
+        mat.set_shader_parameter("wave_loop_period", wave_loop_period)
+        return
+    
     var has_palette := false
     if enable_palette and ClassDB.can_instantiate("FoveaAssetLoader") and asset_path != "":
-        var loader = ClassDB.instantiate("FoveaAssetLoader")
+        var loader: Object = ClassDB.instantiate("FoveaAssetLoader")
         if loader and loader.has_method("load_color_palette"):
             var palette_bytes: PackedByteArray = loader.load_color_palette(asset_path)
             has_palette = not palette_bytes.is_empty()
@@ -406,23 +541,30 @@ func update_material_shader() -> void:
     else:
         mat.shader = preload("res://addons/foveacore/shaders/splat_render_triangle.gdshader")
         mat.set_shader_parameter("use_palette", has_palette)
+        
+    mat.set_shader_parameter("enable_waves", enable_waves)
+    mat.set_shader_parameter("wave_speed", wave_speed)
+    mat.set_shader_parameter("wave_amplitude", wave_amplitude)
+    mat.set_shader_parameter("wave_frequency", wave_frequency)
+    mat.set_shader_parameter("wave_tiling_size", wave_tiling_size)
+    mat.set_shader_parameter("wave_loop_period", wave_loop_period)
 
-func load_and_render_splats():
-    var camera = get_viewport().get_camera_3d()
+func load_and_render_splats() -> void:
+    var camera: Camera3D = get_viewport().get_camera_3d()
     if not camera:
         push_error("FoveaCoreSplatRenderer: No camera in viewport.")
         return
-    var cam_pos = camera.global_position
+    var cam_pos: Vector3 = camera.global_position
     _last_camera_pos = cam_pos
     
     # Get depth texture from camera if available
     var depth_tex: RID = RID()
     if camera.has_method("get_camera_attributes") and camera.get_camera_attributes():
-        var attrs = camera.get_camera_attributes()
+        var attrs: Variant = camera.get_camera_attributes()
         if attrs.has_method("get_depth_texture"):
             depth_tex = attrs.get_depth_texture()
     elif "attributes" in camera and camera.attributes:
-        var attrs = camera.attributes
+        var attrs: Variant = camera.attributes
         if attrs.has_method("get_depth_texture"):
             depth_tex = attrs.get_depth_texture()
     
@@ -430,12 +572,14 @@ func load_and_render_splats():
     var aabb_min := Vector3(-5, -5, -5)
     var aabb_max := Vector3(5, 5, 5)
     if ClassDB.can_instantiate("FoveaAssetLoader"):
-        var loader = ClassDB.instantiate("FoveaAssetLoader")
+        var loader: Object = ClassDB.instantiate("FoveaAssetLoader")
         if loader and loader.has_method("get_asset_aabb"):
-            var aabb: AABB = loader.get_asset_aabb(asset_path)
-            if aabb.size.length_squared() > 0.001:
-                aabb_min = aabb.position
-                aabb_max = aabb.end
+            var aabb_val: Variant = loader.get_asset_aabb(asset_path)
+            if aabb_val is AABB:
+                var aabb: AABB = aabb_val
+                if aabb.size.length_squared() > 0.001:
+                    aabb_min = aabb.position
+                    aabb_max = aabb.end
 
     # Injecter l'AABB dans le shader material pour la dé-quantisation
     var mat := material_override as ShaderMaterial
@@ -445,8 +589,8 @@ func load_and_render_splats():
 
     # 3. Exécution du Compute Shader ultra-rapide (Culling)
     culler_pipeline.chunk_load_radius = chunk_load_radius
-    var output_buffer_rid = culler_pipeline.process_splats_from_file(
-        asset_path, camera, depth_tex, cull_threshold, aabb_min, aabb_max)
+    var output_buffer_rid: RID = culler_pipeline.process_splats_from_file(
+        asset_path, camera, depth_tex, cull_threshold, aabb_min, aabb_max, null, hlod_distances)
     if not output_buffer_rid.is_valid():
         return
         
@@ -462,7 +606,7 @@ func load_and_render_splats():
 
     # 4b. Passe de nettoyage optionnelle (FoveaSplatCleaner — P3)
     # Désormais appliquée de manière statique au chargement dans culler_pipeline pour de meilleures performances.
-    var statically_cleaned = (culler_pipeline and culler_pipeline.enable_cleaning)
+    var statically_cleaned: bool = (culler_pipeline and culler_pipeline.enable_cleaning)
     if enable_cleaning and surviving_splats_count > 0 and not statically_cleaned:
         var before_clean := surviving_splats_count
         # Filtre NaN/outliers (splats quantisés à (65535,65535,65535))
@@ -480,7 +624,7 @@ func load_and_render_splats():
 
     # Passe de fusion co-planaire (Coplanar Splat Merging, Phase 3)
     # Regroupe les splats co-surfaciques pour éliminer l'overdraw GPU.
-    var statically_merged = (culler_pipeline and culler_pipeline.enable_coplanar_merge)
+    var statically_merged: bool = (culler_pipeline and culler_pipeline.enable_coplanar_merge)
     if enable_coplanar_merge and surviving_splats_count > 0 and not statically_merged:
         culled_bytes = FoveaSplatCleaner.merge_coplanar(
             culled_bytes, coplanar_z_bucket, 24, 1024, coplanar_min_group)
@@ -516,14 +660,14 @@ func load_and_render_splats():
     pass
 
 ## Méthode pour mettre à jour dynamiquement le maillage
-func update_splat_mesh_mode(use_triangle: bool):
+func update_splat_mesh_mode(use_triangle: bool) -> void:
     use_triangle_mesh = use_triangle
     if use_triangle:
         splat_mesh = triangle_mesh_generator.generate_triangle_splat_mesh_optimized()
     else:
-        var quad_mesh = QuadMesh.new()
+        var quad_mesh: QuadMesh = QuadMesh.new()
         quad_mesh.size = Vector2(1.0, 1.0)
-        var st = SurfaceTool.new()
+        var st: SurfaceTool = SurfaceTool.new()
         st.begin(Mesh.PRIMITIVE_TRIANGLES)
         st.add_vertex(Vector3(-0.5, -0.5, 0))
         st.add_vertex(Vector3(0.5, -0.5, 0))
@@ -543,8 +687,8 @@ func render_splats(splats: Array[GaussianSplat]) -> int:
         # Générer et mettre en cache la base de données HLOD
         hlod_levels = FoveaHLODGenerator.generate_hlod_levels(splats, hlod_voxel_sizes)
         _current_hlod_level = -1 # Forcer la transition initiale
-        var camera = get_viewport().get_camera_3d()
-        var cam_pos = camera.global_position if camera else Vector3.ZERO
+        var camera: Camera3D = get_viewport().get_camera_3d()
+        var cam_pos: Vector3 = camera.global_position if camera else Vector3.ZERO
         _update_hlod_selection(cam_pos, true)
         return _original_splats.size()
     else:
@@ -576,6 +720,7 @@ func render_splats_internal(splats: Array[GaussianSplat]) -> int:
         mat.set_shader_parameter("aabb_min", aabb_min)
         mat.set_shader_parameter("aabb_max", aabb_max)
         mat.set_shader_parameter("use_palette", false)
+        mat.set_shader_parameter("enable_layered_splatting", enable_layered_splatting)
 
     # Packer les splats en format 16-octets
     var raw_bytes: PackedByteArray = pack_gaussian_splats(splats, aabb_min, aabb_max)
@@ -680,3 +825,34 @@ func _on_cleaning_parameter_changed() -> void:
         culler_pipeline.clear_cache()
     if asset_path != "" and is_inside_tree():
         load_and_render_splats()
+
+func _find_main_light() -> DirectionalLight3D:
+    if is_instance_valid(_cached_main_light):
+        return _cached_main_light
+    if not is_inside_tree():
+        return null
+    var lights: Array[Node] = get_tree().get_nodes_in_group("directional_lights")
+    for light in lights:
+        if light is DirectionalLight3D:
+            _cached_main_light = light
+            return light
+    var current_scene: Node = get_tree().current_scene
+    if current_scene:
+        var found: DirectionalLight3D = _find_light_recursive(current_scene)
+        if found:
+            _cached_main_light = found
+            return found
+    var found_root := _find_light_recursive(get_tree().root)
+    if found_root:
+        _cached_main_light = found_root
+        return found_root
+    return null
+
+func _find_light_recursive(node: Node) -> DirectionalLight3D:
+    if node is DirectionalLight3D:
+        return node
+    for child in node.get_children():
+        var found: DirectionalLight3D = _find_light_recursive(child)
+        if found:
+            return found
+    return null

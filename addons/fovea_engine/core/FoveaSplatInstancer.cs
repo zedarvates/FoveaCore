@@ -13,6 +13,9 @@ namespace FoveaEngine
         [Export]
         public int InstanceCount { get; set; } = 100;
 
+        [Export]
+        public int Seed { get; set; } = 42;
+
         [ExportGroup("Random Variations")]
         [Export]
         public Vector2 ScaleVariation { get; set; } = new Vector2(0.8f, 1.2f); // Min, Max scale multiplier
@@ -56,6 +59,15 @@ namespace FoveaEngine
             int srcCount = SourceResource.SplatCount;
             int totalCount = srcCount * InstanceCount;
 
+            int maxTotalSplats = 2000000;
+            if (totalCount > maxTotalSplats)
+            {
+                int newInstanceCount = Math.Max(1, maxTotalSplats / srcCount);
+                GD.PushWarning($"FoveaSplatInstancer: Instance count {InstanceCount} would result in {totalCount} splats, exceeding limit of {maxTotalSplats}. Clamping InstanceCount to {newInstanceCount}.");
+                InstanceCount = newInstanceCount;
+                totalCount = srcCount * InstanceCount;
+            }
+
             var combinedPositions = new Vector3[totalCount];
             var combinedRotations = new Quaternion[totalCount];
             var combinedScales = new Vector3[totalCount];
@@ -63,7 +75,7 @@ namespace FoveaEngine
             var combinedOpacities = new float[totalCount];
             var combinedNormals = new Vector3[totalCount];
 
-            var rand = new Random();
+            var rand = new Random(Seed);
 
             var sourcePositions = SourceResource.Positions;
             var sourceRotations = SourceResource.Rotations;

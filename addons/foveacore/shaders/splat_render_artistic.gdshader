@@ -23,6 +23,9 @@ uniform vec3 aabb_min;
 uniform vec3 aabb_max;
 uniform sampler2D covar_texture;
 uniform sampler2D palette_texture;
+uniform sampler2D sponge_texture : source_color, filter_linear_mipmap, repeat_disable;
+uniform sampler2D drybrush_texture : source_color, filter_linear_mipmap, repeat_disable;
+uniform sampler2D stipple_texture : source_color, filter_linear_mipmap, repeat_disable;
 uniform bool use_palette = false;
 uniform int palette_size = 16;
 
@@ -33,9 +36,20 @@ uniform float fovea_outer_radius = 0.6;
 uniform int splat_subdivisions = 16;
 uniform float lod_ratio = 1.0;
 
+// Layered Splatting toggle
+uniform bool enable_layered_splatting = true;
+
 // ── Paramètres Motion-Adaptive LOD (partagés avec le renderer) ───────────────
 uniform vec2  motion_dir_screen   = vec2(0.0);
 uniform float motion_stretch_factor = 0.0;
+
+// Surface Waves (Dynamic, Repeating & Looping)
+uniform bool  enable_waves          = false;
+uniform float wave_speed            = 1.0;
+uniform float wave_amplitude        = 0.2;
+uniform float wave_frequency        = 0.5;
+uniform float wave_tiling_size      = 10.0;
+uniform float wave_loop_period      = 4.0;
 
 // ── Paramètres Artistiques ───────────────────────────────────────────────────
 /// Mode de rendu : 0=standard, 1=oil, 2=watercolor, 3=crosshatch
@@ -91,6 +105,7 @@ varying vec3  v_local_pos;
 varying flat vec3  v_conic;
 varying flat uint  v_layer_type;
 varying flat uint  v_brush_type;
+varying flat int   v_instance_id;
 
 // ── Vertex Shader (identique à splat_render_triangle + motion stretch) ────────
 void vertex() {
@@ -110,19 +125,19 @@ void vertex() {
 		float tex_v = (float(palette_idx) + 0.5) / float(max(palette_size, 1));
 		v_color = textureLod(palette_texture, vec2(0.5, tex_v), 0.0).rgb;
 	} else {
-		float r = float((color_index >> 11) & 0x1Fu) / 31.0;
-		float g = float((color_index >> 5)  & 0x3Fu) / 63.0;
+		float r = float((color_index >> 11u) & 0x1Fu) / 31.0;
+		float g = float((color_index >> 5u)  & 0x3Fu) / 63.0;
 		float b = float(color_index & 0x1Fu)         / 31.0;
 		v_color = vec3(r, g, b);
 	}
 	v_opacity = float(data3 & 0xFFu) / 255.0;
-	uint layer_type = (data3 >> 8) & 0xFFu;
-	uint brush_type = (data3 >> 24) & 0xFFu;
+	uint layer_type = (data3 >> 8u) & 0xFFu;
+	uint brush_type = (data3 >> 24u) & 0xFFu;
 	v_layer_type = layer_type;
 	v_brush_type = brush_type;
 
 	// 2. Covariance / Ellipse
-	uint covar_index = (data2 >> 16) & 0xFFFFu;
+	uint covar_index = (data2 >> 16u) & 0xFFFFu;
 	ivec2 tex_size = textureSize(covar_texture, 0);
 	float tex_v    = (float(covar_index) + 0.5) / float(max(tex_size.y, 1));
 	vec4 tex0 = textureLod(covar_texture, vec2(0.25, tex_v), 0.0);
@@ -136,15 +151,23 @@ void vertex() {
 	mat3 MV = mat3(MODELVIEW_MATRIX);
 	cov3d = MV * cov3d * transpose(MV);
 	
-	// Déplacement de vent si tag Leaves (5) actif
-	vec3 wind_offset = vec3(0.0);
+	// Déplacement de vent si tag Leaves (5) actif + Vagues de Surface
+	vec3 displacement_offset = vec3(0.0);
 	if (enable_wind && layer_type == 5u) {
 		float wave = sin(TIME * wind_speed + world_pos.x * 2.0 + world_pos.y * 3.0) * wind_strength;
 		float cos_wave = cos(TIME * wind_speed * 0.8 + world_pos.z * 1.5) * wind_strength * 0.7;
-		wind_offset = vec3(wave, wave * 0.3, cos_wave);
+		displacement_offset = vec3(wave, wave * 0.3, cos_wave);
 	}
 	
-	vec3 center_cam = (MODELVIEW_MATRIX * vec4(wind_offset, 1.0)).xyz;
+	if (enable_waves) {
+		float looped_time = mod(TIME, wave_loop_period);
+		float tiled_x = mod(world_pos.x, wave_tiling_size);
+		float tiled_z = mod(world_pos.z, wave_tiling_size);
+		float wave_angle = (tiled_x + tiled_z) * wave_frequency + (looped_time * wave_speed * (2.0 * PI / wave_loop_period));
+		displacement_offset.y += sin(wave_angle) * wave_amplitude;
+	}
+	
+	vec3 center_cam = (MODELVIEW_MATRIX * vec4(displacement_offset, 1.0)).xyz;
 	vec3 cov2d    = compute_cov2d(center_cam, cov3d, PROJECTION_MATRIX, VIEWPORT_SIZE);
 
 	float det     = (cov2d.x * cov2d.z) - (cov2d.y * cov2d.y);
@@ -164,6 +187,41 @@ void vertex() {
 	float theta     = atan(sin_2t, cos_2t) * 0.5;
 	float cos_t     = cos(theta), sin_t = sin(theta);
 
+	// Calcul de la distance au regard basée sur le centre du splat
+	vec4 center_clip = PROJECTION_MATRIX * vec4(center_cam, 1.0);
+	vec2 center_ndc = center_clip.xy / center_clip.w;
+	vec2 aspect_uv = center_ndc * 0.5 + 0.5;
+	aspect_uv.x *= VIEWPORT_SIZE.x / VIEWPORT_SIZE.y;
+	
+	vec2 aspect_gaze = (VIEW_INDEX == 0) ? fovea_gaze_left : fovea_gaze_right;
+	aspect_gaze.x *= VIEWPORT_SIZE.x / VIEWPORT_SIZE.y;
+	
+	float dist_to_gaze = distance(aspect_uv, aspect_gaze);
+	bool is_in_focus = dist_to_gaze <= fovea_inner_radius;
+	
+	// Dynamic Foveated Layer Weight Calculation
+	float layer_weight = 1.0;
+	if (enable_layered_splatting) {
+		if (layer_type == 0u) {
+			layer_weight = is_in_focus ? 0.8 : 0.3;
+		} else if (layer_type == 1u) {
+			layer_weight = is_in_focus ? 1.0 : 0.0;
+		} else if (layer_type == 2u) {
+			layer_weight = is_in_focus ? 1.2 : 0.1;
+		} else if (layer_type == 3u) {
+			layer_weight = is_in_focus ? 1.0 : 0.0;
+		} else {
+			layer_weight = is_in_focus ? 0.8 : 0.3;
+		}
+		
+		v_opacity *= layer_weight;
+		
+		// Étirement du rayon pour masquer les trous
+		float scale_factor = 1.0 + (dist_to_gaze / fovea_inner_radius);
+		radius1 *= scale_factor;
+		radius2 *= scale_factor;
+	}
+
 	vec2 local_pos  = VERTEX.xy;
 	vec2 scaled     = vec2(local_pos.x * radius1, local_pos.y * radius2);
 	vec2 rotated    = vec2(
@@ -171,8 +229,7 @@ void vertex() {
 		scaled.x * sin_t + scaled.y * cos_t
 	);
 
-	// 4. Motion Stretch (Phase 3 : Motion-Adaptive Splatting)
-	// Étire chaque vertex dans la direction de la vélocité caméra (motion blur natif)
+	// 4. Motion Stretch
 	if (motion_stretch_factor > 0.0 && length(motion_dir_screen) > 0.001) {
 		float proj   = dot(local_pos, motion_dir_screen);
 		float max_r  = max(radius1, radius2);
@@ -186,16 +243,11 @@ void vertex() {
 	clip_pos.xy  += ndc_offset * clip_pos.w;
 
 	vec2 ndc_pos   = clip_pos.xy / clip_pos.w;
-	vec2 aspect_uv = ndc_pos * 0.5 + 0.5;
-	aspect_uv.x   *= VIEWPORT_SIZE.x / VIEWPORT_SIZE.y;
-
-	vec2 aspect_gaze = (VIEW_INDEX == 0) ? fovea_gaze_left : fovea_gaze_right;
-	aspect_gaze.x   *= VIEWPORT_SIZE.x / VIEWPORT_SIZE.y;
-
-	float dist_to_gaze = distance(aspect_uv, aspect_gaze);
 	float rand_val = fract(sin(float(INSTANCE_ID) * 12.9898) * 43758.5453);
 
-	if (rand_val > lod_ratio) {
+	if (layer_weight <= 0.01) {
+		POSITION = vec4(0.0);
+	} else if (rand_val > lod_ratio) {
 		POSITION = vec4(0.0);
 	} else if (dist_to_gaze > fovea_outer_radius && rand_val > 0.25) {
 		POSITION = vec4(0.0);
@@ -208,7 +260,6 @@ void vertex() {
 		v_uv        = local_pos * 0.5 + 0.5;
 		v_local_pos = vec3(rotated, 0.0);
 		
-		// Calcul de la normale de surface depuis le quaternion de rotation 3DGS (Lumière dynamique)
 		vec3 splat_normal = vec3(
 			2.0 * (rot.y * rot.w + rot.x * rot.z),
 			2.0 * (rot.z * rot.w - rot.x * rot.y),
@@ -216,6 +267,7 @@ void vertex() {
 		);
 		NORMAL = (VIEW_MATRIX * vec4(normalize(splat_normal), 0.0)).xyz;
 	}
+	v_instance_id = INSTANCE_ID;
 }
 
 // ── Fonctions utilitaires artistiques ────────────────────────────────────────
@@ -252,17 +304,50 @@ float noise2d(vec2 p) {
 
 // ── Fragment Shader ───────────────────────────────────────────────────────────
 void fragment() {
-	// ── Discards de forme (Triangle, Sphère) ──
-	if (v_brush_type == 1u) {
-		// Triangle Shape Discard
-		vec2 p = v_uv * 2.0 - vec2(1.0);
-		if (p.y < -0.5 || p.y > 1.732 * p.x + 1.0 || p.y > -1.732 * p.x + 1.0) {
+	// ── Discards de forme (Brush Types: 0 = STONE, 1 = SPONGE, 2 = GAUSSIAN, 3 = DRYBRUSH, 4 = STIPPLE) ──
+	vec2 p = v_uv * 2.0 - vec2(1.0);
+	float d_sq = dot(p, p);
+	
+	if (v_brush_type == 0u) {
+		// STONE : Bord angulaire et dentelé (aspect éclat de roche)
+		float angle = atan(p.y, p.x);
+		float warp = noise2d(vec2(angle * 4.0, float(v_instance_id) * 0.17)) * 0.18;
+		if (length(p) > (0.82 + warp)) {
+			discard;
+		}
+	} else if (v_brush_type == 1u) {
+		// SPONGE : Masque poreux de bruit (plus aéré sur les bords)
+		if (d_sq > 1.0) {
+			discard;
+		}
+		vec4 tex_val = texture(sponge_texture, v_uv);
+		float n = tex_val.a > 0.001 ? tex_val.r * tex_val.a : noise2d(v_uv * 18.0 + vec2(float(v_instance_id) * 0.12));
+		if (n < 0.38 * (1.0 - d_sq)) {
 			discard;
 		}
 	} else if (v_brush_type == 2u) {
-		// Sphere/Circle Shape Discard
-		vec2 p = v_uv * 2.0 - vec2(1.0);
-		if (dot(p, p) > 1.0) {
+		// GAUSSIAN / Circle : Bordure circulaire douce standard
+		if (d_sq > 1.0) {
+			discard;
+		}
+	} else if (v_brush_type == 3u) {
+		// DRYBRUSH : Masque linéaire de coups de pinceaux secs
+		if (d_sq > 1.0) {
+			discard;
+		}
+		vec4 tex_val = texture(drybrush_texture, v_uv);
+		float n = tex_val.a > 0.001 ? tex_val.r * tex_val.a : noise2d(vec2(v_uv.x * 32.0, float(v_instance_id) * 0.15)) * (1.0 - abs(v_uv.y - 0.5) * 2.0);
+		if (n < 0.25) {
+			discard;
+		}
+	} else if (v_brush_type == 4u) {
+		// STIPPLE : Pointillisme / points distincts
+		if (d_sq > 1.0) {
+			discard;
+		}
+		vec4 tex_val = texture(stipple_texture, v_uv);
+		float n = tex_val.a > 0.001 ? tex_val.r * tex_val.a : fract(sin(dot(v_uv, vec2(12.9898, 78.233))) * 43758.5453);
+		if (n < 0.5) {
 			discard;
 		}
 	}
@@ -272,7 +357,7 @@ void fragment() {
 
 	// ── Mode 2 : Watercolor - Distorsion organique avant discard (wet-in-wet) ──
 	if (art_mode == 2) {
-		vec2 noise_coord = d * 0.05 + FRAGCOORD.xy * 0.015 + vec2(float(INSTANCE_ID) * 0.11);
+		vec2 noise_coord = d * 0.05 + FRAGCOORD.xy * 0.015 + vec2(float(v_instance_id) * 0.11);
 		float noise_val = noise2d(noise_coord) + 0.5 * noise2d(noise_coord * 2.0);
 		float noise_angle = noise_val * 6.2831853;
 		vec2 warp = vec2(cos(noise_angle), sin(noise_angle)) * wc_bleed_distortion;
@@ -327,11 +412,11 @@ void fragment() {
 		color *= (1.0 - edge_shadow);
 
 		// Bruit de texture de peinture : variation colorée aléatoire par fragment
-		float noise = (hash21(FRAGCOORD.xy * 0.07 + float(INSTANCE_ID) * 0.013) * 2.0 - 1.0);
+		float noise = (hash21(FRAGCOORD.xy * 0.07 + float(v_instance_id) * 0.013) * 2.0 - 1.0);
 		color = clamp(color + noise * paint_noise, 0.0, 1.0);
 
 		// Effet Impasto en relief (3D normal mapping via dFdx/dFdy sur la hauteur)
-		vec2 brush_coord = FRAGCOORD.xy * 0.06 + vec2(float(INSTANCE_ID) * 0.05);
+		vec2 brush_coord = FRAGCOORD.xy * 0.06 + vec2(float(v_instance_id) * 0.05);
 		float brush_noise = noise2d(brush_coord) + 0.5 * noise2d(brush_coord * 2.0);
 		float height = (gauss * 0.7 + brush_noise * 0.3) * impasto_strength;
 
@@ -361,7 +446,7 @@ void fragment() {
 		color = boost_saturation(color, fringe_effect * 0.6); // Sursaturation
 
 		// Granulation aquarelle : bruit de pigment
-		float grain = (hash21(FRAGCOORD.xy * 0.12 + float(INSTANCE_ID) * 0.031) * 2.0 - 1.0);
+		float grain = (hash21(FRAGCOORD.xy * 0.12 + float(v_instance_id) * 0.031) * 2.0 - 1.0);
 		color = clamp(color + grain * wc_granulation * (1.0 - gauss), 0.0, 1.0);
 
 		out_roughness = 0.9; // Aspect mat du papier aquarelle

@@ -7,7 +7,8 @@ extends Node3D
 
 enum DeformationType {
 	GERSTNER_WAVES,
-	NOISE_FIELD
+	NOISE_FIELD,
+	RIPPLES
 }
 
 @export var enabled: bool = true
@@ -29,6 +30,19 @@ var _renderer: FoveaCoreSplatRenderer = null
 var _time: float = 0.0
 var _original_transforms_cache: Array[Transform3D] = []
 var _last_instance_id: int = 0
+var _ripples: Array[Dictionary] = []
+
+## Déclenche une ride d'onde circulaire concentrique
+func trigger_ripple(center: Vector3, amplitude: float = 0.5, speed: float = 2.0, frequency: float = 5.0, decay: float = 1.0, width: float = 1.0) -> void:
+	_ripples.append({
+		"center": center,
+		"time": 0.0,
+		"amplitude": amplitude,
+		"speed": speed,
+		"frequency": frequency,
+		"decay": decay,
+		"width": width
+	})
 
 func _ready() -> void:
 	var parent := get_parent()
@@ -45,6 +59,16 @@ func _process(delta: float) -> void:
 		return
 		
 	_time += delta
+	
+	# Mettre à jour les ondes capillaires actives
+	if not _ripples.is_empty():
+		var active_ripples: Array[Dictionary] = []
+		for rip: Dictionary in _ripples:
+			rip["time"] = (rip["time"] as float) + delta
+			var max_age: float = 5.0 / (rip["decay"] as float)
+			if (rip["time"] as float) < max_age:
+				active_ripples.append(rip)
+		_ripples = active_ripples
 	
 	# Vérifier si les transforms d'origine ont été mis à jour dans le renderer
 	var current_id = mm.get_instance_id()
@@ -128,6 +152,33 @@ func _apply_deformation(mm: MultiMesh) -> void:
 				
 				slope_x = (dn1_dx + dn2_dx) * wave_amplitude
 				slope_z = (dn1_dz + dn2_dz) * wave_amplitude
+				
+			DeformationType.RIPPLES:
+				# Accumulation d'ondes capillaires circulaires concentriques
+				for rip: Dictionary in _ripples:
+					var center: Vector3 = rip["center"] as Vector3
+					var t: float = rip["time"] as float
+					var amplitude: float = rip["amplitude"] as float
+					var speed: float = rip["speed"] as float
+					var frequency: float = rip["frequency"] as float
+					var decay: float = rip["decay"] as float
+					var width: float = rip["width"] as float
+					
+					var diff_x := world_pos.x - center.x
+					var diff_z := world_pos.z - center.z
+					var r := sqrt(diff_x * diff_x + diff_z * diff_z)
+					
+					var amp := amplitude * exp(-decay * t)
+					var u := (r - speed * t) / width
+					var env := exp(-u * u)
+					var theta := (r - speed * t) * frequency
+					var disp := amp * env * cos(theta)
+					displacement_y += disp
+					
+					if r > 0.0001:
+						var dy_dr := amp * env * (-frequency * sin(theta) - cos(theta) * (2.0 * u / width))
+						slope_x += dy_dr * (diff_x / r)
+						slope_z += dy_dr * (diff_z / r)
 				
 		var n_vec := Vector3(-slope_x, 1.0, -slope_z).normalized()
 		var t_vec := Vector3.RIGHT.slide(n_vec).normalized()

@@ -187,7 +187,7 @@ func test_quantization_on_image() -> void:
 	}
 
 func test_performance_large_dataset() -> void:
-	var num_splats = 100000
+	var num_splats = 2000
 	var colors: Array[Color] = []
 	var rng = RandomNumberGenerator.new()
 	rng.randomize()

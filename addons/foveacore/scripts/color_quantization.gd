@@ -59,15 +59,24 @@ static func kmeans_quantize(colors: Array[Color], max_clusters: int = 256) -> Qu
 		result.stats["processing_time_ms"] = Time.get_ticks_msec() - start_time
 		return result
 	
-	# Initialisation des centroids (K-Means++)
+	# Initialisation des centroids (K-Means++ sur un sous-échantillon pour la performance)
 	var centroids: Array[Color] = []
-	centroids.append(colors[0])
+	var sample_colors: Array[Color] = []
+	var max_samples := 300
+	if colors.size() <= max_samples:
+		sample_colors = colors
+	else:
+		var step := colors.size() / max_samples
+		for idx in range(max_samples):
+			sample_colors.append(colors[idx * step])
+			
+	centroids.append(sample_colors[0])
 	
 	for i in range(1, k):
 		var max_dist = 0.0
-		var next_centroid = colors[0]
+		var next_centroid = sample_colors[0]
 		
-		for color in colors:
+		for color in sample_colors:
 			var min_dist = INF
 			for centroid in centroids:
 				var dist = _color_distance_squared(color, centroid)

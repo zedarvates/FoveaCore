@@ -27,7 +27,7 @@ func setup(enabled: bool, shader: bool) -> void:
 
 func _initialize_openxr() -> void:
 	print("FoveaVRSubsystem: Enabling OpenXR 1.0+ Integration...")
-	var xr_interface = XRServer.find_interface("OpenXR")
+	var xr_interface: XRInterface = XRServer.find_interface("OpenXR")
 	if not xr_interface:
 		push_warning("FoveaVRSubsystem: No OpenXR interface found.")
 		xr_unavailable.emit("No OpenXR interface found")

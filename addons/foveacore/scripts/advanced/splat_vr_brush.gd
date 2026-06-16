@@ -12,6 +12,7 @@ class_name SplatVRBrush
 
 # Indicateur visuel de la taille et couleur du pinceau dans l'espace
 var _indicator: MeshInstance3D = null
+var _was_brushing := false
 
 func _ready() -> void:
 	if controller == null:
@@ -70,9 +71,17 @@ func _process(_delta: float) -> void:
 		var splattables = get_tree().get_nodes_in_group("splattables")
 		for splattable in splattables:
 			if splattable is FoveaSplattable:
+				if not brush_engine._is_in_stroke:
+					brush_engine.begin_stroke(splattable)
 				if brush_engine.apply_brush(splattable, hit_pos):
 					modified = true
 					
 		# Déclencher une vibration si des modifications ont eu lieu
 		if modified:
 			controller.trigger_haptic_pulse(haptic_action, 120.0, 0.6, 0.04, 0.0)
+			
+	if not is_brushing and _was_brushing:
+		if brush_engine._is_in_stroke:
+			brush_engine.commit_stroke()
+			
+	_was_brushing = is_brushing

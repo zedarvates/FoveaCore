@@ -35,7 +35,7 @@ mesh = SubResource("BoxMesh_1")
 script = ExtResource("2_splattable")
 
 [node name="Sphere" type="MeshInstance3D" parent="." unique_id=514235856]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.9579368, 1, 0)
 mesh = SubResource("SphereMesh_1")
 script = ExtResource("2_splattable")
 
@@ -45,7 +45,7 @@ mesh = SubResource("PlaneMesh_1")
 script = ExtResource("2_splattable")
 
 [node name="FoveaSplattable" type="Node3D" parent="." unique_id=2111391346]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+transform = Transform3D(1.0440942, 0, 0.093675986, 0, 1.880482, 0, -0.1572411, 0, 0.62201643, 0.39480674, 1, 0.35291433)
 script = ExtResource("2_splattable")
 splat_file_path = "res://test/demo_bonsai.ply"
 metadata/_custom_type_script = "uid://cnfwe7vihmm4h"
