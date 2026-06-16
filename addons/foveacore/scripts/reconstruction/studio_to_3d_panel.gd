@@ -72,6 +72,13 @@ var floaters_detector: FloatersDetector = null
 @onready var wm2_target_label: Label = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/WM2Row/WM2TargetRow/WM2TargetLabel")
 @onready var wm2_status: Label = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/WM2Row/WM2Status")
 
+# ArtiFixer controls
+@onready var artifixer_mode_check: CheckBox = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ArtiFixerRow/ArtiFixerModeCheck")
+@onready var artifixer_checkpoint_edit: LineEdit = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ArtiFixerRow/ArtiFixerCheckpointRow/ArtiFixerCheckpointEdit")
+@onready var artifixer_checkpoint_browse: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ArtiFixerRow/ArtiFixerCheckpointRow/ArtiFixerCheckpointBrowse")
+@onready var artifixer_status: Label = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ArtiFixerRow/ArtiFixerStatus")
+
+
 # COLMAP controls
 @onready var colmap_exhaustive_check: CheckBox = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ColmapOptsRow/ExhaustiveCheck")
 
@@ -92,6 +99,22 @@ var _config_banner: PanelContainer = null
 
 func _ready() -> void:
 	_setup_config_banner()
+	
+	# Injecter dynamiquement l'option TripoSplat
+	var wm2_row = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/WM2Row")
+	var settings_box = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings")
+	if wm2_row and settings_box:
+		var tripo_row = HBoxContainer.new()
+		tripo_row.name = "TripoRow"
+		
+		var tripo_check = CheckBox.new()
+		tripo_check.name = "TripoSplatCheck"
+		tripo_check.text = "Use TripoSplat (Single Image)"
+		tripo_check.toggled.connect(_on_triposplat_mode_changed)
+		tripo_row.add_child(tripo_check)
+		
+		wm2_row.add_sibling(tripo_row)
+
 	floaters_detector = FloatersDetector.new()
 	add_child(floaters_detector)
 	
@@ -133,6 +156,15 @@ func _ready() -> void:
 	_safe_connect_btn(reset_button, _on_reset_pressed)
 	_safe_connect_btn(reload_ply_btn, _on_reload_ply_pressed)
 	_safe_connect_btn(export_btn, _on_export_pressed)
+
+	# ArtiFixer UI connections
+	if artifixer_mode_check:
+		_safe_connect(artifixer_mode_check.toggled, _on_artifixer_mode_changed)
+	if artifixer_checkpoint_edit:
+		_safe_connect(artifixer_checkpoint_edit.text_changed, _on_artifixer_checkpoint_changed)
+	if artifixer_checkpoint_browse:
+		_safe_connect_btn(artifixer_checkpoint_browse, _on_browse_artifixer_checkpoint_pressed)
+
 	_safe_connect_btn(toggle_renderer_btn, _on_toggle_renderer_pressed)
 	
 	_safe_connect_btn(browse_ffmpeg_btn, _on_browse_ffmpeg_pressed)
@@ -350,6 +382,8 @@ func _ready() -> void:
 	
 	# Defer WM2 status check to avoid blocking _ready() on synchronous OS.execute()
 	call_deferred("_update_wm2_status")
+	call_deferred("_update_artifixer_status")
+
 	
 	_log("StudioTo3D UI Initialized (Safe Mode).")
 	
@@ -469,6 +503,10 @@ func _update_ui_from_session() -> void:
 	if _preview_manager: _preview_manager.on_threshold_changed(0)
 
 	# Update styling controls
+	var tripo_check = find_child("TripoSplatCheck", true, false) as CheckBox
+	if tripo_check and "use_triposplat" in current_session:
+		tripo_check.button_pressed = current_session.use_triposplat
+
 	var style_opt = find_child("VisualStyleOption", true, false) as OptionButton
 	if style_opt and "visual_style" in current_session:
 		for idx in range(style_opt.item_count):
@@ -806,8 +844,15 @@ func _ensure_session() -> void:
 	# Sync WM2 settings (no blocking check during init)
 	if current_session:
 		if wm2_mode_check: wm2_mode_check.button_pressed = current_session.use_worldmirror
+		var tripo_check = find_child("TripoSplatCheck", true, false) as CheckBox
+		if tripo_check and "use_triposplat" in current_session:
+			tripo_check.button_pressed = current_session.use_triposplat
 		if wm2_target_slider: wm2_target_slider.value = float(current_session.target_size)
 		if colmap_exhaustive_check: colmap_exhaustive_check.button_pressed = current_session.exhaustive_matching
+		if artifixer_mode_check and "use_artifixer" in current_session:
+			artifixer_mode_check.button_pressed = current_session.use_artifixer
+		if artifixer_checkpoint_edit and "artifixer_checkpoint" in current_session:
+			artifixer_checkpoint_edit.text = current_session.artifixer_checkpoint
 		if dry_run_check: dry_run_check.button_pressed = current_session.dry_run
 		if mask_option and "mask_mode" in current_session:
 			for idx in range(mask_option.item_count):
@@ -894,7 +939,8 @@ func _on_wm2_mode_changed(checked: bool) -> void:
 		current_session.use_worldmirror = checked
 		if checked:
 			_log("🔄 Mode: WorldMirror 2.0 (reconstruction rapide ~10s)")
-			# Désactiver les boutons COLMAP inutiles en mode WM2
+			var tripo_check = find_child("TripoSplatCheck", true, false) as CheckBox
+			if tripo_check: tripo_check.button_pressed = false
 			if sfm_button: sfm_button.disabled = true
 			if train_button: train_button.disabled = true
 		else:
@@ -902,6 +948,20 @@ func _on_wm2_mode_changed(checked: bool) -> void:
 			if sfm_button: sfm_button.disabled = false
 			if train_button: train_button.disabled = false
 	_update_wm2_status()
+
+func _on_triposplat_mode_changed(checked: bool) -> void:
+	_ensure_session()
+	if current_session:
+		current_session.use_triposplat = checked
+		if checked:
+			_log("🔄 Mode: TripoSplat (Single-Image Feed-forward)")
+			if wm2_mode_check: wm2_mode_check.button_pressed = false
+			if sfm_button: sfm_button.disabled = true
+			if train_button: train_button.disabled = true
+		else:
+			_log("🔄 Mode: TripoSplat disabled")
+			if sfm_button: sfm_button.disabled = false
+			if train_button: train_button.disabled = false
 
 func _on_wm2_target_changed(value: float) -> void:
 	_ensure_session()
@@ -928,6 +988,48 @@ func _update_wm2_status() -> void:
 		if wm2_mode_check and wm2_mode_check.button_pressed:
 			wm2_mode_check.button_pressed = false
 			_log("WorldMirror 2.0 not available. Fallback to COLMAP.")
+	_update_artifixer_status()
+
+func _update_artifixer_status() -> void:
+	if not artifixer_status:
+		return
+	if StudioDependencyChecker.is_artifixer_ready():
+		artifixer_status.text = "✅ ArtiFixer ready"
+		artifixer_status.modulate = Color.GREEN
+	else:
+		artifixer_status.text = "⚠ ArtiFixer not installed (use Dry Run for simulation)"
+		artifixer_status.modulate = Color.ORANGE
+
+func _on_artifixer_mode_changed(checked: bool) -> void:
+	_ensure_session()
+	if current_session:
+		current_session.use_artifixer = checked
+		if checked:
+			_log("🔄 ArtiFixer refinement enabled (post-training diffusion pass)")
+		else:
+			_log("🔄 ArtiFixer refinement disabled")
+
+func _on_artifixer_checkpoint_changed(new_text: String) -> void:
+	_ensure_session()
+	if current_session:
+		current_session.artifixer_checkpoint = new_text
+
+func _on_browse_artifixer_checkpoint_pressed() -> void:
+	var dialog = FileDialog.new()
+	dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	dialog.access = FileDialog.ACCESS_FILESYSTEM
+	dialog.filters = PackedStringArray(["*.pt ; PyTorch Weights"])
+	dialog.file_selected.connect(func(path): 
+		if artifixer_checkpoint_edit:
+			artifixer_checkpoint_edit.text = path
+		_ensure_session()
+		if current_session:
+			current_session.artifixer_checkpoint = path
+		_log("ArtiFixer checkpoint set to: " + path)
+	)
+	add_child(dialog)
+	dialog.popup_centered(Vector2i(800, 600))
+
 
 func _on_run_pressed() -> void:
 	if video_path_edit and video_path_edit.text.is_empty():

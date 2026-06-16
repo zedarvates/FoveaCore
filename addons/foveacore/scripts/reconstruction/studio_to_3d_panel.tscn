@@ -150,6 +150,11 @@ layout_mode = 2
 size_flags_horizontal = 3
 text = "Draw ROI Mask..."
 
+[node name="AutoROIButton" type="Button" parent="VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ROIRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Auto-ROI (AI)"
+
 [node name="ShowROIToggle" type="CheckBox" parent="VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ROIRow"]
 layout_mode = 2
 text = "Show ROI"
@@ -242,6 +247,39 @@ value = 952
 [node name="WM2Status" type="Label" parent="VBoxMain/Tabs/Pipeline/VBoxTop/Settings/WM2Row"]
 layout_mode = 2
 text = "Check tools to verify WM2 status"
+
+[node name="ArtiFixerRow" type="VBoxContainer" parent="VBoxMain/Tabs/Pipeline/VBoxTop/Settings"]
+layout_mode = 2
+
+[node name="ArtiFixerHeader" type="Label" parent="VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ArtiFixerRow"]
+layout_mode = 2
+text = "ArtiFixer (Novel-view & Splat Refinement):"
+
+[node name="ArtiFixerModeCheck" type="CheckBox" parent="VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ArtiFixerRow"]
+layout_mode = 2
+text = "Enable ArtiFixer Diffusion Refinement"
+button_pressed = false
+
+[node name="ArtiFixerCheckpointRow" type="HBoxContainer" parent="VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ArtiFixerRow"]
+layout_mode = 2
+
+[node name="ArtiFixerCheckpointLabel" type="Label" parent="VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ArtiFixerRow/ArtiFixerCheckpointRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "Weights (.pt):"
+
+[node name="ArtiFixerCheckpointEdit" type="LineEdit" parent="VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ArtiFixerRow/ArtiFixerCheckpointRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Path to artifixer-14b.pt (optional)"
+
+[node name="ArtiFixerCheckpointBrowse" type="Button" parent="VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ArtiFixerRow/ArtiFixerCheckpointRow"]
+layout_mode = 2
+text = "Browse"
+
+[node name="ArtiFixerStatus" type="Label" parent="VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ArtiFixerRow"]
+layout_mode = 2
+text = "Check tools to verify ArtiFixer status"
 
 [node name="CheckTools" type="Button" parent="VBoxMain/Tabs/Pipeline/VBoxTop/Settings"]
 layout_mode = 2
@@ -477,6 +515,7 @@ size_flags_horizontal = 3
 [connection signal="pressed" from="VBoxMain/Tabs/Pipeline/VBoxTop/HeaderBox/Load" to="." method="_on_load_pressed"]
 [connection signal="pressed" from="VBoxMain/Tabs/Pipeline/VBoxTop/HeaderBox/Save" to="." method="_on_save_pressed"]
 [connection signal="pressed" from="VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ROIRow/ROIButton" to="." method="_on_roi_pressed"]
+[connection signal="pressed" from="VBoxMain/Tabs/Pipeline/VBoxTop/Settings/ROIRow/AutoROIButton" to="." method="_on_auto_roi_pressed"]
 [connection signal="pressed" from="VBoxMain/Tabs/Pipeline/VBoxTop/Pipeline/ReloadPLY" to="." method="_on_reload_ply_pressed"]
 [connection signal="pressed" from="VBoxMain/Tabs/Pipeline/VBoxTop/Pipeline/ExportPLY" to="." method="_on_export_pressed"]
 [connection signal="toggled" from="VBoxMain/Tabs/Pipeline/VBoxTop/Settings/WM2Row/WM2ModeCheck" to="." method="_on_wm2_mode_changed"]

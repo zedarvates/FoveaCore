@@ -15,7 +15,10 @@ class_name ReconstructionSession
 @export var roi_rect: Rect2i = Rect2i(0, 0, 0, 0) # (0,0,0,0) means full image
 @export var use_fast_sync: bool = false # Enable InSpatio-World STAR monocular path (legacy)
 @export var use_worldmirror: bool = false # Enable WorldMirror 2.0 feed-forward reconstruction
+@export var use_triposplat: bool = false # Enable TripoSplat single-image feed-forward reconstruction
 @export var target_size: int = 952 # Max inference resolution for WorldMirror 2.0
+@export var use_artifixer: bool = false # Enable ArtiFixer splat refinement
+@export var artifixer_checkpoint: String = "" # Path to artifixer checkpoint PT file
 @export var dry_run: bool = false
 @export var exhaustive_matching: bool = false # Use COLMAP exhaustive matching instead of sequential (video) mode
 
@@ -54,7 +57,10 @@ func to_dict() -> Dictionary:
 		"roi_rect": [roi_rect.position.x, roi_rect.position.y, roi_rect.size.x, roi_rect.size.y],
 		"use_fast_sync": use_fast_sync,
 		"use_worldmirror": use_worldmirror,
+		"use_triposplat": use_triposplat,
 		"target_size": target_size,
+		"use_artifixer": use_artifixer,
+		"artifixer_checkpoint": artifixer_checkpoint,
 		"dry_run": dry_run,
 		"exhaustive_matching": exhaustive_matching,
 		"visual_style": visual_style,
@@ -86,7 +92,10 @@ func from_dict(dict: Dictionary) -> void:
 			roi_rect = Rect2i(int(r[0]), int(r[1]), int(r[2]), int(r[3]))
 	use_fast_sync = dict.get("use_fast_sync", use_fast_sync)
 	use_worldmirror = dict.get("use_worldmirror", use_worldmirror)
+	use_triposplat = dict.get("use_triposplat", use_triposplat)
 	target_size = dict.get("target_size", target_size)
+	use_artifixer = dict.get("use_artifixer", use_artifixer)
+	artifixer_checkpoint = dict.get("artifixer_checkpoint", artifixer_checkpoint)
 	dry_run = dict.get("dry_run", dry_run)
 	exhaustive_matching = dict.get("exhaustive_matching", exhaustive_matching)
 	visual_style = dict.get("visual_style", visual_style)
