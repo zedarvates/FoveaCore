@@ -9,6 +9,8 @@ class_name StudioDependencyChecker
 signal check_completed(all_found: bool, results: Dictionary)
 
 static var _wm2_cache: int = -1  # -1=unchecked, 0=not ready, 1=ready
+static var _artifixer_cache: int = -1  # -1=unchecked, 0=not ready, 1=ready
+
 
 ## Lance une vérification asynchrone des outils requis
 func check_all_tools() -> void:
@@ -18,8 +20,10 @@ func check_all_tools() -> void:
 		"ffmpeg": _is_command_available("ffmpeg", ["-version"]),
 		"colmap": _is_command_available("colmap", ["--help"]),
 		"python": _is_command_available("python", ["--version"]),
-		"worldmirror2": is_worldmirror2_ready()
+		"worldmirror2": is_worldmirror2_ready(),
+		"artifixer": is_artifixer_ready()
 	}
+
 
 	var legacy_ok = results["ffmpeg"] and results["colmap"] and results["python"]
 	var worldmirror_ok = results["ffmpeg"] and results["python"] and results["worldmirror2"]
@@ -35,6 +39,8 @@ func check_all_tools() -> void:
 		if not results["colmap"]: printerr(" -> COLMAP est introuvable dans le PATH.")
 		if not results["python"]: printerr(" -> Python est introuvable dans le PATH.")
 		if not results["worldmirror2"]: printerr(" -> WorldMirror 2.0 (hyworld2) non installé.")
+		if not results["artifixer"]: printerr(" -> ArtiFixer (model_eval) non disponible.")
+
 
 	check_completed.emit(legacy_ok or worldmirror_ok, results)
 
@@ -55,6 +61,18 @@ static func is_worldmirror2_ready() -> bool:
 	_wm2_cache = 1 if exit_code == 0 else 0
 	return _wm2_cache == 1
 
+## Vérifie si ArtiFixer est installé (static cache)
+static func is_artifixer_ready() -> bool:
+	if _artifixer_cache != -1:
+		return _artifixer_cache == 1
+	var output = []
+	var script = "-c"
+	var code = "import torch; import model_eval; print('OK')"
+	var exit_code = OS.execute("python", [script, code], output, false, false)
+	_artifixer_cache = 1 if exit_code == 0 else 0
+	return _artifixer_cache == 1
+
+
 ## Retourne un texte formaté pour l'interface utilisateur
 func get_diagnostic_text(results: Dictionary) -> String:
 	var text = "Diagnostic Système :\n"
@@ -62,11 +80,17 @@ func get_diagnostic_text(results: Dictionary) -> String:
 	text += "COLMAP (Structure from Motion)   : " + ("[OK]" if results["colmap"] else "[MISSING]") + "\n"
 	text += "Python (3DGS Training)           : " + ("[OK]" if results["python"] else "[MISSING]") + "\n"
 	text += "WorldMirror 2.0 (Reconstruction) : " + ("[OK] (reco rapide ~10s)" if results["worldmirror2"] else "[ ] Non installe (COLMAP uniquement)") + "\n"
+	text += "ArtiFixer (Splat Refinement)     : " + ("[OK] (pret)" if results.get("artifixer", false) else "[ ] Non installe (Raffinement desactive)") + "\n"
 
 	if not (results["ffmpeg"] and results["python"]):
 		text += "\nVeuillez installer les outils manquants et les ajouter à votre variable d'environnement PATH système."
-	elif not results["worldmirror2"]:
-		text += "\n[INFO] Installez WorldMirror 2.0 pour une reconstruction 100x plus rapide :"
-		text += "\n   pip install torch torchvision && git clone https://github.com/Tencent-Hunyuan/HY-World-2.0"
+	else:
+		if not results["worldmirror2"]:
+			text += "\n[INFO] Installez WorldMirror 2.0 pour une reconstruction 100x plus rapide :"
+			text += "\n   pip install torch torchvision && git clone https://github.com/Tencent-Hunyuan/HY-World-2.0"
+		if not results.get("artifixer", false):
+			text += "\n[INFO] Installez ArtiFixer pour le raffinement par diffusion :"
+			text += "\n   pip install torch torchvision && git clone https://github.com/nv-tlabs/ArtiFixer"
 
 	return text
+

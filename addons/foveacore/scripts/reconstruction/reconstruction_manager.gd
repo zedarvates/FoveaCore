@@ -92,6 +92,19 @@ var worldmirror_bridge_script: String = "worldmirror_bridge.py":
 		_propagate_worldmirror_bridge_script()
 		_save_user_settings()
 
+var triposplat_bridge_script: String = "triposplat_bridge.py":
+	set(val):
+		triposplat_bridge_script = val
+		_propagate_triposplat_bridge_script()
+		_save_user_settings()
+
+var artifixer_bridge_script: String = "artifixer_bridge.py":
+	set(val):
+		artifixer_bridge_script = val
+		_propagate_artifixer_bridge_script()
+		_save_user_settings()
+
+
 func _propagate_ffmpeg_path() -> void:
 	if processor: processor.ffmpeg_path = ffmpeg_path
 	ProjectSettings.set_setting("fovea/tools/ffmpeg_path", ffmpeg_path)
@@ -115,6 +128,15 @@ func _propagate_star_bridge_script() -> void:
 func _propagate_worldmirror_bridge_script() -> void:
 	if backend: backend.worldmirror_bridge_script = worldmirror_bridge_script
 	ProjectSettings.set_setting("fovea/tools/worldmirror_bridge_script", worldmirror_bridge_script)
+
+func _propagate_triposplat_bridge_script() -> void:
+	if backend: backend.triposplat_bridge_script = triposplat_bridge_script
+	ProjectSettings.set_setting("fovea/tools/triposplat_bridge_script", triposplat_bridge_script)
+
+func _propagate_artifixer_bridge_script() -> void:
+	if backend: backend.artifixer_bridge_script = artifixer_bridge_script
+	ProjectSettings.set_setting("fovea/tools/artifixer_bridge_script", artifixer_bridge_script)
+
 
 # Fichier de configuration utilisateur (hors projet)
 var _user_config_path: String = OS.get_user_data_dir() + "/fovea_engine_user_settings.cfg"
@@ -149,6 +171,11 @@ func _ready() -> void:
 		star_bridge_script = ProjectSettings.get_setting("fovea/tools/star_bridge_script")
 	if ProjectSettings.has_setting("fovea/tools/worldmirror_bridge_script"):
 		worldmirror_bridge_script = ProjectSettings.get_setting("fovea/tools/worldmirror_bridge_script")
+	if ProjectSettings.has_setting("fovea/tools/triposplat_bridge_script"):
+		triposplat_bridge_script = ProjectSettings.get_setting("fovea/tools/triposplat_bridge_script")
+	if ProjectSettings.has_setting("fovea/tools/artifixer_bridge_script"):
+		artifixer_bridge_script = ProjectSettings.get_setting("fovea/tools/artifixer_bridge_script")
+
 
 	if processor == null:
 		processor = StudioProcessor.new()
@@ -168,6 +195,8 @@ func _ready() -> void:
 		backend.gaussiantrain_script = gaussian_train_script
 		backend.star_bridge_script = star_bridge_script
 		backend.worldmirror_bridge_script = worldmirror_bridge_script
+		backend.triposplat_bridge_script = triposplat_bridge_script
+		backend.artifixer_bridge_script = artifixer_bridge_script
 		backend.dry_run = dry_run
 		backend.command_started.connect(_on_backend_started)
 		backend.command_progress.connect(_on_backend_progress)
@@ -348,6 +377,9 @@ func _save_user_settings() -> void:
 	config.set_value("tools", "gaussian_train_script", gaussian_train_script)
 	config.set_value("tools", "star_bridge_script", star_bridge_script)
 	config.set_value("tools", "worldmirror_bridge_script", worldmirror_bridge_script)
+	config.set_value("tools", "triposplat_bridge_script", triposplat_bridge_script)
+	config.set_value("tools", "artifixer_bridge_script", artifixer_bridge_script)
+
 
 	var err = config.save(_user_config_path)
 	if err != OK:
@@ -379,6 +411,11 @@ func _load_user_settings() -> void:
 		star_bridge_script = config.get_value("tools", "star_bridge_script")
 	if config.has_section_key("tools", "worldmirror_bridge_script"):
 		worldmirror_bridge_script = config.get_value("tools", "worldmirror_bridge_script")
+	if config.has_section_key("tools", "triposplat_bridge_script"):
+		triposplat_bridge_script = config.get_value("tools", "triposplat_bridge_script")
+	if config.has_section_key("tools", "artifixer_bridge_script"):
+		artifixer_bridge_script = config.get_value("tools", "artifixer_bridge_script")
+
 
 	print("FoveaManager: User settings loaded from ", _user_config_path)
 
@@ -571,9 +608,26 @@ func run_reconstruction(session: ReconstructionSession) -> void:
 	save_session(session) # Auto-save initiale
 
 	# Phase 1 : Extraction & Masquage
-	var mask_mode := session.mask_mode if ("mask_mode" in session and not session.mask_mode.is_empty()) else "Smart Studio"
-	print("Manager: Starting Phase 1 (Extraction) with mode: ", mask_mode)
-	await run_extraction(session, mask_mode)
+	var is_single_image := false
+	var ext := session.video_path.get_extension().to_lower()
+	if ext == "png" or ext == "jpg" or ext == "jpeg" or ext == "webp":
+		is_single_image = true
+
+	if is_single_image:
+		print("Manager: Single image input detected. Skipping video extraction.")
+		exporter.prepare_workspace(session)
+		var dest_dir = ProjectSettings.globalize_path(session.output_directory).path_join("input")
+		if not DirAccess.dir_exists_absolute(dest_dir):
+			DirAccess.make_dir_recursive_absolute(dest_dir)
+		var dest_path = dest_dir.path_join(session.video_path.get_file())
+		DirAccess.copy_absolute(ProjectSettings.globalize_path(session.video_path), dest_path)
+		session.frame_count = 1
+		session.status = "Pre-processed"
+		session_progress_updated.emit(33.0)
+	else:
+		var mask_mode := session.mask_mode if ("mask_mode" in session and not session.mask_mode.is_empty()) else "Smart Studio"
+		print("Manager: Starting Phase 1 (Extraction) with mode: ", mask_mode)
+		await run_extraction(session, mask_mode)
 
 	if session.status == "Erreur" or session.frame_count == 0:
 		if session.frame_count == 0:
@@ -587,6 +641,35 @@ func run_reconstruction(session: ReconstructionSession) -> void:
 
 	save_session(session) # Auto-save après Phase 1
 
+	# TripoSplat path: single step replaces SfM + 3DGS training
+	if "use_triposplat" in session and session.use_triposplat:
+		session_progress_updated.emit(40.0)
+		print("Manager: Using TripoSplat Feed-forward Path")
+		await run_triposplat(session)
+		if session.status == "Erreur":
+			reconstruction_failed.emit("Échec TripoSplat")
+			save_session(session)
+			_end_task()
+			return
+		
+		# Phase 4 : ArtiFixer Splat Refinement
+		if "use_artifixer" in session and session.use_artifixer:
+			session_progress_updated.emit(80.0)
+			print("Manager: Starting Phase 4 (ArtiFixer Refinement after TripoSplat)...")
+			await run_artifixer(session)
+			if session.status == "Erreur":
+				reconstruction_failed.emit("Échec Phase 4 : Raffinement ArtiFixer")
+				save_session(session)
+				_end_task()
+				return
+				
+		session_progress_updated.emit(100.0)
+		session_completed.emit(session)
+		save_session(session) # Auto-save finale
+		print("ReconstructionManager: TripoSplat pipeline terminé !")
+		_end_task()
+		return
+
 	# WorldMirror 2.0 path: single step replaces SfM + 3DGS training
 	if session.use_worldmirror:
 		session_progress_updated.emit(40.0)
@@ -597,6 +680,18 @@ func run_reconstruction(session: ReconstructionSession) -> void:
 			save_session(session)
 			_end_task()
 			return
+		
+		# Phase 4 : ArtiFixer Splat Refinement
+		if "use_artifixer" in session and session.use_artifixer:
+			session_progress_updated.emit(80.0)
+			print("Manager: Starting Phase 4 (ArtiFixer Refinement after WorldMirror)...")
+			await run_artifixer(session)
+			if session.status == "Erreur":
+				reconstruction_failed.emit("Échec Phase 4 : Raffinement ArtiFixer")
+				save_session(session)
+				_end_task()
+				return
+				
 		session_progress_updated.emit(100.0)
 		session_completed.emit(session)
 		save_session(session) # Auto-save finale
@@ -632,6 +727,17 @@ func run_reconstruction(session: ReconstructionSession) -> void:
 		save_session(session)
 		_end_task()
 		return
+
+	# Phase 4 : ArtiFixer Splat Refinement
+	if "use_artifixer" in session and session.use_artifixer:
+		session_progress_updated.emit(88.0)
+		print("Manager: Starting Phase 4 (ArtiFixer Refinement)...")
+		await run_artifixer(session)
+		if session.status == "Erreur":
+			reconstruction_failed.emit("Échec Phase 4 : Raffinement ArtiFixer")
+			save_session(session)
+			_end_task()
+			return
 
 	session_progress_updated.emit(100.0)
 	session_completed.emit(session)
@@ -700,6 +806,70 @@ func run_star_sync(session: ReconstructionSession) -> void:
 		reconstruction_failed.emit("Le STAR Workspace n'a pas été généré.")
 	_end_task()
 
+## Step 2 (TripoSplat): Feed-forward Single-Image Reconstruction
+func run_triposplat(session: ReconstructionSession) -> void:
+	_current_phase = 2
+	_start_task()
+	if session.frame_count == 0:
+		session.status = "Erreur"
+		reconstruction_failed.emit("Échec Phase 2 : Aucune image à traiter.")
+		_end_task()
+		return
+	session.status = "TripoSplat Inference"
+	session.is_processed = false
+	print("ReconstructionManager: Phase 2 - TripoSplat Single-Image...")
+
+	if session.dry_run:
+		var global_dir = ProjectSettings.globalize_path(session.output_directory)
+		var target_ply = global_dir.path_join("gaussians.ply")
+		if not FileAccess.file_exists(target_ply):
+			var f = FileAccess.open(target_ply, FileAccess.WRITE)
+			if f:
+				f.store_string("ply\nformat ascii 1.0\nelement vertex 0\nend_header\n")
+				f.close()
+		var marker_path = global_dir.path_join(".triposplat_done")
+		var marker = FileAccess.open(marker_path, FileAccess.WRITE)
+		if marker:
+			marker.store_string('{"engine": "FoveaCore TripoSplat", "elapsed_s": 0.1}')
+			marker.close()
+
+	backend.execute_reconstruction(session)
+
+	await backend.command_finished
+
+	# Vérifier le marqueur de complétion
+	var marker_path = ProjectSettings.globalize_path(session.output_directory) + "/.triposplat_done"
+	if not FileAccess.file_exists(marker_path):
+		session.status = "Erreur"
+		reconstruction_failed.emit("TripoSplat: aucun marqueur de complétion trouvé.")
+		_end_task()
+		return
+
+	var marker = FileAccess.open(marker_path, FileAccess.READ)
+	if marker:
+		var content = marker.get_as_text()
+		print("ReconstructionManager: TripoSplat results -> ", content)
+		marker.close()
+
+	# Charger le PLY directement
+	var ply_path = session.output_directory.path_join("gaussians.ply")
+	var global_ply = ProjectSettings.globalize_path(ply_path)
+	if FileAccess.file_exists(global_ply):
+		_post_process_reconstruction_splats(session, global_ply)
+		print("ReconstructionManager: Loading TripoSplat PLY from ", global_ply)
+		var gaussians = PLYLoader.load_gaussians_from_ply(global_ply)
+		if gaussians and not gaussians.is_empty():
+			session.splat_data_path = ply_path
+			session.status = "Terminé (%d splats)" % gaussians.size()
+		else:
+			session.status = "Erreur Chargement PLY"
+			push_error("ReconstructionManager: PLY loaded but empty")
+	else:
+		session.status = "Erreur"
+		push_error("ReconstructionManager: gaussians.ply not found at " + global_ply)
+	_end_task()
+
+
 ## Step 2 (WorldMirror 2.0): Feed-forward Reconstruction
 func run_worldmirror(session: ReconstructionSession) -> void:
 	_current_phase = 2
@@ -712,7 +882,23 @@ func run_worldmirror(session: ReconstructionSession) -> void:
 	session.status = "WorldMirror 2.0 Inference"
 	session.is_processed = false
 	print("ReconstructionManager: Phase 2 - WorldMirror 2.0 Feed-forward...")
+
+	if session.dry_run:
+		var global_dir = ProjectSettings.globalize_path(session.output_directory)
+		var target_ply = global_dir.path_join("gaussians.ply")
+		if not FileAccess.file_exists(target_ply):
+			var f = FileAccess.open(target_ply, FileAccess.WRITE)
+			if f:
+				f.store_string("ply\nformat ascii 1.0\nelement vertex 0\nend_header\n")
+				f.close()
+		var marker_path = global_dir.path_join(".worldmirror_done")
+		var marker = FileAccess.open(marker_path, FileAccess.WRITE)
+		if marker:
+			marker.store_string('{"engine": "FoveaCore WorldMirror-2.0", "elapsed_s": 0.1}')
+			marker.close()
+
 	backend.execute_reconstruction(session)
+
 
 	await backend.command_finished
 
@@ -787,6 +973,65 @@ func run_training(session: ReconstructionSession) -> void:
 		else:
 			session.status = "Terminé (PLY non trouvé)"
 	_end_task()
+
+## Step 4: ArtiFixer Splat Refinement
+func run_artifixer(session: ReconstructionSession) -> void:
+	_current_phase = 3
+	_start_task()
+	session.status = "ArtiFixer Refinement..."
+	print("ReconstructionManager: Phase 4 - ArtiFixer Refinement...")
+
+	if session.dry_run:
+		var global_dir = ProjectSettings.globalize_path(session.output_directory)
+		var target_ply = global_dir.path_join("artifixer_refined.ply")
+		if not FileAccess.file_exists(target_ply):
+			var f = FileAccess.open(target_ply, FileAccess.WRITE)
+			if f:
+				f.store_string("ply\nformat ascii 1.0\nelement vertex 0\nend_header\n")
+				f.close()
+		var marker_path = global_dir.path_join(".artifixer_done")
+		var marker = FileAccess.open(marker_path, FileAccess.WRITE)
+		if marker:
+			marker.store_string('{"engine": "FoveaCore ArtiFixer-Refiner", "mode": "dry-run", "elapsed_s": 0.1}')
+			marker.close()
+
+	backend.execute_artifixer(session)
+
+	
+	await backend.command_finished
+	
+	# Vérifier le marqueur de complétion
+	var marker_path = ProjectSettings.globalize_path(session.output_directory) + "/.artifixer_done"
+	if not FileAccess.file_exists(marker_path):
+		session.status = "Erreur"
+		reconstruction_failed.emit("ArtiFixer: aucun marqueur de complétion trouvé.")
+		_end_task()
+		return
+
+	var marker = FileAccess.open(marker_path, FileAccess.READ)
+	if marker:
+		var content = marker.get_as_text()
+		print("ReconstructionManager: ArtiFixer results -> ", content)
+		marker.close()
+
+	# Charger le PLY raffiné
+	var ply_path = session.output_directory.path_join("artifixer_refined.ply")
+	var global_ply = ProjectSettings.globalize_path(ply_path)
+	if FileAccess.file_exists(global_ply):
+		_post_process_reconstruction_splats(session, global_ply)
+		print("ReconstructionManager: Loading ArtiFixer PLY from ", global_ply)
+		var gaussians = PLYLoader.load_gaussians_from_ply(global_ply)
+		if gaussians and not gaussians.is_empty():
+			session.splat_data_path = ply_path
+			session.status = "Terminé (%d splats raffinés)" % gaussians.size()
+		else:
+			session.status = "Erreur Chargement PLY"
+			push_error("ReconstructionManager: PLY loaded but empty")
+	else:
+		session.status = "Erreur"
+		push_error("ReconstructionManager: artifixer_refined.ply not found at " + global_ply)
+	_end_task()
+
 
 func _on_backend_started(task: String) -> void:
 	print("Manager: Backend started -> ", task)

@@ -18,6 +18,7 @@ signal oom_detected(command: String, details: String)
 ## Chemin vers les poids DA3 (.pth). Vide = repli heuristique (basse qualité, avertissement explicite).
 @export var star_da3_checkpoint: String = ""
 @export var worldmirror_bridge_script: String = "worldmirror_bridge.py"
+@export var triposplat_bridge_script: String = "triposplat_bridge.py"
 @export var artifixer_bridge_script: String = "artifixer_bridge.py"
 
 ## Timeout maximum en secondes pour chaque commande externe (0 = pas de timeout)
@@ -31,9 +32,11 @@ var _current_pid: int = -1
 
 ## Run the full reconstruction pipeline using external calls
 func execute_reconstruction(session: ReconstructionSession) -> void:
-	# Choix entre WorldMirror 2.0, STAR (legacy) et COLMAP complet
+	# Choix entre WorldMirror 2.0, TripoSplat, STAR (legacy) et COLMAP complet
 	if not session.is_processed:
-		if session.use_worldmirror:
+		if session.use_triposplat:
+			_run_triposplat_path(session)
+		elif session.use_worldmirror:
 			_run_worldmirror_path(session)
 		elif session.use_fast_sync:
 			_run_star_monocular_path(session)
@@ -86,6 +89,33 @@ func _run_worldmirror_path(session: ReconstructionSession) -> void:
 		"--fps", str(session.extraction_fps)
 	]
 	_execute_command(python_path, args, "WorldMirror 2.0: Feed-forward Reconstruction", session)
+
+func _run_triposplat_path(session: ReconstructionSession) -> void:
+	var abs_path: String = ProjectSettings.globalize_path(session.output_directory)
+	var script_path = ProjectSettings.globalize_path("res://addons/foveacore/scripts/reconstruction").path_join(triposplat_bridge_script)
+	
+	var input_image = session.video_path
+	if not FileAccess.file_exists(input_image):
+		# Fallback to the first image found in input_dir
+		var input_dir = abs_path.path_join("input")
+		if DirAccess.dir_exists_absolute(input_dir):
+			var dir = DirAccess.open(input_dir)
+			dir.list_dir_begin()
+			var file_name = dir.get_next()
+			while file_name != "":
+				if not dir.current_is_dir() and (file_name.to_lower().matchn("*.png") or file_name.to_lower().matchn("*.jpg") or file_name.to_lower().matchn("*.jpeg") or file_name.to_lower().matchn("*.webp")):
+					input_image = input_dir.path_join(file_name)
+					break
+				file_name = dir.get_next()
+	
+	var args = [
+		script_path,
+		"--input", ProjectSettings.globalize_path(input_image),
+		"--output", abs_path,
+		"--device", "cuda",
+		"--density", "262144"
+	]
+	_execute_command(python_path, args, "TripoSplat: Single-Image Reconstruction", session)
 
 func _run_star_monocular_path(session: ReconstructionSession) -> void:
 	var abs_path: String = ProjectSettings.globalize_path(session.output_directory)
