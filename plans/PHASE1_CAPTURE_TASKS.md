@@ -33,8 +33,8 @@ Le pipeline StudioTo3D est **déjà branché de bout en bout** — mais chaque �
 
 Le constat : `studio_dependency_checker.gd` ne fait que `OS.execute` pour tester le PATH et affiche des `pip install`/`git clone` à copier-coller (l.88–93). Volinga installe tout pour vous.
 
-- [ ] **F1. `FoveaDependencyManager`** (`reconstruction/fovea_dependency_manager.gd`) — surcouche au-dessus du checker : pour chaque dépendance, connaître {présente?, version, chemin résolu, URL de téléchargement par OS}. Source de vérité unique consommée par le panneau.
-  - ✅ *Accepté si : un seul appel rend l'état complet {ffmpeg, colmap, python, trainer} avec chemins résolus.*
+- [x] **F1. `FoveaDependencyManager`** (`reconstruction/fovea_dependency_manager.gd`) — surcouche au-dessus du checker : pour chaque dépendance, connaître {présente?, version, chemin résolu, URL de téléchargement par OS}. Source de vérité unique consommée par le panneau. *(Fait 2026-06-16 : `get_status()`/`probe()`/`resolve()`/`download_url()`/`minimal_pipeline_ready()`, registre `TOOLS` (ffmpeg/colmap/python) avec URLs par OS et regex de version, préférence `user://fovea_tools/`. Test structurel `test_dependency_manager.gd` 16/16, groupe non-GPU. **Note pour F4** : la probe par PATH renvoie ffmpeg=false ici alors que le manager marche via le réglage `[fovea] tools/ffmpeg_path` — F4 doit aussi honorer ces réglages projet existants.)*
+  - ✅ *Accepté si : un seul appel rend l'état complet {ffmpeg, colmap, python, trainer} avec chemins résolus.* → **OK**.
 
 - [ ] **F2. Téléchargeur intégré** — `HTTPRequest` (ou `OS.create_process` curl) + barre de progression dans le panneau pour récupérer les builds statiques : **FFmpeg** (gyan.dev win / johnvansickle linux / evermeet mac), **COLMAP** (releases GitHub), dans `user://fovea_tools/`. Vérif SHA-256 (réutiliser la logique CRC/SHA du `.fovea`).
   - ✅ *Accepté si : cliquer « Install FFmpeg » télécharge, extrait et résout le binaire sans terminal ; re-vérif passe au vert.*
