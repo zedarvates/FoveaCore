@@ -1,8 +1,10 @@
 #[compute]
 #version 450
 
-// FoveaEngine: GPU-Driven Publish Shader
-// Copies culled/sorted storage buffer data to textures for gdshader usage.
+// ============================================================================
+// FoveaEngine : publish_splats.glsl
+// Copie GPU-Driven asynchrone des splats culled vers des textures VRAM.
+// ============================================================================
 
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
@@ -14,7 +16,7 @@ struct PackedSplat {
 };
 
 layout(set = 0, binding = 0, std430) restrict readonly buffer SourceSplats {
-    PackedSplat source_data[];
+    PackedSplat splats[];
 };
 
 layout(set = 0, binding = 1, std430) restrict readonly buffer CounterBuffer {
@@ -22,19 +24,26 @@ layout(set = 0, binding = 1, std430) restrict readonly buffer CounterBuffer {
 };
 
 layout(set = 0, binding = 2, rgba32ui) uniform writeonly uimage2D dest_texture;
-layout(set = 0, binding = 3, r32ui) uniform writeonly uimage2D dest_counter_texture;
+layout(set = 0, binding = 3, r32ui) uniform writeonly uimage2D dest_counter;
 
 void main() {
-    uint index = gl_GlobalInvocationID.x;
+    uint idx = gl_GlobalInvocationID.x;
     
-    // Thread 0 writes the counter
-    if (index == 0) {
-        imageStore(dest_counter_texture, ivec2(0, 0), uvec4(valid_splat_count, 0, 0, 0));
+    // Le premier thread écrit la valeur du compteur dans la texture mono-canal
+    if (idx == 0) {
+        imageStore(dest_counter, ivec2(0, 0), uvec4(valid_splat_count, 0, 0, 0));
     }
     
-    if (index >= valid_splat_count) return;
+    if (idx >= valid_splat_count) {
+        return;
+    }
     
-    PackedSplat splat = source_data[index];
-    ivec2 tex_coord = ivec2(int(index % 1024), int(index / 1024));
-    imageStore(dest_texture, tex_coord, uvec4(splat.data0, splat.data1, splat.data2, splat.data3));
+    PackedSplat s = splats[idx];
+    
+    // Indexation 2D de la texture avec une largeur fixe de 1024
+    int tex_x = int(idx % 1024);
+    int tex_y = int(idx / 1024);
+    
+    uvec4 pixel_val = uvec4(s.data0, s.data1, s.data2, s.data3);
+    imageStore(dest_texture, ivec2(tex_x, tex_y), pixel_val);
 }

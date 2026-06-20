@@ -30,6 +30,9 @@ var sort_pipeline_rid: RID
 var raster_shader_rid: RID
 var raster_pipeline_rid: RID
 
+var publish_shader_rid: RID
+var publish_pipeline_rid: RID
+
 var hiz_shader_rid: RID
 var hiz_pipeline_rid: RID
 var hiz_texture_rid: RID
@@ -145,6 +148,18 @@ func _load_compute_shader() -> void:
     else:
         push_error("GPU Culler: Failed to create raster_shader_rid")
 
+    # Shader de publication (GPU-Driven copy)
+    var publish_file: RDShaderFile = load("res://addons/foveacore/shaders/publish_splats.glsl")
+    var publish_spirv := publish_file.get_spirv()
+    var publish_err: String = publish_spirv.get_stage_compile_error(RenderingDevice.SHADER_STAGE_COMPUTE)
+    if not publish_err.is_empty():
+        push_error("GPU Culler: Error compiling publish_splats.glsl: " + publish_err)
+    publish_shader_rid = rd.shader_create_from_spirv(publish_spirv)
+    if publish_shader_rid.is_valid():
+        publish_pipeline_rid = rd.compute_pipeline_create(publish_shader_rid)
+    else:
+        push_error("GPU Culler: Failed to create publish_shader_rid")
+
 ## Charge le fichier via Rust et exécute le Culling sur le GPU
 func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_texture: RID, cull_threshold: float = 0.0,
     aabb_min: Vector3 = Vector3(-5, -5, -5), aabb_max: Vector3 = Vector3(5, 5, 5),
@@ -255,6 +270,9 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
             if cache.get("asset_data", RID()).is_valid(): rd.free_rid(cache["asset_data"])
             if cache.get("depth_uniform_set", RID()).is_valid(): rd.free_rid(cache["depth_uniform_set"])
             if cache.get("sort_uniform_set", RID()).is_valid(): rd.free_rid(cache["sort_uniform_set"])
+            if cache.get("output_texture", RID()).is_valid(): rd.free_rid(cache["output_texture"])
+            if cache.get("counter_texture", RID()).is_valid(): rd.free_rid(cache["counter_texture"])
+            if cache.get("publish_uniform_set", RID()).is_valid(): rd.free_rid(cache["publish_uniform_set"])
         
         # Créer les nouveaux buffers persistants à la taille maximale
         var input_buf: RID = rd.storage_buffer_create(max_buffer_size)
@@ -281,6 +299,27 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
         asset_bytes.encode_float(24, aabb_max.z)
         asset_bytes.encode_float(28, 0.0)
         var asset_buf: RID = rd.storage_buffer_create(32, asset_bytes)
+        
+        # Créer les textures GPU de destination (VRAM-to-VRAM GPU-Driven publish target)
+        var tex_w: int = 1024
+        var tex_h: int = ceili(float(max_splats_count) / 1024.0)
+        if tex_h <= 0: tex_h = 1
+        
+        var out_tex_format := RDTextureFormat.new()
+        out_tex_format.format = RenderingDevice.DATA_FORMAT_R32G32B32A32_UINT
+        out_tex_format.width = tex_w
+        out_tex_format.height = tex_h
+        out_tex_format.usage_bits = RenderingDevice.TEXTURE_USAGE_STORAGE_BIT | RenderingDevice.TEXTURE_USAGE_SAMPLING_BIT
+        var out_tex_view := RDTextureView.new()
+        var output_texture: RID = rd.texture_create(out_tex_format, out_tex_view, [])
+        
+        var cnt_tex_format := RDTextureFormat.new()
+        cnt_tex_format.format = RenderingDevice.DATA_FORMAT_R32_UINT
+        cnt_tex_format.width = 1
+        cnt_tex_format.height = 1
+        cnt_tex_format.usage_bits = RenderingDevice.TEXTURE_USAGE_STORAGE_BIT | RenderingDevice.TEXTURE_USAGE_SAMPLING_BIT
+        var cnt_tex_view := RDTextureView.new()
+        var counter_texture: RID = rd.texture_create(cnt_tex_format, cnt_tex_view, [])
         
         # Créer le uniform set persistant 0 (culling)
         var uniform_input: RDUniform = RDUniform.new()
@@ -315,7 +354,7 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
         u_depth_assets.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
         u_depth_assets.binding = 2
         u_depth_assets.add_id(asset_buf)
-
+ 
         var u_depth_counter: RDUniform = RDUniform.new()
         u_depth_counter.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
         u_depth_counter.binding = 3
@@ -336,6 +375,31 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
         
         var sort_uniform_set: RID = rd.uniform_set_create([u_sort_splats, u_sort_depths], sort_shader_rid, 0)
         
+        # Uniform set pour publish_splats.glsl (binding 0: output_buf, binding 1: counter_buf, binding 2: output_texture, binding 3: counter_texture)
+        var u_pub_src := RDUniform.new()
+        u_pub_src.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+        u_pub_src.binding = 0
+        u_pub_src.add_id(output_buf)
+        
+        var u_pub_cnt := RDUniform.new()
+        u_pub_cnt.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+        u_pub_cnt.binding = 1
+        u_pub_cnt.add_id(counter_buf)
+        
+        var u_pub_dest_tex := RDUniform.new()
+        u_pub_dest_tex.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
+        u_pub_dest_tex.binding = 2
+        u_pub_dest_tex.add_id(output_texture)
+        
+        var u_pub_dest_cnt := RDUniform.new()
+        u_pub_dest_cnt.uniform_type = RenderingDevice.UNIFORM_TYPE_IMAGE
+        u_pub_dest_cnt.binding = 3
+        u_pub_dest_cnt.add_id(counter_texture)
+        
+        var publish_uniform_set: RID = rd.uniform_set_create(
+            [u_pub_src, u_pub_cnt, u_pub_dest_tex, u_pub_dest_cnt], publish_shader_rid, 0
+        )
+        
         cache = {
             "input": input_buf,
             "output": output_buf,
@@ -346,7 +410,10 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
             "asset_data": asset_buf,
             "depth_uniform_set": depth_uniform_set,
             "sort_uniform_set": sort_uniform_set,
-            "size": max_buffer_size
+            "size": max_buffer_size,
+            "output_texture": output_texture,
+            "counter_texture": counter_texture,
+            "publish_uniform_set": publish_uniform_set
         }
         _gpu_buffers[fovea_path] = cache
 
@@ -470,6 +537,19 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
                 padded_total,
                 cam_pos
             )
+        else:
+            rd.submit()
+            
+        # Publication GPU-driven : Copie des splats triés et du compteur vers les textures RDs
+        if publish_pipeline_rid.is_valid() and cache.get("publish_uniform_set", RID()).is_valid():
+            var pub_list: int = rd.compute_list_begin()
+            rd.compute_list_bind_compute_pipeline(pub_list, publish_pipeline_rid)
+            rd.compute_list_bind_uniform_set(pub_list, cache["publish_uniform_set"], 0)
+            var pub_workgroups: int = ceili(total_splats / 256.0)
+            if pub_workgroups <= 0: pub_workgroups = 1
+            rd.compute_list_dispatch(pub_list, pub_workgroups, 1, 1)
+            rd.compute_list_end()
+            rd.submit()
     else:
         # Mode classique : regroupe les soumissions et effectue une UNIQUE synchronisation à la fin
         if total_splats > 1:
@@ -1152,5 +1232,11 @@ func unload_asset_buffers(fovea_path: String) -> void:
             rd.free_rid(cache["depth_uniform_set"])
         if cache.get("sort_uniform_set", RID()).is_valid():
             rd.free_rid(cache["sort_uniform_set"])
+        if cache.get("output_texture", RID()).is_valid():
+            rd.free_rid(cache["output_texture"])
+        if cache.get("counter_texture", RID()).is_valid():
+            rd.free_rid(cache["counter_texture"])
+        if cache.get("publish_uniform_set", RID()).is_valid():
+            rd.free_rid(cache["publish_uniform_set"])
         _gpu_buffers.erase(fovea_path)
         print("FoveaEngine: Unloaded GPU culler buffers for asset: %s" % fovea_path)

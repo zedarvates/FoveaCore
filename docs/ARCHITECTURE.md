@@ -54,6 +54,17 @@ tables (`AUTOLOADS`, `CUSTOM_TYPES`) walked symmetrically in
 `_enter_tree`/`_exit_tree`, so a registration can never be left without its
 matching cleanup. `fovea_labs/plugin.gd` follows the same pattern.
 
+## Embedded 3DGS Trainer Backend Decision (Phase 1, Chantier G)
+
+To support one-click, zero-terminal training within the Godot editor, we use a uniform `FoveaTrainerBackend` interface.
+
+1. **Default/Primary Backend**: [Brush](https://github.com/ArthurBrussee/brush)
+   - **Tech stack**: Rust + WGPU.
+   - **Rationale**: Written in Rust, matching our core extension technology. It uses WGPU/Vulkan for compute shader training, which runs natively on desktop platforms without needing a Python runtime. This allows ultra-fast training directly on the GPU.
+2. **Fallback Backend**: Python `gsplat` / `splatfacto`
+   - **Tech stack**: Python Standalone + PyTorch + `gsplat`.
+   - **Rationale**: If the host machine lacks Vulkan/WGPU support or encounters driver compatibility errors, we fall back to the Python environment installed in `user://fovea_tools/python/`. The Python backend runs the training process via subprocesses.
+
 ## Release packaging (target, Phase 0 task D2)
 
 The release zip contains exactly: `addons/foveacore/` (with `gdextension/bin/`
