@@ -65,7 +65,7 @@ func _capture_snapshots(splattable: FoveaSplattable) -> Array[ViewSnapshot]:
 	# Calculate bounding box from loaded splats
 	var min_pos: Vector3 = Vector3(INF, INF, INF)
 	var max_pos: Vector3 = Vector3(-INF, -INF, -INF)
-	for splat in splattable.loaded_splats:
+	for splat: GaussianSplat in splattable.loaded_splats:
 		min_pos.x = min(min_pos.x, splat.position.x)
 		min_pos.y = min(min_pos.y, splat.position.y)
 		min_pos.z = min(min_pos.z, splat.position.z)
@@ -171,7 +171,7 @@ func _simulate_masks(snapshots: Array[ViewSnapshot], splattable: FoveaSplattable
 		var tree: SceneTree = Engine.get_main_loop() as SceneTree
 		tree.root.add_child(camera)
 		
-		for splat in splattable.loaded_splats:
+		for splat: GaussianSplat in splattable.loaded_splats:
 			var world_pos: Vector3 = splattable.global_transform * splat.position
 			if camera.is_position_behind(world_pos):
 				continue
@@ -437,8 +437,8 @@ func _download_mask(filename: String, subfolder: String, type: String, snapshot:
 				return
 				
 			var mask_img: Image = Image.new()
-			var err = mask_img.load_png_from_buffer(response_body)
-			if err != OK:
+			var load_err: Error = mask_img.load_png_from_buffer(response_body)
+			if load_err != OK:
 				callback.call(false)
 				return
 				
@@ -489,7 +489,7 @@ func _apply_backprojection(splattable: FoveaSplattable, snapshots: Array[ViewSna
 		
 	var match_count: int = 0
 	
-	for splat in splattable.loaded_splats:
+	for splat: GaussianSplat in splattable.loaded_splats:
 		var world_pos: Vector3 = splattable.global_transform * splat.position
 		var yes_votes: int = 0
 		var total_votes: int = 0

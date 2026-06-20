@@ -395,11 +395,11 @@ Ce document présente le plan de développement complet et structuré de **Fové
 ## 10. Roadmap R&D Avancée & Améliorations (236-300)
 
 ### 10.1 Tile-Based Rasterization (16×16) (236-242)
-- [/] 236. **Grille de Tuiles Écran** : Découper l'écran de rendu en tuiles de 16x16 pixels pour le culling localisé.
-- [ ] 237. **Compute Shader de Rastérisation** : Coder la rastérisation et l'accumulation alpha directement dans un Compute Shader par tuile.
+- [x] 236. **Grille de Tuiles Écran** : Découper l'écran de rendu en tuiles de 16x16 pixels pour le culling localisé.
+- [x] 237. **Compute Shader de Rastérisation** : Coder la rastérisation et l'accumulation alpha directement dans un Compute Shader par tuile.
 - [ ] 238. **Tri Local par Tuile (Local Sorting)** : Implémenter un tri rapide en mémoire partagée GPU (shared memory) pour les splats intersectant chaque tuile.
 - [ ] 239. **Gestion des Listes de Collision** : Gérer les adresses mémoire des splats par tuile via un tampon chaîné.
-- [ ] 240. **Accumulateur Alpha Local** : Effectuer le blending de transparence par tuile dans le cache L1/L2 pour éliminer l'overdraw VRAM global.
+- [x] 240. **Accumulateur Alpha Local** : Effectuer le blending de transparence par tuile dans le cache L1/L2 pour éliminer l'overdraw VRAM global.
 - [x] 241. **Intégration du flag `enable_tile_rasterizer`** : Câbler le basculement dynamique du rasterizer standard vers le rasterizer par tuiles dans `GPUCullerPipeline`.
 - [ ] 242. **Analyse Comparative de Rendu** : Comparer les performances et le taux de remplissage (fillrate) entre le rendu MultiMesh et la rastérisation par tuile.
 
@@ -412,9 +412,9 @@ Ce document présente le plan de développement complet et structuré de **Fové
 - [ ] 248. **Outil de Peinture Delta** : Proposer un outil dans l'inspecteur pour peindre des deltas locaux (changement de couleur, déformation) sur un asset instancié.
 
 ### 10.3 GPU-Driven Indirect Draw (249-255)
-- [ ] 249. **Configuration du Buffer d'Arguments** : Initialiser le buffer structuré `RDDrawIndirectArguments` pour le dispatch automatique de rendu.
-- [ ] 250. **Compute Shader d'Indirect Command Generation** : Écrire le shader qui lit la liste des instances visibles et remplit le buffer indirect.
-- [ ] 251. **Élimination de la Synchronisation `rd.sync()`** : Supprimer la barrière CPU en reliant le compute shader au vertex shader du MultiMesh.
+- [x] 249. **Configuration du Buffer d'Arguments** : Initialiser le buffer structuré `RDDrawIndirectArguments` pour le dispatch automatique de rendu.
+- [x] 250. **Compute Shader d'Indirect Command Generation** : Écrire le shader qui lit la liste des instances visibles et remplit le buffer indirect.
+- [x] 251. **Élimination de la Synchronisation `rd.sync()`** : Supprimer la barrière CPU en reliant le compute shader au vertex shader du MultiMesh.
 - [ ] 252. **Gestion Multi-Assets Indirecte** : Permettre le rendu de multiples objets distincts via un seul appel indirect multi-draw.
 - [ ] 253. **Culling d'Instance Avancé sur GPU** : Déplacer le frustum culling d'instances des nodes du CPU vers le GPU pour les scènes chargées.
 - [ ] 254. **Gestion de Barrière Mémoire** : Configurer les transitions de buffers GPU pour synchroniser de façon fluide l'écriture et le dessin.

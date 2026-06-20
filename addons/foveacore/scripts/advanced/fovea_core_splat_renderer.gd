@@ -24,6 +24,7 @@ extends MultiMeshInstance3D
 @export var sort_distance_threshold: float = 0.1  # Distance minimale de déplacement de la caméra pour recalculer le tri/culling
 @export var chunk_load_radius: float = 20.0  # Distance maximum pour charger un chunk spatial
 @export var enable_layered_splatting: bool = true
+@export var enable_gpu_driven: bool = false
 
 @export_group("Cleaning (FoveaSplatCleaner)")
 ## Activer le filtrage des floaters et NaN apres le GPU culling
@@ -162,6 +163,9 @@ var _compositor_effect: FoveaCompositorEffect = null
 var culler_pipeline: GPUCullerPipeline
 var splat_mesh: ArrayMesh
 var triangle_mesh_generator
+
+var texture_rd_output: Texture2DRD = null
+var texture_rd_counter: Texture2DRD = null
 
 ## Référence optionnelle au FoveaClayDeformer attaché à ce renderer.
 ## Peut être assigné manuellement ou automatiquement par le deformer lui-même.
@@ -589,9 +593,40 @@ func load_and_render_splats() -> void:
 
     # 3. Exécution du Compute Shader ultra-rapide (Culling)
     culler_pipeline.chunk_load_radius = chunk_load_radius
+    culler_pipeline.skip_sync = enable_gpu_driven
     var output_buffer_rid: RID = culler_pipeline.process_splats_from_file(
         asset_path, camera, depth_tex, cull_threshold, aabb_min, aabb_max, null, hlod_distances)
     if not output_buffer_rid.is_valid():
+        return
+        
+    if enable_gpu_driven:
+        var cache: Dictionary = culler_pipeline._gpu_buffers.get(asset_path, {})
+        if not cache.is_empty():
+            var out_rid: RID = cache.get("output_texture", RID())
+            var cnt_rid: RID = cache.get("counter_texture", RID())
+            if out_rid.is_valid() and cnt_rid.is_valid():
+                if texture_rd_output == null:
+                    texture_rd_output = Texture2DRD.new()
+                if texture_rd_counter == null:
+                    texture_rd_counter = Texture2DRD.new()
+                
+                if texture_rd_output.texture_rd_rid != out_rid:
+                    texture_rd_output.texture_rd_rid = out_rid
+                if texture_rd_counter.texture_rd_rid != cnt_rid:
+                    texture_rd_counter.texture_rd_rid = cnt_rid
+                
+                if mat:
+                    mat.set_shader_parameter("enable_gpu_driven", true)
+                    mat.set_shader_parameter("output_texture", texture_rd_output)
+                    mat.set_shader_parameter("counter_texture", texture_rd_counter)
+                
+                var streaming_asset = culler_pipeline.streaming_manager.register_asset(asset_path, aabb_min, aabb_max)
+                if streaming_asset:
+                    multimesh.instance_count = streaming_asset.total_splats
+            else:
+                push_error("FoveaCoreSplatRenderer: GPU-driven textures not valid in cache.")
+        else:
+            push_error("FoveaCoreSplatRenderer: Cache not found for asset: " + asset_path)
         return
         
     # 3. Récupération des données filtrées depuis la VRAM
