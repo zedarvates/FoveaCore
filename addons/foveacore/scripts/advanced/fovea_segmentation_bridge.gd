@@ -80,7 +80,7 @@ func _capture_snapshots(splattable: FoveaSplattable) -> Array[ViewSnapshot]:
 		diameter = 2.0
 		
 	# Define 6 viewing directions
-	var directions: Dictionary[String, Vector3] = {
+	var directions: Dictionary = {  ## String → Vector3
 		"front": Vector3(0, 0, 1),
 		"back": Vector3(0, 0, -1),
 		"left": Vector3(-1, 0, 0),

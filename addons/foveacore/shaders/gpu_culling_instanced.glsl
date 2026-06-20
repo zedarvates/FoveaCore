@@ -16,6 +16,14 @@ struct PackedSplat {
     uint data3;
 };
 
+struct OutputSplat {
+    uint data0;
+    uint data1;
+    uint data2;
+    uint data3;
+    uint local_idx;
+};
+
 // 1. Unique asset splats buffer (size N)
 layout(set = 0, binding = 0, std430) restrict readonly buffer InputSplats {
     PackedSplat input_data[];
@@ -28,7 +36,7 @@ layout(set = 0, binding = 1, std430) restrict readonly buffer InstanceTransforms
 
 // 3. Output buffer for surviving splats (size M * N)
 layout(set = 0, binding = 2, std430) restrict writeonly buffer OutputSplats {
-    PackedSplat output_data[];
+    OutputSplat output_data[];
 };
 
 // 4. Atomic counter
@@ -122,9 +130,13 @@ void main() {
     // --- 7. WRITE TO OUTPUT WITH INSTANCE ID TAGGED ---
     uint out_index = atomicAdd(valid_splat_count, 1);
     
-    // Tag the instance_id in the upper 16 bits of data3
-    PackedSplat out_splat = splat;
+    OutputSplat out_splat;
+    out_splat.data0 = splat.data0;
+    out_splat.data1 = splat.data1;
+    out_splat.data2 = splat.data2;
     out_splat.data3 = (splat.data3 & 0x0000FFFFu) | (instance_id << 16u);
+    out_splat.local_idx = local_idx;
     
     output_data[out_index] = out_splat;
+}
 }

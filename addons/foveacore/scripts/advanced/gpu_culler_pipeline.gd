@@ -471,7 +471,22 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
                 cam_pos
             )
     else:
-        # Mode classique avec sync CPU pour obtenir le valid_splat_count exact
+        # Mode classique : regroupe les soumissions et effectue une UNIQUE synchronisation à la fin
+        if total_splats > 1:
+            var prev_skip_sync := skip_sync
+            skip_sync = true # Désactiver temporairement pour éviter les syncs intermédiaires
+            _temporal_sort_bitonic_keyed(
+                output_buffer,
+                cache["depths"],
+                cache["depth_uniform_set"],
+                cache["sort_uniform_set"],
+                total_splats, # Trier sur le total (les splats culled ont une distance infinie)
+                padded_total,
+                cam_pos
+            )
+            skip_sync = prev_skip_sync
+        
+        # Soumettre tous les dispatches chaînés (Culling + Precompute + Sort) et faire l'unique sync
         rd.submit()
         rd.sync()
         
@@ -480,26 +495,10 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
         last_valid_splat_count = valid_splat_count
         
         var culled_percentage: float = 100.0 - ((float(valid_splat_count) / total_splats) * 100.0)
-        print("FoveaEngine: Compute Culling terminé. Splats restants : %d (%.1f%% supprimés)" % [valid_splat_count, culled_percentage])
-        
-        if valid_splat_count > 1:
-            var padded_visible: int = 1
-            while padded_visible < valid_splat_count:
-                padded_visible <<= 1
-            _temporal_sort_bitonic_keyed(
-                output_buffer,
-                cache["depths"],
-                cache["depth_uniform_set"],
-                cache["sort_uniform_set"],
-                valid_splat_count,
-                padded_visible,
-                cam_pos
-            )
-            print("FoveaEngine: GPU Bitonic Sort temporel par cles (keyed) termine (frame %d, facteur %d)." % \
-                [_frame_counter, interleave_factor])
- 
+        print("FoveaEngine: Compute Culling & Sort terminé. Splats restants : %d (%.1f%% supprimés)" % [valid_splat_count, culled_percentage])
+
     _frame_counter += 1
- 
+
     # Libération du sampler et du uniform set temporaires
     rd.free_rid(sampler_rid)
     if uniform_set_depth.is_valid():

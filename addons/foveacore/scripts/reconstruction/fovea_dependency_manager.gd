@@ -33,9 +33,9 @@ const TOOLS := {
 		"probe_args": ["--help"],
 		"version_regex": "COLMAP ([0-9][^ \n]*)",
 		"urls": {
-			"Windows": "https://github.com/colmap/colmap/releases/latest",
-			"Linux": "https://github.com/colmap/colmap/releases/latest",
-			"macOS": "https://github.com/colmap/colmap/releases/latest",
+			"Windows": "https://github.com/colmap/colmap/releases/download/3.11.0/colmap-x64-windows-cuda.zip",
+			"Linux": "https://github.com/colmap/colmap/releases/download/3.11.0/colmap-x86_64-linux.tar.gz",
+			"macOS": "https://github.com/colmap/colmap/releases/download/3.11.0/colmap-x64-mac.zip",
 		},
 	},
 	"python": {
@@ -44,10 +44,9 @@ const TOOLS := {
 		"probe_args": ["--version"],
 		"version_regex": "Python ([0-9][^ \n]*)",
 		"urls": {
-			# python-build-standalone (astral) — resolved precisely in F3.
-			"Windows": "https://github.com/astral-sh/python-build-standalone/releases/latest",
-			"Linux": "https://github.com/astral-sh/python-build-standalone/releases/latest",
-			"macOS": "https://github.com/astral-sh/python-build-standalone/releases/latest",
+			"Windows": "https://github.com/indygreg/python-build-standalone/releases/download/20240107/cpython-3.10.13+20240107-x86_64-pc-windows-msvc-shared-install_only.tar.gz",
+			"Linux": "https://github.com/indygreg/python-build-standalone/releases/download/20240107/cpython-3.10.13+20240107-x86_64-unknown-linux-gnu-install_only.tar.gz",
+			"macOS": "https://github.com/indygreg/python-build-standalone/releases/download/20240107/cpython-3.10.13+20240107-x86_64-apple-darwin-install_only.tar.gz",
 		},
 	},
 }
@@ -135,6 +134,8 @@ static func _resolved(name: String) -> Dictionary:
 static func _local_binary_path(name: String, bin: String) -> String:
 	var ext := ".exe" if OS.get_name() == "Windows" else ""
 	var candidate := "%s/%s/%s%s" % [TOOLS_DIR, name, bin, ext]
+	if name == "python" and OS.get_name() != "Windows":
+		candidate = "%s/%s/bin/%s%s" % [TOOLS_DIR, name, bin, ext]
 	if FileAccess.file_exists(candidate):
 		return ProjectSettings.globalize_path(candidate)
 	return ""

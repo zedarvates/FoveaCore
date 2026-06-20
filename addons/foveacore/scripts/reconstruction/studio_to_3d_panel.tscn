@@ -160,6 +160,24 @@ layout_mode = 2
 text = "Show ROI"
 button_pressed = false
 
+[node name="SegmentRow" type="HBoxContainer" parent="VBoxMain/Tabs/Pipeline/VBoxTop/Settings"]
+layout_mode = 2
+
+[node name="SegmentLabel" type="Label" parent="VBoxMain/Tabs/Pipeline/VBoxTop/Settings/SegmentRow"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "Prompt:"
+
+[node name="SegmentPrompt" type="LineEdit" parent="VBoxMain/Tabs/Pipeline/VBoxTop/Settings/SegmentRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "clothing"
+placeholder_text = "Prompt target (e.g. clothing)"
+
+[node name="SegmentBtn" type="Button" parent="VBoxMain/Tabs/Pipeline/VBoxTop/Settings/SegmentRow"]
+layout_mode = 2
+text = "Segment!"
+
 [node name="HSeparatorTools" type="HSeparator" parent="VBoxMain/Tabs/Pipeline/VBoxTop/Settings"]
 layout_mode = 2
 
