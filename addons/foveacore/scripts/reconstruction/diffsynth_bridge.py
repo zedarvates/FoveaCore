@@ -240,10 +240,49 @@ def _run_dvlt(args, output_dir):
         print("  Pass --dry-run to generate placeholder outputs for integration tests.", file=sys.stderr)
         sys.exit(2)
 
-    # Placeholder pour le test d'intégration (uniquement en --dry-run)
     (output_dir / "depth").mkdir(parents=True, exist_ok=True)
     camera_params = output_dir / "camera_params.json"
-    camera_params.write_text(json.dumps({"info": "DVLT predicted poses placeholder", "dry_run": True}))
+    camera_params.write_text(json.dumps({
+        "extrinsics": [
+            {
+                "camera_id": 0,
+                "matrix": [
+                    [1.0, 0.0, 0.0, 0.0],
+                    [0.0, 1.0, 0.0, 0.0],
+                    [0.0, 0.0, 1.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0]
+                ]
+            },
+            {
+                "camera_id": 1,
+                "matrix": [
+                    [0.9, 0.0, 0.1, 0.2],
+                    [0.0, 1.0, 0.0, 0.0],
+                    [-0.1, 0.0, 0.9, 0.5],
+                    [0.0, 0.0, 0.0, 1.0]
+                ]
+            }
+        ],
+        "intrinsics": [
+            {
+                "camera_id": 0,
+                "matrix": [
+                    [525.0, 0.0, 320.0],
+                    [0.0, 525.0, 240.0],
+                    [0.0, 0.0, 1.0]
+                ]
+            },
+            {
+                "camera_id": 1,
+                "matrix": [
+                    [525.0, 0.0, 320.0],
+                    [0.0, 525.0, 240.0],
+                    [0.0, 0.0, 1.0]
+                ]
+            }
+        ],
+        "num_cameras": 2
+    }))
 
     print("[DiffSynth Bridge] DVLT DRY-RUN: wrote placeholder depth/ and camera_params.json.")
     print(f"[DiffSynth Bridge] DVLT finished in {time.time() - t_start:.1f}s")

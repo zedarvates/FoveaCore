@@ -1,0 +1,8 @@
+{
+  "botte_root": "F:\\foveaengine\\fovea-engine\\botte-secrete",
+  "local_backend": "127.0.0.1:1234",
+  "local_model": "gemma-4-12b-coder-fable5-composer2.5-v1",
+  "cloud_keys_present": [],
+  "daily_token_budget": 50000,
+  "routing": "auto"
+}

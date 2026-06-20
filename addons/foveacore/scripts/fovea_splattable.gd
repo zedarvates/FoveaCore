@@ -115,6 +115,11 @@ const _PlyLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/
 ## Culling priority (0 is culled first, 10 is culled last).
 @export_range(0, 10) var culling_priority := 5
 
+## Delta colors (tint overrides per splat index: local_idx -> Color)
+var delta_colors: Dictionary = {}
+## Delta positions (deform offsets per splat index: local_idx -> Vector3)
+var delta_positions: Dictionary = {}
+
 ## Référence au mesh original
 var original_mesh: Mesh = null
 
@@ -132,6 +137,14 @@ var has_ply_splats: bool = false
 
 ## Buffer GPU pour les splats (géré par le renderer natif)
 var splat_buffer_rid: RID = RID()
+
+## Sets a delta tint color on a specific splat index.
+func set_delta_color(local_idx: int, color: Color) -> void:
+	delta_colors[local_idx] = color
+
+## Sets a delta position deformation offset on a specific splat index.
+func set_delta_position(local_idx: int, offset: Vector3) -> void:
+	delta_positions[local_idx] = offset
 
 
 func _enter_tree() -> void:
@@ -198,6 +211,8 @@ func _setup_native_renderer() -> void:
 
 
 func _update_local_renderer() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
 	if Engine.is_editor_hint() or not get_node_or_null("/root/FoveaCoreManager"):
 		if has_ply_splats and not loaded_splats.is_empty():
 			var renderer: Node = get_node_or_null("SplatRenderer")

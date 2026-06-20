@@ -322,25 +322,46 @@ func _load_mesh_from_glb_file(file_path: String) -> ArrayMesh:
 		push_error("PhysicsProxyGenerator: GLTFDocument append_from_file failed with error code: " + error_string(err))
 		return null
 		
-	var node = gltf_doc.generate_scene(gltf_state)
-	if node:
-		print("PhysicsProxyGenerator: Generated GLB scene root node: ", node.name, " (", node.get_class(), ")")
-		var mesh = _find_mesh_in_node(node)
-		node.queue_free()
-		return mesh
-	else:
-		push_error("PhysicsProxyGenerator: GLTFDocument generate_scene returned null")
-	return null
-
-func _find_mesh_in_node(node: Node) -> ArrayMesh:
-	print("  Traversing: ", node.name, " (", node.get_class(), ")")
-	if node is MeshInstance3D:
-		print("    Found MeshInstance3D. Mesh: ", node.mesh)
-		return node.mesh as ArrayMesh
-	for child in node.get_children():
-		var mesh = _find_mesh_in_node(child)
-		if mesh:
-			return mesh
+	# Inspect GLTFState nodes to find "LOD_2" (physics mesh)
+	var nodes = gltf_state.get_nodes()
+	var meshes = gltf_state.get_meshes()
+	
+	print("PhysicsProxyGenerator: GLTFState has ", nodes.size(), " nodes and ", meshes.size(), " meshes.")
+	
+	var physics_mesh_idx = -1
+	for i in range(nodes.size()):
+		var gltf_node = nodes[i]
+		var node_name = gltf_node.resource_name if gltf_node.resource_name != "" else gltf_node.name
+		print("  Node ", i, ": name='", node_name, "', mesh_index=", gltf_node.mesh)
+		if node_name.to_upper() == "LOD_2":
+			physics_mesh_idx = gltf_node.mesh
+			break
+			
+	# If LOD_2 wasn't found by name, try to find any node that has a mesh
+	if physics_mesh_idx == -1:
+		for i in range(nodes.size()):
+			var gltf_node = nodes[i]
+			if gltf_node.mesh != -1:
+				physics_mesh_idx = gltf_node.mesh
+				
+	if physics_mesh_idx >= 0 and physics_mesh_idx < meshes.size():
+		var gltf_mesh = meshes[physics_mesh_idx]
+		var m = gltf_mesh.mesh
+		if m != null:
+			print("    Found mesh inside GLTFMesh: ", m.get_class())
+			if m is ArrayMesh:
+				print("    Successfully loaded ArrayMesh for physics.")
+				return m
+			elif m.has_method("get_mesh"):
+				var real_mesh = m.call("get_mesh")
+				print("    Successfully extracted real ArrayMesh from ImporterMesh.")
+				return real_mesh
+			elif m.has_method("get_real_mesh"):
+				var real_mesh = m.call("get_real_mesh")
+				print("    Successfully extracted real ArrayMesh from ImporterMesh.")
+				return real_mesh
+	
+	push_error("PhysicsProxyGenerator: Could not find mesh for physics in GLB.")
 	return null
 
 ## Auto-generate proxy from splats (very simplified AABB-based)

@@ -1,0 +1,37 @@
+{
+  "project": "F:\\foveaengine\\fovea-engine",
+  "botte_root": "F:\\foveaengine\\fovea-engine\\botte-secrete",
+  "local_backends": [
+    "LM Studio 127.0.0.1:1234"
+  ],
+  "cloud_keys_present": [],
+  "mcp": {
+    "path": "F:\\foveaengine\\fovea-engine\\.mcp.json",
+    "action": "added",
+    "other_servers": []
+  },
+  "directives": {
+    "available": true,
+    "score": 90,
+    "has_instructions": true,
+    "findings": 2
+  },
+  "config": "F:\\foveaengine\\fovea-engine\\.botte\\config.json",
+  "policy": {
+    "written": "F:\\foveaengine\\fovea-engine\\.botte\\policy.md",
+    "agents_pointer_added": true
+  },
+  "hook": {
+    "path": "F:\\foveaengine\\fovea-engine\\.claude\\settings.json",
+    "action": "added"
+  },
+  "oculix_mcp": {
+    "action": "added",
+    "jar": "C:\\Users\\redga\\.oculix\\oculix-mcp-server.jar"
+  },
+  "skill_catalog_size": 35,
+  "next_steps": [
+    "Local routing active — cheap tasks will run on LM Studio for 0 cloud tokens.",
+    "Restart your agent in the project so it picks up .mcp.json (tools: auto_route, local_chat, fusion, find_skills, audit_local_usage)."
+  ]
+}

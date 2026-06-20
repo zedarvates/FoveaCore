@@ -30,7 +30,7 @@ class MaterialStyleConfig:
 	var noise_gain: float = 0.5
 
 ## Cache des styles
-static var _style_cache: Dictionary[String, Variant] = {}
+static var _style_cache: Dictionary = {}  ## String → Variant (style data cache)
 
 ## Obtenir la couleur procédurale pour un point
 static func compute_color(

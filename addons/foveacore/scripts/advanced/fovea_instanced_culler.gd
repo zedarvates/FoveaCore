@@ -9,6 +9,7 @@ var shader_rid: RID
 var pipeline_rid: RID
 
 const SPLAT_BYTE_SIZE: int = 16
+const OUTPUT_SPLAT_BYTE_SIZE: int = 20
 
 func _init() -> void:
     rd = RenderingServer.create_local_rendering_device()
@@ -66,7 +67,7 @@ func process_instanced_splats(
     # 3. Create GPU Buffers
     var input_buffer: RID = rd.storage_buffer_create(raw_bytes.size(), raw_bytes)
     var transforms_buffer: RID = rd.storage_buffer_create(transforms_bytes.size(), transforms_bytes)
-    var output_buffer: RID = rd.storage_buffer_create(active_instances_count * raw_bytes.size())
+    var output_buffer: RID = rd.storage_buffer_create(active_instances_count * asset_splat_count * OUTPUT_SPLAT_BYTE_SIZE)
     
     var counter_bytes: PackedByteArray = PackedByteArray()
     counter_bytes.resize(4)
