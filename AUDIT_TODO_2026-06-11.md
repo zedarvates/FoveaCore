@@ -53,9 +53,9 @@
 
 ## 4. 🟡 AMÉLIORATIONS / DÉVELOPPEMENT (roadmap restante)
 
-- [ ] **A1. Tile-Based Rasterization (16×16)** — les shaders existent (cf. B4), finir l'intégration dans `GPUCullerPipeline`/`FoveaCompositorEffect` (le flag `enable_tile_rasterizer` est déjà câblé).
+- [x] **A1. Tile-Based Rasterization (16×16)** — les shaders existent (cf. B4), finir l'intégration dans `GPUCullerPipeline`/`FoveaCompositorEffect` (le flag `enable_tile_rasterizer` est déjà câblé). ✅ *Complété le 20/06* : Intégration finalisée et validée avec le nouveau test unitaire `test_tile_rasterizer.gd`.
 - [ ] **A2. Delta-Splat Variants** — variantes légères d'objets instanciés (tints, déformations locales) stockées en delta.
-- [ ] **A3. GPU-Driven Indirect Draw** — éliminer les `rd.sync()` (D2) via draw indirect buffer écrit par le compute shader.
+- [x] **A3. GPU-Driven Indirect Draw** — éliminer les `rd.sync()` (D2) via draw indirect buffer écrit par le compute shader. ✅ *Complété le 20/06* : Rendu GPU-driven complet via textures d'octets de splats publiées en VRAM directement lues par le shader matériel MultiMesh (sans aucun CPU readback/stalls de frame). Validé avec le test `test_gpu_driven_renderer.gd`.
 - [ ] **A4. Out-of-Core VRAM Streaming** — chunks SSD→VRAM pour mondes ouverts (étend `fovea_streaming_manager` + chunks Morton existants).
 - [ ] **A5. Séparation Static vs Dynamic Splats** — baking/octree pour le décor, compute skinning pour les entités mobiles.
 - [ ] **A6. Auto-ROI par IA** — détection automatique de l'objet principal dans StudioTo3D (le pont segmentation `fovea_segmentation_bridge.gd` existe déjà : s'appuyer dessus).
