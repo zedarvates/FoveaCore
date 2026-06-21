@@ -39,16 +39,18 @@ signal generation_completed(splat_count: int)
 
 ## Static reference to the PLYLoader script.
 const _PlyLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/ply_loader.gd")
+## Unified point-cloud loader (routes .ply/.splat/.spz/.sog by extension).
+const _SplatFormatLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/splat_format_loader.gd")
 
 ## Local multiplier for splat density (e.g. 1.0 matches the global density).
 @export var splat_density := 1.0
 
-## Path to a Gaussian Splatting file (.ply, .fovea, .spz).
-@export_file("*.ply", "*.fovea", "*.spz") var splat_file_path: String = "":
+## Path to a Gaussian Splatting file (.ply, .fovea, .spz, .splat).
+@export_file("*.ply", "*.fovea", "*.spz", "*.splat") var splat_file_path: String = "":
 	set(val):
 		splat_file_path = val
 		if is_node_ready():
-			if splat_file_path.ends_with(".ply"):
+			if splat_file_path.ends_with(".ply") or splat_file_path.ends_with(".splat"):
 				_load_splats_from_ply()
 			elif splat_file_path.ends_with(".fovea"):
 				var renderer: Node = get_node_or_null("SplatRenderer")
@@ -226,9 +228,9 @@ func _ready() -> void:
 	if hide_mesh_when_splatting and splatting_enabled and _mesh_instance_ref != null:
 		_mesh_instance_ref.visible = false
 		
-	# Charger le PLY si un chemin est fourni
+	# Charger le nuage de points si un chemin est fourni
 	if not splat_file_path.is_empty():
-		if splat_file_path.ends_with(".ply"):
+		if splat_file_path.ends_with(".ply") or splat_file_path.ends_with(".splat"):
 			_load_splats_from_ply()
 		elif splat_file_path.ends_with(".fovea"):
 			_setup_native_renderer()
@@ -361,16 +363,18 @@ func _capture_mesh_reference() -> void:
 		original_mesh = _mesh_instance_ref.mesh
 
 
-## Charger les splats depuis le fichier PLY configuré
+## Charge les splats depuis le fichier configuré (.ply / .splat / …), via le
+## routeur de formats. Le nom historique est conservé car des appelants externes
+## (plugin.gd) l'invoquent directement.
 func _load_splats_from_ply() -> void:
-	print("FoveaSplattable: Chargement PLY depuis '", splat_file_path, "'...")
-	var gaussians: Variant = _PlyLoaderScript.load_gaussians_from_ply(splat_file_path)
-	if gaussians == null or gaussians.is_empty():
-		push_error("FoveaSplattable: PLYLoader returned empty")
+	print("FoveaSplattable: Chargement du nuage depuis '", splat_file_path, "'...")
+	var gaussians: Array = _SplatFormatLoaderScript.load_gaussians(splat_file_path)
+	if gaussians.is_empty():
+		push_error("FoveaSplattable: loader returned empty for " + splat_file_path)
 		return
 	loaded_splats = gaussians
 	has_ply_splats = true
-	print("FoveaSplattable: %d splats loaded from PLY" % loaded_splats.size())
+	print("FoveaSplattable: %d splats loaded from %s" % [loaded_splats.size(), splat_file_path.get_extension()])
 	_update_local_renderer()
 
 
