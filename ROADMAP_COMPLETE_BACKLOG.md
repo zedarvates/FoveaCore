@@ -377,11 +377,11 @@ Ce document présente le plan de développement complet et structuré de **Fové
 - [x] 225. **Template de reconstruction par turntable** : Fournir un modèle de configuration de capture vidéo et un script d'automatisation.
 
 ### 9.4 Optimisations mobiles et portage WebAssembly/WebGPU
-- [ ] 226. **Compatibilité Vulkan Mobile** : Adapter les compute shaders pour se conformer aux limitations de bande passante et de registres des puces mobiles ARM.
+- [x] 226. **Compatibilité Vulkan Mobile** : Adapter les compute shaders pour se conformer aux limitations de bande passante et de registres des puces mobiles ARM.
 - [ ] 227. **Optimisations Meta Quest 3** : Configurer des préréglages graphiques optimisés pour le matériel VR autonome pour cibler 90 Hz stables.
 - [ ] 228. **Compilation WebAssembly** : Configurer la chaîne de compilation Rust pour cibler WASM, permettant au code natif de tourner sur le web.
 - [ ] 229. **Portage WGSL (WebGPU)** : Réécrire les shaders GLSL de tri et de rendu en format WGSL pour assurer la compatibilité WebGPU.
-- [ ] 230. **Optimisation d'autonomie énergétique** : Réduire le nombre de dispatches GPU sur mobile en désactivant le tri sur les objets statiques stables.
+- [x] 230. **Optimisation d'autonomie énergétique** : Réduire le nombre de dispatches GPU sur mobile en désactivant le tri sur les objets statiques stables.
 
 ### 9.5 Packaging, CI/CD et publication Godot Asset Library
 - [x] 231. **Vérification réglementaire de licence** : Ajouter les fichiers de licence et s'assurer que toutes les dépendances sont créditées.
@@ -397,19 +397,19 @@ Ce document présente le plan de développement complet et structuré de **Fové
 ### 10.1 Tile-Based Rasterization (16×16) (236-242)
 - [x] 236. **Grille de Tuiles Écran** : Découper l'écran de rendu en tuiles de 16x16 pixels pour le culling localisé.
 - [x] 237. **Compute Shader de Rastérisation** : Coder la rastérisation et l'accumulation alpha directement dans un Compute Shader par tuile.
-- [ ] 238. **Tri Local par Tuile (Local Sorting)** : Implémenter un tri rapide en mémoire partagée GPU (shared memory) pour les splats intersectant chaque tuile.
-- [ ] 239. **Gestion des Listes de Collision** : Gérer les adresses mémoire des splats par tuile via un tampon chaîné.
+- [x] 238. **Tri Local par Tuile (Local Sorting)** : Implémenter un tri rapide en mémoire partagée GPU (shared memory) pour les splats intersectant chaque tuile.
+- [x] 239. **Gestion des Listes de Collision** : Gérer les adresses mémoire des splats par tuile via un tampon chaîné.
 - [x] 240. **Accumulateur Alpha Local** : Effectuer le blending de transparence par tuile dans le cache L1/L2 pour éliminer l'overdraw VRAM global.
 - [x] 241. **Intégration du flag `enable_tile_rasterizer`** : Câbler le basculement dynamique du rasterizer standard vers le rasterizer par tuiles dans `GPUCullerPipeline`.
-- [ ] 242. **Analyse Comparative de Rendu** : Comparer les performances et le taux de remplissage (fillrate) entre le rendu MultiMesh et la rastérisation par tuile.
+- [x] 242. **Analyse Comparative de Rendu** : Comparer les performances et le taux de remplissage (fillrate) entre le rendu MultiMesh et la rastérisation par tuile.
 
 ### 10.2 Delta-Splat Variants (Morphs & Overrides) (243-248)
-- [ ] 243. **Structure de Données Delta** : Définir le format binaire de stockage des écarts de position, de couleur, et de normales.
-- [ ] 244. **Compute Shader d'Animation Delta** : Créer le shader appliquant dynamiquement le morphing localisé sur les instances visibles.
-- [ ] 245. **Gestionnaire de Variantes d'Instances** : Créer `FoveaDeltaManager` pour stocker les overrides d'instances sous forme de tampons condensés.
-- [ ] 246. **Interpolation Temporelle des Deltas** : Permettre d'animer le coefficient d'application du delta (de 0.0 à 1.0) pour des transitions douces.
-- [ ] 247. **Optimisation Mémoire VRAM** : Stocker les deltas en format compressé FP16 pour limiter l'utilisation de bande passante VRAM.
-- [ ] 248. **Outil de Peinture Delta** : Proposer un outil dans l'inspecteur pour peindre des deltas locaux (changement de couleur, déformation) sur un asset instancié.
+- [x] 243. **Structure de Données Delta** : Définir le format binaire de stockage des écarts de position, de couleur, et de normales.
+- [x] 244. **Compute Shader d'Animation Delta** : Créer le shader appliquant dynamiquement le morphing localisé sur les instances visibles.
+- [x] 245. **Gestionnaire de Variantes d'Instances** : Créer `FoveaDeltaManager` pour stocker les overrides d'instances sous forme de tampons condensés.
+- [x] 246. **Interpolation Temporelle des Deltas** : Permettre d'animer le coefficient d'application du delta (de 0.0 à 1.0) pour des transitions douces.
+- [x] 247. **Optimisation Mémoire VRAM** : Stocker les deltas en format compressé FP16 pour limiter l'utilisation de bande passante VRAM.
+- [x] 248. **Outil de Peinture Delta** : Proposer un outil dans l'inspecteur pour peindre des deltas locaux (changement de couleur, déformation) sur un asset instancié.
 
 ### 10.3 GPU-Driven Indirect Draw (249-255)
 - [x] 249. **Configuration du Buffer d'Arguments** : Initialiser le buffer structuré `RDDrawIndirectArguments` pour le dispatch automatique de rendu.
@@ -430,9 +430,9 @@ Ce document présente le plan de développement complet et structuré de **Fové
 - [ ] 262. **Limites de Bande Passante VRAM** : Implémenter un régulateur de débit de transfert pour éviter de saturer le bus PCIe.
 
 ### 10.5 Séparation Static vs Dynamic Splats (263-269)
-- [ ] 263. **Détection de Statut d'Asset** : Ajouter une propriété statique/dynamique sur le `FoveaSplatNode` pour trier les pipelines.
+- [x] 263. **Détection de Statut d'Asset** : Ajouter une propriété statique/dynamique sur le `FoveaSplatNode` (FoveaSplat3D/FoveaSplattable) pour trier les pipelines.
 - [ ] 264. **Baking d'Octree Statique** : Figer le tri et le culling des assets statiques dans un octree immuable sauvegardé en mémoire VRAM.
-- [ ] 265. **Compute Skinning Dynamique** : Écrire un compute shader appliquant des déformations d'armature (skeletal deformation) sur les splats d'entités mobiles.
+- [x] 265. **Compute Skinning Dynamique** : Écrire un compute shader appliquant des déformations d'armature (skeletal deformation) sur les splats d'entités mobiles.
 - [ ] 266. **Optimisation du Tri Bitonique** : Ne retrier les splats statiques qu'en cas de mouvement de caméra majeur, retrier les splats dynamiques chaque frame.
 - [ ] 267. **Buffers GPU Séparés** : Allouer deux buffers distincts (un static de lecture seule, un dynamic réécrit à chaque image).
 - [ ] 268. **Interaction Physique avec Dynamic Splats** : Connecter le Verlet Solver ou les forces physiques aux entités dynamiques uniquement.
