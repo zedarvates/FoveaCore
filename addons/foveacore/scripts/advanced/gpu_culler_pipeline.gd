@@ -33,6 +33,9 @@ var raster_pipeline_rid: RID
 var publish_shader_rid: RID
 var publish_pipeline_rid: RID
 
+var delta_shader_rid: RID
+var delta_pipeline_rid: RID
+
 var hiz_shader_rid: RID
 var hiz_pipeline_rid: RID
 var hiz_texture_rid: RID
@@ -53,6 +56,17 @@ var skip_sync: bool = false
 # Persistent Vulkan buffer cache to avoid per-frame allocation stalls
 # Structure: { fovea_path: { "input": RID, "output": RID, "counter": RID, "camera_ubo": RID, "uniform_set": RID, "size": int } }
 var _gpu_buffers: Dictionary = {}
+
+# Configuration et Allocateur de segments VRAM pour le streaming out-of-core
+const MAX_VRAM_SLOTS: int = 512
+const BLOCK_SIZE: int = 4096
+var _vram_slots_occupied: Array[String] = []
+var _vram_allocations: Dictionary = {}
+var _vram_lru: Array[String] = []
+var _vram_fade_opacities: Dictionary = {}
+var _vram_pool_buffer: RID
+var _vram_metadata_buffer: RID
+var _vram_global_lod_buffers: Dictionary = {} # fovea_path -> RID
 
 # Configuration du nettoyage (appliqué une seule fois au chargement pour éviter la surcharge CPU par frame)
 var enable_cleaning: bool = true
@@ -78,12 +92,16 @@ var _cached_bytes: Dictionary = {}
 var _cached_blocks: Dictionary = {}
 
 func _init() -> void:
-    streaming_manager = load("res://addons/foveacore/scripts/advanced/fovea_streaming_manager.gd").new()
-    rd = RenderingServer.create_local_rendering_device()
-    if rd:
-        _load_compute_shader()
-    else:
-        push_warning("GPUCullerPipeline: local rendering device not available (headless or dummy/compatibility renderer).")
+	streaming_manager = load("res://addons/foveacore/scripts/advanced/fovea_streaming_manager.gd").new()
+	_vram_slots_occupied.resize(MAX_VRAM_SLOTS)
+	_vram_slots_occupied.fill("")
+	rd = RenderingServer.create_local_rendering_device()
+	if rd:
+		_load_compute_shader()
+		_vram_pool_buffer = rd.storage_buffer_create(MAX_VRAM_SLOTS * BLOCK_SIZE * SPLAT_BYTE_SIZE)
+		_vram_metadata_buffer = rd.storage_buffer_create(256 * 48) # 256 active chunks max
+	else:
+		push_warning("GPUCullerPipeline: local rendering device not available (headless or dummy/compatibility renderer).")
 
 func _load_compute_shader() -> void:
     if not rd:
@@ -160,12 +178,25 @@ func _load_compute_shader() -> void:
     else:
         push_error("GPU Culler: Failed to create publish_shader_rid")
 
+    # Shader d'animation Delta
+    var delta_file: RDShaderFile = load("res://addons/foveacore/shaders/delta_animation.glsl")
+    var delta_spirv := delta_file.get_spirv()
+    var delta_err: String = delta_spirv.get_stage_compile_error(RenderingDevice.SHADER_STAGE_COMPUTE)
+    if not delta_err.is_empty():
+        push_error("GPU Culler: Error compiling delta_animation.glsl: " + delta_err)
+    delta_shader_rid = rd.shader_create_from_spirv(delta_spirv)
+    if delta_shader_rid.is_valid():
+        delta_pipeline_rid = rd.compute_pipeline_create(delta_shader_rid)
+    else:
+        push_error("GPU Culler: Failed to create delta_shader_rid")
+
 ## Charge le fichier via Rust et exécute le Culling sur le GPU
 func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_texture: RID, cull_threshold: float = 0.0,
     aabb_min: Vector3 = Vector3(-5, -5, -5), aabb_max: Vector3 = Vector3(5, 5, 5),
     render_scene_data: Object = null, hlod_distances: Array = [8.0, 18.0, 30.0],
     covar_texture: RID = RID(), palette_texture: RID = RID(), use_palette: bool = false,
-    palette_size: int = 16, model_transform: Transform3D = Transform3D.IDENTITY) -> RID:
+    palette_size: int = 16, model_transform: Transform3D = Transform3D.IDENTITY,
+    delta_buffer: RID = RID(), delta_weight: float = 0.0) -> RID:
     if covar_texture.is_valid():
         last_covar_texture_rid = covar_texture
     if palette_texture.is_valid():
@@ -262,6 +293,7 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
         # Libérer l'ancien cache s'il existait
         if not cache.is_empty():
             if cache.get("input", RID()).is_valid(): rd.free_rid(cache["input"])
+            if cache.get("animated", RID()).is_valid(): rd.free_rid(cache["animated"])
             if cache.get("output", RID()).is_valid(): rd.free_rid(cache["output"])
             if cache.get("counter", RID()).is_valid(): rd.free_rid(cache["counter"])
             if cache.get("camera_ubo", RID()).is_valid(): rd.free_rid(cache["camera_ubo"])
@@ -276,6 +308,7 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
         
         # Créer les nouveaux buffers persistants à la taille maximale
         var input_buf: RID = rd.storage_buffer_create(max_buffer_size)
+        var animated_buf: RID = rd.storage_buffer_create(max_buffer_size)
         var output_buf: RID = rd.storage_buffer_create(max_buffer_size)
         
         var zero_counter := PackedByteArray([0,0,0,0])
@@ -402,6 +435,7 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
         
         cache = {
             "input": input_buf,
+            "animated": animated_buf,
             "output": output_buf,
             "counter": counter_buf,
             "camera_ubo": camera_ubo_buf,
@@ -509,10 +543,70 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
     push_bytes.encode_float(48, aabb_max.z)
     push_bytes.encode_float(52, 0.0) # pad2
     
+    # --- RUN DELTA ANIMATION COMPUTE SHADER PASS (Task 244) ---
+    var culler_uniform_set: RID = uniform_set
+    if delta_buffer.is_valid() and delta_weight > 0.0 and delta_pipeline_rid.is_valid():
+        var u_in := RDUniform.new()
+        u_in.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+        u_in.binding = 0
+        u_in.add_id(input_buffer)
+        
+        var u_delta := RDUniform.new()
+        u_delta.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+        u_delta.binding = 1
+        u_delta.add_id(delta_buffer)
+        
+        var u_anim := RDUniform.new()
+        u_anim.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+        u_anim.binding = 2
+        u_anim.add_id(cache["animated"])
+        
+        var delta_set := rd.uniform_set_create([u_in, u_delta, u_anim], delta_shader_rid, 0)
+        
+        var push_delta := PackedByteArray()
+        push_delta.resize(48)
+        push_delta.encode_float(0, delta_weight)
+        push_delta.encode_u32(4, total_splats)
+        push_delta.encode_float(8, aabb_min.x)
+        push_delta.encode_float(12, aabb_min.y)
+        push_delta.encode_float(16, aabb_min.z)
+        push_delta.encode_float(20, 0.0)
+        push_delta.encode_float(24, aabb_max.x)
+        push_delta.encode_float(28, aabb_max.y)
+        push_delta.encode_float(32, aabb_max.z)
+        push_delta.encode_float(36, 0.0)
+        
+        var delta_cl := rd.compute_list_begin()
+        rd.compute_list_bind_compute_pipeline(delta_cl, delta_pipeline_rid)
+        rd.compute_list_bind_uniform_set(delta_cl, delta_set, 0)
+        rd.compute_list_set_push_constant(delta_cl, push_delta, push_delta.size())
+        
+        var delta_workgroups := ceili(total_splats / 256.0)
+        rd.compute_list_dispatch(delta_cl, delta_workgroups, 1, 1)
+        rd.compute_list_end()
+        
+        # Point the culler input to the newly animated buffer
+        var u_cull_in := RDUniform.new()
+        u_cull_in.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+        u_cull_in.binding = 0
+        u_cull_in.add_id(cache["animated"])
+        
+        var u_cull_out := RDUniform.new()
+        u_cull_out.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+        u_cull_out.binding = 1
+        u_cull_out.add_id(output_buffer)
+        
+        var u_cull_cnt := RDUniform.new()
+        u_cull_cnt.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+        u_cull_cnt.binding = 2
+        u_cull_cnt.add_id(counter_buffer)
+        
+        culler_uniform_set = rd.uniform_set_create([u_cull_in, u_cull_out, u_cull_cnt], shader_rid, 0)
+
     # 6. Exécution du Compute Shader
     var compute_list: int = rd.compute_list_begin()
     rd.compute_list_bind_compute_pipeline(compute_list, pipeline_rid)
-    rd.compute_list_bind_uniform_set(compute_list, uniform_set, 0)
+    rd.compute_list_bind_uniform_set(compute_list, culler_uniform_set, 0)
     rd.compute_list_bind_uniform_set(compute_list, uniform_set_depth, 1)
     rd.compute_list_set_push_constant(compute_list, push_bytes, push_bytes.size())
     
@@ -801,6 +895,13 @@ func cleanup() -> void:
         if raster_shader_rid.is_valid():
             rd.free_rid(raster_shader_rid)
             raster_shader_rid = RID()
+
+        if delta_pipeline_rid.is_valid():
+            rd.free_rid(delta_pipeline_rid)
+            delta_pipeline_rid = RID()
+        if delta_shader_rid.is_valid():
+            rd.free_rid(delta_shader_rid)
+            delta_shader_rid = RID()
         
         # Libérer les buffers GPU persistants en cache
         for path in _gpu_buffers:
@@ -809,6 +910,8 @@ func cleanup() -> void:
                 rd.free_rid(cache["input"])
             if cache.get("output", RID()).is_valid():
                 rd.free_rid(cache["output"])
+            if cache.get("animated", RID()).is_valid():
+                rd.free_rid(cache["animated"])
             if cache.get("counter", RID()).is_valid():
                 rd.free_rid(cache["counter"])
             if cache.get("camera_ubo", RID()).is_valid():

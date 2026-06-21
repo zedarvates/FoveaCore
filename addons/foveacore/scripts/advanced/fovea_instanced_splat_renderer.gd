@@ -45,6 +45,7 @@ var instance_morph_frequencies: Array[float] = []
 var instance_morph_amplitudes: Array[float] = []
 var instance_delta_colors: Array[Dictionary] = []
 var instance_delta_positions: Array[Dictionary] = []
+var instance_delta_weights: Array[float] = []
 
 var _last_colors: Array[Color] = []
 var _last_scales: Array[float] = []
@@ -55,11 +56,14 @@ var _last_morph_frequencies: Array[float] = []
 var _last_morph_amplitudes: Array[float] = []
 var _last_delta_colors_hashes: Array[int] = []
 var _last_delta_positions_hashes: Array[int] = []
+var _last_delta_weights: Array[float] = []
 
 var _cached_main_light: DirectionalLight3D = null
+var delta_manager: FoveaDeltaManager = null
 
 func _ready() -> void:
 	instanced_culler = FoveaInstancedCuller.new()
+	delta_manager = FoveaDeltaManager.new()
 	triangle_mesh_generator = load("res://addons/foveacore/scripts/advanced/triangle_splat_mesh.gd")
 
 	# 1. Création de la géométrie de base (Maillage TRIANGLE)
@@ -101,6 +105,8 @@ func _ready() -> void:
 		call_deferred("_upload_covar_codebook")
 
 func _process(_delta: float) -> void:
+	if delta_manager:
+		delta_manager.process_interpolation(_delta)
 	var camera := get_viewport().get_camera_3d()
 	if camera == null or material_override == null:
 		return
@@ -117,6 +123,7 @@ func _process(_delta: float) -> void:
 	var morph_amplitudes: Array[float] = []
 	var delta_colors: Array[Dictionary] = []
 	var delta_positions: Array[Dictionary] = []
+	var delta_weights: Array[float] = []
 	var delta_colors_hashes: Array[int] = []
 	var delta_positions_hashes: Array[int] = []
 	
@@ -141,6 +148,7 @@ func _process(_delta: float) -> void:
 			
 			delta_colors.append(n.delta_colors)
 			delta_positions.append(n.delta_positions)
+			delta_weights.append(n.delta_weight)
 			delta_colors_hashes.append(n.delta_colors.hash())
 			delta_positions_hashes.append(n.delta_positions.hash())
 
@@ -181,6 +189,9 @@ func _process(_delta: float) -> void:
 				if delta_colors_hashes[i] != _last_delta_colors_hashes[i] or delta_positions_hashes[i] != _last_delta_positions_hashes[i]:
 					changed = true
 					break
+				if i < _last_delta_weights.size() and not is_equal_approx(delta_weights[i], _last_delta_weights[i]):
+					changed = true
+					break
 			else:
 				changed = true
 				break
@@ -195,6 +206,7 @@ func _process(_delta: float) -> void:
 	instance_morph_amplitudes = morph_amplitudes
 	instance_delta_colors = delta_colors
 	instance_delta_positions = delta_positions
+	instance_delta_weights = delta_weights
 
 	_last_transforms = transforms.duplicate()
 	_last_colors = colors.duplicate()
@@ -206,6 +218,7 @@ func _process(_delta: float) -> void:
 	_last_morph_amplitudes = morph_amplitudes.duplicate()
 	_last_delta_colors_hashes = delta_colors_hashes.duplicate()
 	_last_delta_positions_hashes = delta_positions_hashes.duplicate()
+	_last_delta_weights = delta_weights.duplicate()
 	_last_transforms_size = transforms.size()
 
 	# Recalculer le culling si la caméra bouge ou si les instances ont changé
@@ -303,7 +316,13 @@ func load_and_render_splats() -> void:
 		depth_tex,
 		cull_threshold,
 		aabb_min,
-		aabb_max
+		aabb_max,
+		instance_delta_positions,
+		instance_delta_colors,
+		instance_morph_types,
+		instance_morph_weights,
+		instance_morph_frequencies,
+		instance_morph_amplitudes
 	)
 
 	var output_buffer_rid: RID = cull_res.buffer_rid
@@ -349,6 +368,7 @@ func load_and_render_splats() -> void:
 	var active_morph_amplitudes: Array[float] = []
 	var active_delta_colors: Array[Dictionary] = []
 	var active_delta_positions: Array[Dictionary] = []
+	var active_delta_weights: Array[float] = []
 	
 	for idx in active_instance_indices:
 		active_transforms.append(instance_transforms[idx])
@@ -361,6 +381,7 @@ func load_and_render_splats() -> void:
 		active_morph_amplitudes.append(instance_morph_amplitudes[idx] if idx < instance_morph_amplitudes.size() else 0.5)
 		active_delta_colors.append(instance_delta_colors[idx] if idx < instance_delta_colors.size() else {})
 		active_delta_positions.append(instance_delta_positions[idx] if idx < instance_delta_positions.size() else {})
+		active_delta_weights.append(instance_delta_weights[idx] if idx < instance_delta_weights.size() else 0.0)
 
 	# 6. Décodage parallèle
 	var decode_result := FoveaThreadPool.decode_parallel(
@@ -378,6 +399,7 @@ func load_and_render_splats() -> void:
 		active_morph_amplitudes,
 		active_delta_colors,
 		active_delta_positions,
+		active_delta_weights,
 		20
 	)
 

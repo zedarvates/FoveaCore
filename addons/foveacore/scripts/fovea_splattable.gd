@@ -93,6 +93,17 @@ const _PlyLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/
 ## If [code]true[/code], enables shared instanced rendering (Global Splat Instancing) for .fovea assets.
 @export var enable_instancing: bool = true
 
+## If [code]true[/code], this asset is treated as completely static/stable.
+## Static assets bypass redundant GPU culling/sorting dispatches on mobile.
+## Dynamic assets support skeletal skinning, physics solver, and get sorted every frame.
+@export var is_static: bool = true:
+	set(val):
+		is_static = val
+		var renderer = get_node_or_null("FoveaCoreSplatRenderer")
+		if renderer:
+			renderer.is_static = val
+
+
 @export_group("Delta-Splat Overrides")
 ## Custom tint color override applied to this instance.
 @export var color_override: Color = Color.WHITE
@@ -104,10 +115,21 @@ const _PlyLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/
 @export_enum("None", "Bend", "Twist", "Squish", "Wave") var morph_type: String = "None"
 ## Force de la déformation (0.0 = aucun effet, 1.0 = effet maximum).
 @export_range(0.0, 1.0) var morph_weight: float = 0.0
+## Valeur cible pour le morphing (permet une interpolation fluide).
+@export_range(0.0, 1.0) var morph_weight_target: float = 0.0
+## Vitesse d'interpolation (0 = instantané, >0 = vitesse d'interpolation).
+@export var morph_interpolation_speed: float = 5.0
 ## Fréquence spatiale du morphing.
 @export var morph_frequency: float = 1.0
 ## Amplitude maximale du morphing.
 @export var morph_amplitude: float = 0.5
+
+## Force de l'application du delta (0.0 = aucun effet, 1.0 = effet maximum).
+@export_range(0.0, 1.0) var delta_weight: float = 0.0
+## Valeur cible pour le delta (permet une interpolation fluide).
+@export_range(0.0, 1.0) var delta_weight_target: float = 0.0
+## Vitesse d'interpolation du delta.
+@export var delta_interpolation_speed: float = 5.0
 
 ## If [code]true[/code], hides the original MeshInstance3D when splatting is active.
 @export var hide_mesh_when_splatting := true
@@ -115,10 +137,27 @@ const _PlyLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/
 ## Culling priority (0 is culled first, 10 is culled last).
 @export_range(0, 10) var culling_priority := 5
 
+@export_file("*.fvdelta") var delta_file_path: String = "":
+	set(val):
+		delta_file_path = val
+		if not delta_file_path.is_empty():
+			load_delta_file(delta_file_path)
+
 ## Delta colors (tint overrides per splat index: local_idx -> Color)
 var delta_colors: Dictionary = {}
 ## Delta positions (deform offsets per splat index: local_idx -> Vector3)
 var delta_positions: Dictionary = {}
+
+func save_delta_file(path: String) -> void:
+	if loaded_splats.is_empty():
+		return
+	FoveaDeltaData.save_to_file(path, loaded_splats.size(), delta_positions, delta_colors, {})
+
+func load_delta_file(path: String) -> void:
+	var result = FoveaDeltaData.load_from_file(path)
+	if not result.is_empty():
+		delta_positions = result.delta_positions
+		delta_colors = result.delta_colors
 
 ## Référence au mesh original
 var original_mesh: Mesh = null
@@ -161,7 +200,22 @@ func _exit_tree() -> void:
 		manager.unregister_splattable(self)
 
 
+func _process(delta: float) -> void:
+	if not Engine.is_editor_hint():
+		if morph_interpolation_speed > 0.0:
+			morph_weight = move_toward(morph_weight, morph_weight_target, morph_interpolation_speed * delta)
+		else:
+			morph_weight = morph_weight_target
+			
+		if delta_interpolation_speed > 0.0:
+			delta_weight = move_toward(delta_weight, delta_weight_target, delta_interpolation_speed * delta)
+		else:
+			delta_weight = delta_weight_target
+
+
 func _ready() -> void:
+	morph_weight_target = morph_weight
+	delta_weight_target = delta_weight
 	_capture_mesh_reference()
 	
 	# Gestion de la compatibilité des fichiers de splats
@@ -206,8 +260,10 @@ func _setup_native_renderer() -> void:
 		renderer = FoveaCoreSplatRenderer.new()
 		renderer.name = "FoveaCoreSplatRenderer"
 		renderer.sort_distance_threshold = 0.1
+		renderer.is_static = is_static
 		add_child(renderer)
 	renderer.asset_path = splat_file_path
+
 
 
 func _update_local_renderer() -> void:
