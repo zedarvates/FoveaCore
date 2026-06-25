@@ -62,6 +62,16 @@ enum QualityPreset {
 		if _splattable != null:
 			_splattable.alpha_override = val
 
+## If [code]true[/code], this asset is treated as completely static/stable.
+## Static assets bypass redundant GPU culling/sorting dispatches on mobile.
+## Dynamic assets support skeletal skinning, physics solver, and get sorted every frame.
+@export var is_static: bool = true:
+	set(val):
+		is_static = val
+		if _splattable != null:
+			_splattable.is_static = val
+
+
 ## Internal delegate doing the actual loading/rendering. Created at runtime,
 ## never persisted into the scene file.
 var _splattable: FoveaSplattable = null
@@ -105,6 +115,7 @@ func _apply_all() -> void:
 		return
 	_splattable.generate_collisions = generate_collisions
 	_splattable.alpha_override = opacity
+	_splattable.is_static = is_static
 	_apply_quality_preset()
 	_apply_enabled()
 	_apply_source_path()

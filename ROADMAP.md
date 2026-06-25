@@ -72,6 +72,17 @@ This document outlines the roadmap to transform FoveaCore into a world-class hyb
 - [ ] **Gaussian Compression**: Ultra-light file format for VR streaming.
 - [ ] **Pont Agents Autonomes (Hermes) & Blender** : Création d'une passerelle entre des agents autonomes (tels que Hermes) et Blender/Godot pour la génération et l'orchestration automatique d'assets 3D. *(Réflexion et conception sérieuses planifiées d'ici 2 mois)*
 
+
+## 🔴 Phase 5: Dynamic Avatars & Live Interaction (Markerless Mocap)
+*Objective: Drive real-time high-fidelity 3DGS avatars via standard video feeds.*
+
+- [ ] **Splat Markerless Mocap Bridge**: Python-based pipeline (MediaPipe / RTMPose / WHAM) to extract body poses (Skeleton3D) and facial blendshapes (Apple ARKit 52 Blendshapes) from video/webcam.
+- [ ] **Fovea Live Link Receiver**: Godot UDP/WebSockets server to receive real-time facial and skeletal motion data from mobile devices and local bridges.
+- [ ] **GPU Compute Skinning Shader**: GLSL compute shader (`gpu_skinning_compute.glsl`) to compute Linear Blend Skinning (LBS) or Dual Quaternion Skinning (DQS) on millions of splats at 90 FPS in VR.
+- [ ] **GPU Morph Target Blendshapes**: GPU-based deformation framework for driving facial expressions of 3DGS assets via blendshapes.
+- [ ] **Mocap Capture & Retargeting UI**: Editor interface to calibrate neutral pose, record mocap feeds, and bake animations directly to Godot `AnimationPlayer` tracks.
+- [ ] **Automatic Weights Painting**: Tool to automatically assign skinning weights to splats based on mesh/skeleton distance, with support for manual touch-ups.
+
 ---
 
 *"The future of rendering is not just about displaying triangles, but about painting with volumes of light."*

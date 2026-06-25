@@ -151,7 +151,7 @@ var _user_config_path: String = ""
 		dry_run = val
 		if backend: backend.dry_run = dry_run
 
-var active_sessions: Dictionary = {}
+var active_sessions: Dictionary[String, ReconstructionSession] = {}
 
 func _ready() -> void:
 	# Initialiser le chemin de config utilisateur
@@ -323,7 +323,7 @@ func _auto_detect_ffmpeg() -> void:
 		possible_paths.append(home_path + "/Documents/ffmpeg-master-latest-win64-gpl-shared/ffmpeg-master-latest-win64-gpl-shared/bin/" + bin_name)
 		possible_paths.append(home_path + "/Documents/ffmpeg/bin/" + bin_name)
 	
-	for p in possible_paths:
+	for p: String in possible_paths:
 		if _is_tool_available(p, ["-version"]):
 			print("FoveaManager: FFmpeg détecté automatiquement à : ", p)
 			ffmpeg_path = p 
@@ -355,7 +355,7 @@ func _auto_detect_colmap() -> void:
 		possible_paths.append(home_path + "/Documents/colmap/bin/" + bin_name)
 		possible_paths.append(home_path + "/Documents/colmap/" + bin_name)
 
-	for p in possible_paths:
+	for p: String in possible_paths:
 		if _is_tool_available(p, ["--help"]):
 			print("FoveaManager: COLMAP détecté automatiquement à : ", p)
 			colmap_path = p
@@ -377,7 +377,7 @@ func _auto_detect_python() -> void:
 		"/usr/local/bin/python3"
 	]
 
-	for p in possible_paths:
+	for p: String in possible_paths:
 		if _is_tool_available(p, ["--version"]):
 			print("FoveaManager: Python détecté automatiquement à : ", p)
 			python_path = p
@@ -589,8 +589,8 @@ func _calculate_mask_coverage(mask: Image) -> float:
 	var transparent_pixels: int = 0
 	var size: Vector2i = mask.get_size()
 	# Sample every 10th pixel for performance
-	for y in range(0, size.y, 10):
-		for x in range(0, size.x, 10):
+	for y: int in range(0, size.y, 10):
+		for x: int in range(0, size.x, 10):
 			if mask.get_pixel(x, y).a < 0.1:
 				transparent_pixels += 1
 	
@@ -611,12 +611,12 @@ func run_reconstruction(session: ReconstructionSession) -> void:
 	print("ReconstructionManager: Démarrage du pipeline complet pour '", session.session_name, "'")
 	
 	# Clean up previous COLMAP cache files
-	var abs_path := ProjectSettings.globalize_path(session.output_directory)
-	var db_file := abs_path.path_join("database.db")
+	var abs_path: String = ProjectSettings.globalize_path(session.output_directory)
+	var db_file: String = abs_path.path_join("database.db")
 	if FileAccess.file_exists(db_file):
 		DirAccess.remove_absolute(db_file)
 		print("ReconstructionManager: Cleaned up old database.db cache")
-	var sparse_dir := abs_path.path_join("sparse")
+	var sparse_dir: String = abs_path.path_join("sparse")
 	if DirAccess.dir_exists_absolute(sparse_dir):
 		_delete_dir_recursive(sparse_dir)
 		print("ReconstructionManager: Cleaned up old sparse reconstruction cache")
@@ -873,7 +873,7 @@ func run_triposplat(session: ReconstructionSession) -> void:
 	if FileAccess.file_exists(global_ply):
 		_post_process_reconstruction_splats(session, global_ply)
 		print("ReconstructionManager: Loading TripoSplat PLY from ", global_ply)
-		var gaussians: Array = PLYLoader.load_gaussians_from_ply(global_ply)
+		var gaussians: Array[GaussianSplat] = PLYLoader.load_gaussians_from_ply(global_ply)
 		if not gaussians.is_empty():
 			session.splat_data_path = ply_path
 			session.status = "Terminé (%d splats)" % gaussians.size()
@@ -937,7 +937,7 @@ func run_worldmirror(session: ReconstructionSession) -> void:
 	if FileAccess.file_exists(global_ply):
 		_post_process_reconstruction_splats(session, global_ply)
 		print("ReconstructionManager: Loading WorldMirror PLY from ", global_ply)
-		var gaussians: Array = PLYLoader.load_gaussians_from_ply(global_ply)
+		var gaussians: Array[GaussianSplat] = PLYLoader.load_gaussians_from_ply(global_ply)
 		if not gaussians.is_empty():
 			session.splat_data_path = ply_path
 			session.status = "Terminé (%d splats)" % gaussians.size()
@@ -978,7 +978,7 @@ func run_training(session: ReconstructionSession) -> void:
 		if FileAccess.file_exists(global_ply):
 			_post_process_reconstruction_splats(session, global_ply)
 			print("ReconstructionManager: Loading result PLY from ", global_ply)
-			var gaussians: Array = PLYLoader.load_gaussians_from_ply(global_ply)
+			var gaussians: Array[GaussianSplat] = PLYLoader.load_gaussians_from_ply(global_ply)
 			if not gaussians.is_empty():
 				session.splat_data_path = ply_path
 				session.status = "Terminé (%d splats)" % gaussians.size()
@@ -1034,7 +1034,7 @@ func run_artifixer(session: ReconstructionSession) -> void:
 	if FileAccess.file_exists(global_ply):
 		_post_process_reconstruction_splats(session, global_ply)
 		print("ReconstructionManager: Loading ArtiFixer PLY from ", global_ply)
-		var gaussians: Array = PLYLoader.load_gaussians_from_ply(global_ply)
+		var gaussians: Array[GaussianSplat] = PLYLoader.load_gaussians_from_ply(global_ply)
 		if not gaussians.is_empty():
 			session.splat_data_path = ply_path
 			session.status = "Terminé (%d splats raffinés)" % gaussians.size()
@@ -1051,7 +1051,7 @@ func _on_backend_started(task: String) -> void:
 	print("Manager: Backend started -> ", task)
 	log_line_received.emit(">>> Starting: " + task)
 	# Logger dans la session active
-	for sess in active_sessions.values():
+	for sess: ReconstructionSession in active_sessions.values():
 		if sess.status != "Terminé":
 			sess.status = task
 
@@ -1076,7 +1076,7 @@ func _on_backend_finished(status: int, output: String) -> void:
 
 func _post_process_reconstruction_splats(session: ReconstructionSession, global_ply: String) -> void:
 	print("ReconstructionManager: Post-processing splats...")
-	var gaussians: Array = PLYLoader.load_gaussians_from_ply(global_ply)
+	var gaussians: Array[GaussianSplat] = PLYLoader.load_gaussians_from_ply(global_ply)
 	if gaussians.is_empty():
 		push_error("ReconstructionManager: Failed to load PLY for post-processing.")
 		return

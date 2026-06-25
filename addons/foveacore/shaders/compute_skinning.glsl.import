@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://dlvdg2bb6rwu6"
+path="res://.godot/imported/compute_skinning.glsl-973090e5869253376c45c6a9e9c762ce.res"
+
+[deps]
+
+source_file="res://addons/foveacore/shaders/compute_skinning.glsl"
+dest_files=["res://.godot/imported/compute_skinning.glsl-973090e5869253376c45c6a9e9c762ce.res"]
+
+[params]
+

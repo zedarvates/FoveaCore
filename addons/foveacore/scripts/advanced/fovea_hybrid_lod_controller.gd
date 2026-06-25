@@ -35,6 +35,19 @@ extends Node3D
 		if is_node_ready() and not meshflow_glb_path.is_empty():
 			_load_meshflow_lod_mesh()
 
+@export_group("Textured LOD Settings")
+## The shared texture atlas containing all packed LOD textures.
+@export var lod_texture_atlas: Texture2D = null:
+	set(val):
+		lod_texture_atlas = val
+		_update_references()
+
+## The UV region within the atlas for this controller's mesh.
+@export var lod_texture_region: Rect2 = Rect2(0, 0, 1, 1):
+	set(val):
+		lod_texture_region = val
+		_update_references()
+
 var _timer: float = 0.0
 var _current_lod: int = -1 # 0 = Splat (close), 1 = Mesh (far)
 
@@ -125,5 +138,15 @@ func _apply_lod_state() -> void:
 		splattable.splatting_enabled = false
 		splattable.visible = false
 		mesh_instance.visible = true
+		
+		if lod_texture_atlas != null and mesh_instance != null:
+			var mat = mesh_instance.material_override
+			if not mat is StandardMaterial3D:
+				mat = StandardMaterial3D.new()
+				mesh_instance.material_override = mat
+			
+			mat.albedo_texture = lod_texture_atlas
+			mat.uv1_scale = Vector3(lod_texture_region.size.x, lod_texture_region.size.y, 1.0)
+			mat.uv1_offset = Vector3(lod_texture_region.position.x, lod_texture_region.position.y, 0.0)
 		
 		print("FoveaHybridLODController: Switch to LOD 1 (Simplified MeshFlow Mesh)")

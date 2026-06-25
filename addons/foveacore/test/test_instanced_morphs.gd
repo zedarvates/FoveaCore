@@ -1,5 +1,7 @@
 extends Node
 
+const FoveaDeltaManager := preload("res://addons/foveacore/scripts/advanced/fovea_delta_manager.gd")
+
 ## Script de test pour valider les Delta-Splat Variants (Morphs & Overrides)
 ## Crée plusieurs instances avec différentes couleurs, échelles et morphs (Bend, Twist, Squish, Wave).
 
@@ -159,6 +161,41 @@ func _verify_morphs() -> void:
 	var expected_wave_pos = local_pos
 	expected_wave_pos.y += sin((local_pos.x + local_pos.z) * freq_wave) * amp_wave * weight_wave
 	print("test_instanced_morphs: [PASS] Wave de surface Y-offset validée !")
+	
+	# 5. Verification FoveaDeltaManager half float precision and serialization
+	var original_pos := Vector3(1.234, -4.567, 0.0089)
+	var hx := FoveaDeltaManager.float_to_half(original_pos.x)
+	var hy := FoveaDeltaManager.float_to_half(original_pos.y)
+	var hz := FoveaDeltaManager.float_to_half(original_pos.z)
+	
+	var decoded_pos := Vector3(
+		FoveaDeltaManager.half_to_float(hx),
+		FoveaDeltaManager.half_to_float(hy),
+		FoveaDeltaManager.half_to_float(hz)
+	)
+	var precision_loss := original_pos.distance_to(decoded_pos)
+	print("test_instanced_morphs: Loss of FP16 precision: %.6f" % precision_loss)
+	if precision_loss < 0.01:
+		print("test_instanced_morphs: [PASS] FP16 conversion precision verified.")
+	else:
+		push_error("test_instanced_morphs: [FAIL] FP16 precision loss too high.")
+
+	# Test delta serialization round-trip
+	var serialized := FoveaDeltaManager.serialize_deltas(
+		[1], [0.5], [1.0], [0.5],
+		[ { 42: Vector3(0.1, -0.2, 0.3) } ],
+		[ { 42: Color(0.8, 0.6, 0.4) } ]
+	)
+	var deserialized := FoveaDeltaManager.deserialize_deltas(serialized)
+	if not deserialized.is_empty():
+		var d_pos: Dictionary = deserialized.delta_positions[0]
+		var d_col: Dictionary = deserialized.delta_colors[0]
+		if d_pos.has(42) and d_col.has(42):
+			print("test_instanced_morphs: [PASS] DeltaManager serialization round-trip successful.")
+		else:
+			push_error("test_instanced_morphs: [FAIL] Serialized data verification mismatch.")
+	else:
+		push_error("test_instanced_morphs: [FAIL] DeltaManager deserialization failed.")
 	
 	print("test_instanced_morphs: Toutes les validations de morphings GPU/CPU sont [PASS].")
 	print("--- FIN TEST INSTANCED MORPHS & OVERRIDES ---")

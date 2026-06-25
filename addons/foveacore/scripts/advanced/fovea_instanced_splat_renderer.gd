@@ -28,6 +28,11 @@ extends MultiMeshInstance3D
 @export var enable_palette: bool = true
 @export var use_dithering: bool = true
 @export_range(0.0, 2.0) var dither_strength: float = 1.0
+@export var enable_gpu_driven: bool = false
+@export var use_gpu_instance_culling: bool = false
+
+var texture_rd_output: Texture2DRD = null
+var texture_rd_counter: Texture2DRD = null
 
 var instanced_culler: FoveaInstancedCuller
 var splat_mesh: ArrayMesh
@@ -59,11 +64,11 @@ var _last_delta_positions_hashes: Array[int] = []
 var _last_delta_weights: Array[float] = []
 
 var _cached_main_light: DirectionalLight3D = null
-var delta_manager: FoveaDeltaManager = null
+var delta_manager: RefCounted = null
 
 func _ready() -> void:
 	instanced_culler = FoveaInstancedCuller.new()
-	delta_manager = FoveaDeltaManager.new()
+	delta_manager = preload("res://addons/foveacore/scripts/advanced/fovea_delta_manager.gd").new()
 	triangle_mesh_generator = load("res://addons/foveacore/scripts/advanced/triangle_splat_mesh.gd")
 
 	# 1. Création de la géométrie de base (Maillage TRIANGLE)
@@ -309,7 +314,7 @@ func load_and_render_splats() -> void:
 			depth_tex = attrs.get_depth_texture()
 
 	# 4. Culling GPU d'instances multiples
-	var cull_res: Dictionary = instanced_culler.process_instanced_splats(
+	var cull_res: Dictionary = instanced_culler.process_instanced_splats_ext(
 		raw_bytes,
 		instance_transforms,
 		camera,
@@ -322,8 +327,32 @@ func load_and_render_splats() -> void:
 		instance_morph_types,
 		instance_morph_weights,
 		instance_morph_frequencies,
-		instance_morph_amplitudes
+		instance_morph_amplitudes,
+		enable_gpu_driven,
+		use_gpu_instance_culling
 	)
+
+	if enable_gpu_driven:
+		var out_rid: RID = cull_res.get("output_texture", RID())
+		var cnt_rid: RID = cull_res.get("counter_texture", RID())
+		if out_rid.is_valid() and cnt_rid.is_valid():
+			if texture_rd_output == null:
+				texture_rd_output = Texture2DRD.new()
+			if texture_rd_counter == null:
+				texture_rd_counter = Texture2DRD.new()
+			
+			if texture_rd_output.texture_rd_rid != out_rid:
+				texture_rd_output.texture_rd_rid = out_rid
+			if texture_rd_counter.texture_rd_rid != cnt_rid:
+				texture_rd_counter.texture_rd_rid = cnt_rid
+			
+			if mat:
+				mat.set_shader_parameter("enable_gpu_driven", true)
+				mat.set_shader_parameter("output_texture", texture_rd_output)
+				mat.set_shader_parameter("counter_texture", texture_rd_counter)
+			
+			multimesh.instance_count = instance_transforms.size() * (raw_bytes.size() / 16)
+		return
 
 	var output_buffer_rid: RID = cull_res.buffer_rid
 	var surviving_splats_count: int = cull_res.count

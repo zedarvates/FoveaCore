@@ -11,11 +11,11 @@ class_name SplatFormatLoader
 ##
 ## .fovea is handled natively by the resource loader, not here.
 
-const GaussianSplat = preload("res://addons/foveacore/scripts/reconstruction/gaussian_splat.gd")
-const _PlyLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/ply_loader.gd")
+const GaussianSplat: GDScript = preload("res://addons/foveacore/scripts/reconstruction/gaussian_splat.gd")
+const _PlyLoaderScript: GDScript = preload("res://addons/foveacore/scripts/reconstruction/ply_loader.gd")
 
 ## Number of bytes per splat in the binary .splat format.
-const SPLAT_STRIDE := 32
+const SPLAT_STRIDE: int = 32
 
 
 ## Loads a splat cloud from [param path], routing by extension. Returns an empty
@@ -52,35 +52,35 @@ static func load_splat(path: String) -> Array[GaussianSplat]:
 		push_error("SplatFormatLoader: file not found: " + path)
 		return splats
 
-	var f := FileAccess.open(path, FileAccess.READ)
+	var f: FileAccess = FileAccess.open(path, FileAccess.READ)
 	if f == null:
 		push_error("SplatFormatLoader: cannot open: " + path)
 		return splats
 
-	var size := f.get_length()
+	var size: int = f.get_length()
 	if size == 0 or size % SPLAT_STRIDE != 0:
 		push_error("SplatFormatLoader: .splat size %d is not a multiple of %d (corrupt?)" % [size, SPLAT_STRIDE])
 		f.close()
 		return splats
 
-	var count := int(size / SPLAT_STRIDE)
-	for _i in range(count):
-		var s := GaussianSplat.new(Vector3(f.get_float(), f.get_float(), f.get_float()))
+	var count: int = int(size / SPLAT_STRIDE)
+	for _i: int in range(count):
+		var s: GaussianSplat = GaussianSplat.new(Vector3(f.get_float(), f.get_float(), f.get_float()))
 		s.scale = Vector3(f.get_float(), f.get_float(), f.get_float())  # absolute, not log-space
 
-		var r := f.get_8()
-		var g := f.get_8()
-		var b := f.get_8()
-		var a := f.get_8()
+		var r: int = f.get_8()
+		var g: int = f.get_8()
+		var b: int = f.get_8()
+		var a: int = f.get_8()
 		s.opacity = a / 255.0
-		s.color = Color(r / 255.0, g / 255.0, b / 255.0, s.opacity)
+		s.color = Color(float(r) / 255.0, float(g) / 255.0, float(b) / 255.0, s.opacity)
 
 		# Rotation: 4 × uint8 → quaternion (w, x, y, z), each (byte - 128) / 128.
-		var qw := (f.get_8() - 128) / 128.0
-		var qx := (f.get_8() - 128) / 128.0
-		var qy := (f.get_8() - 128) / 128.0
-		var qz := (f.get_8() - 128) / 128.0
-		var q := Quaternion(qx, qy, qz, qw)
+		var qw: float = (f.get_8() - 128) / 128.0
+		var qx: float = (f.get_8() - 128) / 128.0
+		var qy: float = (f.get_8() - 128) / 128.0
+		var qz: float = (f.get_8() - 128) / 128.0
+		var q: Quaternion = Quaternion(qx, qy, qz, qw)
 		if q.length_squared() > 0.0001:
 			s.rotation = q.normalized()
 

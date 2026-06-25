@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://c6325p0p0kxrh"
+path="res://.godot/imported/publish_splats.glsl-5dc17657e572faf8ed7d85cf77dd35b7.res"
+
+[deps]
+
+source_file="res://addons/foveacore/shaders/publish_splats.glsl"
+dest_files=["res://.godot/imported/publish_splats.glsl-5dc17657e572faf8ed7d85cf77dd35b7.res"]
+
+[params]
+

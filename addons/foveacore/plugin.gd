@@ -245,6 +245,70 @@ func _handles(object: Object) -> bool:
 func _edit(object: Object) -> void:
 	selected_splattable = object as FoveaSplattable
 
+func _forward_3d_gui_input(viewport_camera: Camera3D, event: InputEvent) -> int:
+	if selected_splattable == null or not is_instance_valid(selected_splattable):
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
+	if not selected_splattable.get_meta("paint_mode", false):
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
+		
+	# Handle mouse inputs
+	if event is InputEventMouseButton:
+		var mouse_event := event as InputEventMouseButton
+		if mouse_event.button_index == MOUSE_BUTTON_LEFT:
+			if mouse_event.pressed:
+				_paint_at_mouse(viewport_camera, mouse_event.position)
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
+	elif event is InputEventMouseMotion:
+		var motion_event := event as InputEventMouseMotion
+		if motion_event.button_mask & MOUSE_BUTTON_MASK_LEFT:
+			_paint_at_mouse(viewport_camera, motion_event.position)
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
+			
+	return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+func _paint_at_mouse(camera: Camera3D, mouse_pos: Vector2) -> void:
+	var origin := camera.project_ray_origin(mouse_pos)
+	var dir := camera.project_ray_normal(mouse_pos)
+	
+	var local_origin := selected_splattable.to_local(origin)
+	var local_dir := selected_splattable.to_local(origin + dir * 100.0) - local_origin
+	local_dir = local_dir.normalized()
+	
+	# Find closest splat to the projected ray
+	var closest_idx := -1
+	var min_dist := 999999.0
+	var hit_pos := Vector3.ZERO
+	
+	var brush_radius: float = selected_splattable.get_meta("paint_brush_radius", 0.5)
+	
+	for i in range(selected_splattable.loaded_splats.size()):
+		var s := selected_splattable.loaded_splats[i]
+		var to_s := s.position - local_origin
+		var projection := to_s.dot(local_dir)
+		if projection < 0.0:
+			continue
+		var proj_point := local_origin + local_dir * projection
+		var dist := s.position.distance_to(proj_point)
+		if dist < min_dist and dist < brush_radius:
+			min_dist = dist
+			closest_idx = i
+			hit_pos = s.position
+			
+	if closest_idx != -1:
+		var brush_mode_idx: int = selected_splattable.get_meta("paint_brush_mode", 0)
+		var mode_str := "color"
+		if brush_mode_idx == 1:
+			mode_str = "deform"
+		elif brush_mode_idx == 2:
+			mode_str = "erase"
+			
+		var color: Color = selected_splattable.get_meta("paint_brush_color", Color.RED)
+		var deform_offset := local_dir * 0.1 # push splats slightly along view ray
+		
+		var paint_tool := load("res://addons/foveacore/scripts/editor/fovea_splat_paint_tool.gd")
+		if paint_tool:
+			paint_tool.paint_splats(selected_splattable, hit_pos, brush_radius, mode_str, color, deform_offset)
+
 func _make_visible(visible: bool) -> void:
 	if fovea_menu:
 		fovea_menu.visible = visible

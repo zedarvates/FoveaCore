@@ -18,21 +18,21 @@ func load_depth_maps(output_dir: String) -> Array[ImageTexture]:
 	_depth_textures.clear()
 	_depth_images.clear()
 
-	var depth_dir = output_dir.path_join("depth")
-	var abs_dir = ProjectSettings.globalize_path(depth_dir)
+	var depth_dir: String = output_dir.path_join("depth")
+	var abs_dir: String = ProjectSettings.globalize_path(depth_dir)
 
 	if not DirAccess.dir_exists_absolute(abs_dir):
 		error_occurred.emit("Depth directory not found: " + abs_dir)
 		return _depth_textures
 
-	var dir = DirAccess.open(abs_dir)
+	var dir: DirAccess = DirAccess.open(abs_dir)
 	if not dir:
 		error_occurred.emit("Cannot open depth directory")
 		return _depth_textures
 
 	dir.list_dir_begin()
 	var files: Array[String] = []
-	var fname = dir.get_next()
+	var fname: String = dir.get_next()
 	while not fname.is_empty():
 		if fname.ends_with(".png") and fname.begins_with("depth_"):
 			files.append(fname)
@@ -41,12 +41,12 @@ func load_depth_maps(output_dir: String) -> Array[ImageTexture]:
 
 	files.sort()
 
-	for f in files:
-		var full_path = depth_dir.path_join(f)
-		var img = Image.load_from_file(ProjectSettings.globalize_path(full_path))
+	for f: String in files:
+		var full_path: String = depth_dir.path_join(f)
+		var img: Image = Image.load_from_file(ProjectSettings.globalize_path(full_path))
 		if img:
 			_depth_images.append(img)
-			var tex = ImageTexture.create_from_image(img)
+			var tex: ImageTexture = ImageTexture.create_from_image(img)
 			_depth_textures.append(tex)
 
 	print("WorldMirrorDepthLoader: Loaded %d depth maps" % _depth_textures.size())
@@ -72,21 +72,21 @@ func get_depth_as_float32(index: int) -> PackedFloat32Array:
 	For real values, use the .npy file (requires Python bridge).
 	This provides a rough estimate by decoding the PNG pixel values.
 	"""
-	var img = get_depth_image(index)
+	var img: Image = get_depth_image(index)
 	if not img:
 		return PackedFloat32Array()
 
-	var w = img.get_width()
-	var h = img.get_height()
-	var result = PackedFloat32Array()
+	var w: int = img.get_width()
+	var h: int = img.get_height()
+	var result: PackedFloat32Array = PackedFloat32Array()
 	result.resize(w * h)
 
-	for y in range(h):
-		for x in range(w):
-			var pixel = img.get_pixel(x, y)
+	for y: int in range(h):
+		for x: int in range(w):
+			var pixel: Color = img.get_pixel(x, y)
 			# WM2 PNGs use a colormap. We estimate depth from luminance.
 			# Higher lum = closer (typically cooler colors = far, warm = close)
-			var lum = 0.299 * pixel.r + 0.587 * pixel.g + 0.114 * pixel.b
+			var lum: float = 0.299 * pixel.r + 0.587 * pixel.g + 0.114 * pixel.b
 			result[y * w + x] = lum
 
 	return result
