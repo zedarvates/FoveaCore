@@ -136,3 +136,6 @@ jobs:
             ${{ env.ROOT }}.zip.sha256
           generate_release_notes: true
           fail_on_unmatched_files: true
+          # Pre-1.0 / WIP builds publish as pre-releases. Tags with a suffix
+          # (e.g. v0.2.0-beta) are always pre-releases; plain pre-1.0 tags too.
+          prerelease: ${{ contains(github.ref_name, '-') || startsWith(github.ref_name, 'v0.') }}
