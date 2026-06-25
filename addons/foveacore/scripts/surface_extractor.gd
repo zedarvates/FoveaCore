@@ -206,8 +206,10 @@ static func extract_visible_surfaces_stereo(
 			right_result = extract_visible_triangles(splattable, right_camera_pos, Transform3D.IDENTITY)
 		)
 		
-		thread_left.wait_to_finish()
-		thread_right.wait_to_finish()
+		if thread_left.is_started():
+			thread_left.wait_to_finish()
+		if thread_right.is_started():
+			thread_right.wait_to_finish()
 	else:
 		if has_left:
 			left_result = extract_visible_triangles(splattable, left_camera_pos, Transform3D.IDENTITY)

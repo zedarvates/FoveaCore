@@ -145,7 +145,8 @@ static func decode_parallel(
 
 	# Attendre tous les threads
 	for t: int in range(thread_count):
-		threads[t].wait_to_finish()
+		if threads[t].is_started():
+			threads[t].wait_to_finish()
 
 	return result
 
