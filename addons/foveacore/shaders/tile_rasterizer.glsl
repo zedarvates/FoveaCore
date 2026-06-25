@@ -44,7 +44,15 @@ layout(push_constant, std430) uniform Params {
 } params;
 
 // Mémoire partagée de la tuile (256 threads)
-shared uint shared_splat_indices[256];
+// Pour la gestion des listes de collision (Task 239), on définit une structure de noeud chaîné
+// en mémoire partagée GPU (shared memory).
+struct CollisionNode {
+    uint splat_idx;
+    uint next;
+};
+
+shared CollisionNode shared_nodes[256];
+shared uint shared_head;
 shared uint shared_splat_count;
 
 // Math helper - projection 3D -> 2D
@@ -101,9 +109,10 @@ void main() {
     uint splat_limit = min(valid_splat_count, 65536u);
     uint thread_idx = gl_LocalInvocationIndex; // 0..255
     
-    // Initialiser le compteur partagé
+    // Initialiser le compteur partagé et la tête de liste
     if (thread_idx == 0) {
         shared_splat_count = 0;
+        shared_head = 0xFFFFFFFFu; // Fin de liste
     }
     barrier();
     
@@ -116,13 +125,14 @@ void main() {
         if (splat_idx < splat_limit) {
             PackedSplat s = splats[splat_idx];
             
-            // Décoder position spatiale
+            // Décoder position spatiale (Mobile Vulkan Optimised - Task 226)
             uint qx = s.data0 & 0xFFFFu;
             uint qy = (s.data0 >> 16) & 0xFFFFu;
             uint qz = s.data1 & 0xFFFFu;
             
-            vec3 q_pos = vec3(float(qx), float(qy), float(qz)) / 65535.0;
-            vec3 world_pos = params.aabb_min + q_pos * (params.aabb_max - params.aabb_min);
+            vec3 aabb_size = params.aabb_max - params.aabb_min;
+            vec3 q_pos = vec3(float(qx), float(qy), float(qz)) * 0.00001525902189669643; // 1.0 / 65535.0
+            vec3 world_pos = params.aabb_min + q_pos * aabb_size;
             
             // Projeter dans l'espace caméra
             vec4 cam_pos = params.model_view_matrix * vec4(world_pos, 1.0);
@@ -165,22 +175,77 @@ void main() {
             }
         }
         
+        // --- GESTION DES LISTES DE COLLISION (Task 239) ---
+        // Insertion atomique dans la liste chaînée de collisions en mémoire partagée
         if (overlaps_tile) {
-            uint dest_idx = atomicAdd(shared_splat_count, 1);
-            if (dest_idx < 256) {
-                shared_splat_indices[dest_idx] = splat_idx;
+            uint node_idx = atomicAdd(shared_splat_count, 1);
+            if (node_idx < 256) {
+                shared_nodes[node_idx].splat_idx = splat_idx;
+                // Insertion en tête de liste chaînée
+                uint old_head = atomicExchange(shared_head, node_idx);
+                shared_nodes[node_idx].next = old_head;
             }
         }
         
         barrier();
         
+        // --- TRI LOCAL PAR TUILE (Local Sorting - Task 238) ---
+        // On convertit la liste chaînée en un tableau temporaire indexable pour le tri odd-even
+        uint active_count = min(shared_splat_count, 256u);
+        
+        // Reconstruction locale du tableau à partir de la liste chaînée pour le tri
+        // (chaque thread extrait séquentiellement un élément pour éviter les conflits d'accès)
+        shared uint temp_indices[256];
+        if (thread_idx == 0) {
+            uint curr = shared_head;
+            for (uint i = 0; i < active_count; i++) {
+                if (curr != 0xFFFFFFFFu) {
+                    temp_indices[i] = shared_nodes[curr].splat_idx;
+                    curr = shared_nodes[curr].next;
+                }
+            }
+        }
+        barrier();
+        
+        // Tri à bulles parallèle simple sur temp_indices
+        for (uint step = 0; step < active_count; step++) {
+            uint idx1 = thread_idx * 2 + (step & 1u);
+            uint idx2 = idx1 + 1;
+            
+            if (idx2 < active_count) {
+                uint s_idx1 = temp_indices[idx1];
+                uint s_idx2 = temp_indices[idx2];
+                
+                PackedSplat s1 = splats[s_idx1];
+                uint qx1 = s1.data0 & 0xFFFFu;
+                uint qy1 = (s1.data0 >> 16) & 0xFFFFu;
+                uint qz1 = s1.data1 & 0xFFFFu;
+                vec3 q_pos1 = vec3(float(qx1), float(qy1), float(qz1)) / 65535.0;
+                vec3 world_pos1 = params.aabb_min + q_pos1 * (params.aabb_max - params.aabb_min);
+                float depth1 = (params.model_view_matrix * vec4(world_pos1, 1.0)).z;
+                
+                PackedSplat s2 = splats[s_idx2];
+                uint qx2 = s2.data0 & 0xFFFFu;
+                uint qy2 = (s2.data0 >> 16) & 0xFFFFu;
+                uint qz2 = s2.data1 & 0xFFFFu;
+                vec3 q_pos2 = vec3(float(qx2), float(qy2), float(qz2)) / 65535.0;
+                vec3 world_pos2 = params.aabb_min + q_pos2 * (params.aabb_max - params.aabb_min);
+                float depth2 = (params.model_view_matrix * vec4(world_pos2, 1.0)).z;
+                
+                if (depth1 > depth2) {
+                    temp_indices[idx1] = s_idx2;
+                    temp_indices[idx2] = s_idx1;
+                }
+            }
+            barrier();
+        }
+        
         // Blending par pixel
         if (pixel_coords.x < dest_size.x && pixel_coords.y < dest_size.y) {
-            uint active_count = min(shared_splat_count, 256u);
             for (uint i = 0; i < active_count; i++) {
                 if (final_color.a >= 0.99) break;
                 
-                uint s_idx = shared_splat_indices[i];
+                uint s_idx = temp_indices[i];
                 PackedSplat s = splats[s_idx];
                 
                 uint qx = s.data0 & 0xFFFFu;

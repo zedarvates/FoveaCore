@@ -201,11 +201,11 @@ func _ready() -> void:
 		
 	if log_text:
 		var highlighter = CodeHighlighter.new()
-		highlighter.add_color_region("❌", "", Color(1.0, 0.35, 0.35), true)
-		highlighter.add_color_region("✅", "", Color(0.35, 1.0, 0.35), true)
-		highlighter.add_color_region("⚠️", "", Color(1.0, 0.85, 0.35), true)
-		highlighter.add_color_region("ERROR:", "", Color(1.0, 0.35, 0.35), true)
-		highlighter.add_color_region("WARNING:", "", Color(1.0, 0.85, 0.35), true)
+		# CodeHighlighter color regions must START WITH A SYMBOL — emoji and word
+		# prefixes are rejected (spams "color regions must start with a symbol").
+		# Colorize ERROR/WARNING as keywords instead; keep the [..] region.
+		highlighter.add_keyword_color("ERROR", Color(1.0, 0.35, 0.35))
+		highlighter.add_keyword_color("WARNING", Color(1.0, 0.85, 0.35))
 		highlighter.add_color_region("[", "]", Color(0.6, 0.6, 0.6), false)
 		log_text.syntax_highlighter = highlighter
 	
@@ -245,7 +245,7 @@ func _ready() -> void:
 		pipeline_container.add_child(dry_run_check)
 
 	# Injecter dynamiquement les réglages de Styling & Optimization
-	var settings_box = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings")
+	settings_box = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings")
 	if settings_box:
 		var sep = HSeparator.new()
 		settings_box.add_child(sep)
@@ -403,13 +403,13 @@ func _ready() -> void:
 		tools_vbox.name = "ToolsVBox"
 		tools_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		tools_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		tools_vbox.theme_override_constants/separation = 15
+		tools_vbox.add_theme_constant_override("separation", 15)
 		tools_tab.add_child(tools_vbox)
 		
 		var title_lbl := Label.new()
 		title_lbl.text = "Dependency & Tools Installation"
 		title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		title_lbl.theme_override_font_sizes/font_size = 18
+		title_lbl.add_theme_font_size_override("font_size", 18)
 		tools_vbox.add_child(title_lbl)
 		
 		var desc_lbl := Label.new()
@@ -766,6 +766,8 @@ func _on_video_selected(path: String) -> void:
 	if img:
 		_log("Aperçu généré avec succès.")
 		_preview_manager.set_preview_image(img)
+		# Déclenchement automatique de l'Auto-ROI par IA
+		_on_auto_roi_pressed()
 
 func _setup_preview_manager() -> void:
 	_preview_manager = StudioPreviewManager.new()
@@ -1579,11 +1581,10 @@ func _on_popout_pressed() -> void:
 	popout_edit.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	
 	var highlighter = CodeHighlighter.new()
-	highlighter.add_color_region("❌", "", Color(1.0, 0.35, 0.35), true)
-	highlighter.add_color_region("✅", "", Color(0.35, 1.0, 0.35), true)
-	highlighter.add_color_region("⚠️", "", Color(1.0, 0.85, 0.35), true)
-	highlighter.add_color_region("ERROR:", "", Color(1.0, 0.35, 0.35), true)
-	highlighter.add_color_region("WARNING:", "", Color(1.0, 0.85, 0.35), true)
+	# See note above: region delimiters must start with a symbol, so ERROR/WARNING
+	# are keyword colors and emoji prefixes are dropped.
+	highlighter.add_keyword_color("ERROR", Color(1.0, 0.35, 0.35))
+	highlighter.add_keyword_color("WARNING", Color(1.0, 0.85, 0.35))
 	highlighter.add_color_region("[", "]", Color(0.6, 0.6, 0.6), false)
 	popout_edit.syntax_highlighter = highlighter
 	
@@ -1913,7 +1914,7 @@ func _dismiss_config_banner() -> void:
 
 func _create_tool_row(container: VBoxContainer, tool_name: String, label_text: String) -> void:
 	var row := HBoxContainer.new()
-	row.theme_override_constants/separation = 10
+	row.add_theme_constant_override("separation", 10)
 	
 	var label := Label.new()
 	label.text = label_text

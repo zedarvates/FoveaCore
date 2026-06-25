@@ -32,6 +32,10 @@ func _parse_begin(object: Object) -> void:
 		"Run AI Segmentation",
 		"Run 3D semantic segmentation using the prompt configured in 'AI Segmentation & Tagging'",
 		func() -> void: _on_segment_pressed(object)))
+	box.add_child(_make_button(
+		"Align to Ground (Up-Vector)",
+		"Estimate gravity/ground plane and rotate the splats to align them with Vector3.UP",
+		func() -> void: _on_align_pressed(object)))
 
 	box.add_child(HSeparator.new())
 
@@ -163,3 +167,11 @@ func _on_segment_pressed(object: Object) -> void:
 		push_warning("FoveaInspector: Please specify a segmentation prompt first ('AI Segmentation & Tagging' group).")
 		return
 	target.run_segmentation(target.run_segmentation_prompt)
+
+
+func _on_align_pressed(object: Object) -> void:
+	var target: FoveaSplattable = _resolve_splattable(object)
+	if target == null:
+		push_warning("FoveaInspector: Node is not ready yet, cannot align splats.")
+		return
+	target.align_to_gravity_plane()

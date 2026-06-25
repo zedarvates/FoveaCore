@@ -378,9 +378,9 @@ Ce document présente le plan de développement complet et structuré de **Fové
 
 ### 9.4 Optimisations mobiles et portage WebAssembly/WebGPU
 - [x] 226. **Compatibilité Vulkan Mobile** : Adapter les compute shaders pour se conformer aux limitations de bande passante et de registres des puces mobiles ARM.
-- [ ] 227. **Optimisations Meta Quest 3** : Configurer des préréglages graphiques optimisés pour le matériel VR autonome pour cibler 90 Hz stables.
-- [ ] 228. **Compilation WebAssembly** : Configurer la chaîne de compilation Rust pour cibler WASM, permettant au code natif de tourner sur le web.
-- [ ] 229. **Portage WGSL (WebGPU)** : Réécrire les shaders GLSL de tri et de rendu en format WGSL pour assurer la compatibilité WebGPU.
+- [x] 227. **Optimisations Meta Quest 3** : Configurer des préréglages graphiques optimisés pour le matériel VR autonome pour cibler 90 Hz stables.
+- [x] 228. **Compilation WebAssembly** : Configurer la chaîne de compilation Rust pour cibler WASM, permettant au code natif de tourner sur le web.
+- [x] 229. **Portage WGSL (WebGPU)** : Réécrire les shaders GLSL de tri et de rendu en format WGSL pour assurer la compatibilité WebGPU.
 - [x] 230. **Optimisation d'autonomie énergétique** : Réduire le nombre de dispatches GPU sur mobile en désactivant le tri sur les objets statiques stables.
 
 ### 9.5 Packaging, CI/CD et publication Godot Asset Library
@@ -415,10 +415,10 @@ Ce document présente le plan de développement complet et structuré de **Fové
 - [x] 249. **Configuration du Buffer d'Arguments** : Initialiser le buffer structuré `RDDrawIndirectArguments` pour le dispatch automatique de rendu.
 - [x] 250. **Compute Shader d'Indirect Command Generation** : Écrire le shader qui lit la liste des instances visibles et remplit le buffer indirect.
 - [x] 251. **Élimination de la Synchronisation `rd.sync()`** : Supprimer la barrière CPU en reliant le compute shader au vertex shader du MultiMesh.
-- [ ] 252. **Gestion Multi-Assets Indirecte** : Permettre le rendu de multiples objets distincts via un seul appel indirect multi-draw.
-- [ ] 253. **Culling d'Instance Avancé sur GPU** : Déplacer le frustum culling d'instances des nodes du CPU vers le GPU pour les scènes chargées.
-- [ ] 254. **Gestion de Barrière Mémoire** : Configurer les transitions de buffers GPU pour synchroniser de façon fluide l'écriture et le dessin.
-- [ ] 255. **Test de Saccade (Frame Stutters)** : Valider que le passage au rendu indirect élimine les micro-gels périodiques en jeu.
+- [x] 252. **Gestion Multi-Assets Indirecte** : Permettre le rendu de multiples objets distincts via un seul appel indirect multi-draw.
+- [x] 253. **Culling d'Instance Avancé sur GPU** : Déplacer le frustum culling d'instances des nodes du CPU vers le GPU pour les scènes chargées.
+- [x] 254. **Gestion de Barrière Mémoire** : Configurer les transitions de buffers GPU pour synchroniser de façon fluide l'écriture et le dessin.
+- [x] 255. **Test de Saccade (Frame Stutters)** : Valider que le passage au rendu indirect élimine les micro-gels périodiques en jeu.
 
 ### 10.4 Out-of-Core VRAM Streaming (256-262)
 - [ ] 256. **Format de Chunk Morton** : Structurer l'écriture des fichiers `.fovea` volumineux triés selon les Morton Codes 3D pour la localité.
@@ -433,10 +433,10 @@ Ce document présente le plan de développement complet et structuré de **Fové
 - [x] 263. **Détection de Statut d'Asset** : Ajouter une propriété statique/dynamique sur le `FoveaSplatNode` (FoveaSplat3D/FoveaSplattable) pour trier les pipelines.
 - [ ] 264. **Baking d'Octree Statique** : Figer le tri et le culling des assets statiques dans un octree immuable sauvegardé en mémoire VRAM.
 - [x] 265. **Compute Skinning Dynamique** : Écrire un compute shader appliquant des déformations d'armature (skeletal deformation) sur les splats d'entités mobiles.
-- [ ] 266. **Optimisation du Tri Bitonique** : Ne retrier les splats statiques qu'en cas de mouvement de caméra majeur, retrier les splats dynamiques chaque frame.
-- [ ] 267. **Buffers GPU Séparés** : Allouer deux buffers distincts (un static de lecture seule, un dynamic réécrit à chaque image).
-- [ ] 268. **Interaction Physique avec Dynamic Splats** : Connecter le Verlet Solver ou les forces physiques aux entités dynamiques uniquement.
-- [ ] 269. **Gestion de Profils de Performance** : Permettre de régler la proportion maximale de splats dynamiques affichés simultanément.
+- [x] 266. **Optimisation du Tri Bitonique** : Ne retrier les splats statiques qu'en cas de mouvement de caméra majeur, retrier les splats dynamiques chaque frame.
+- [x] 267. **Buffers GPU Séparés** : Allouer deux buffers distincts (un static de lecture seule, un dynamic réécrit à chaque image).
+- [x] 268. **Interaction Physique avec Dynamic Splats** : Connecter le Verlet Solver ou les forces physiques aux entités dynamiques uniquement.
+- [x] 269. **Gestion de Profils de Performance** : Permettre de régler la proportion maximale de splats dynamiques affichés simultanément.
 
 ### 10.6 Auto-ROI par IA (270-275)
 - [ ] 270. **Intégration du Modèle IA Local** : Charger un réseau de segmentation d'objets (type Segment Anything ou MobileSAM) au format ONNX.

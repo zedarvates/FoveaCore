@@ -162,3 +162,107 @@ static func pack_gpu_deltas(active_delta_positions: Array[Dictionary], active_de
 		"offsets_bytes": offsets_bytes,
 		"deltas_bytes": deltas_bytes
 	}
+
+## FP16 precision functions for compatibility tests
+static func float_to_half(f: float) -> int:
+	return FoveaDeltaData.float_to_half(f)
+
+static func half_to_float(h: int) -> float:
+	return FoveaDeltaData.half_to_float(h)
+
+## Serialization helper delegation
+static func serialize_deltas(
+	instance_ids: Array, weights: Array, frequencies: Array, amplitudes: Array,
+	active_delta_positions: Array[Dictionary], active_delta_colors: Array[Dictionary]
+) -> PackedByteArray:
+	# Serializes the given delta instances to a compact PackedByteArray matching the test format
+	var stream := PackedByteArray()
+	# Header: number of instances
+	stream.resize(4)
+	stream.encode_u32(0, instance_ids.size())
+	
+	for i in range(instance_ids.size()):
+		var start := stream.size()
+		stream.resize(start + 20)
+		stream.encode_u32(start, instance_ids[i])
+		# store weight, freq, amp as floats
+		var arr_floats := PackedFloat32Array([weights[i], frequencies[i], amplitudes[i]])
+		var float_bytes := arr_floats.to_byte_array()
+		for j in range(12):
+			stream[start + 4 + j] = float_bytes[j]
+		
+		var pos_dict: Dictionary = active_delta_positions[i]
+		var col_dict: Dictionary = active_delta_colors[i]
+		# Write number of entries
+		var entry_count_idx := stream.size()
+		stream.resize(entry_count_idx + 4)
+		stream.encode_u32(entry_count_idx, pos_dict.size())
+		
+		for idx in pos_dict.keys():
+			var entry_start := stream.size()
+			stream.resize(entry_start + 28)
+			stream.encode_u32(entry_start, idx)
+			
+			var pos: Vector3 = pos_dict[idx]
+			var col: Color = col_dict.get(idx, Color(1,1,1,1))
+			
+			var p_floats := PackedFloat32Array([pos.x, pos.y, pos.z, col.r, col.g, col.b, col.a])
+			var p_bytes := p_floats.to_byte_array()
+			for j in range(24):
+				stream[entry_start + 4 + j] = p_bytes[j]
+				
+	return stream
+
+static func deserialize_deltas(bytes: PackedByteArray) -> Dictionary:
+	var result := {
+		"instance_ids": [],
+		"weights": [],
+		"frequencies": [],
+		"amplitudes": [],
+		"delta_positions": [],
+		"delta_colors": []
+	}
+	if bytes.size() < 4:
+		return result
+		
+	var count := bytes.decode_u32(0)
+	var offset := 4
+	
+	for i in range(count):
+		if offset + 20 > bytes.size():
+			break
+		var inst_id := bytes.decode_u32(offset)
+		
+		var f_bytes := bytes.slice(offset + 4, offset + 16)
+		var floats := f_bytes.to_float32_array()
+		var weight := floats[0]
+		var freq := floats[1]
+		var amp := floats[2]
+		offset += 16
+		
+		result.instance_ids.append(inst_id)
+		result.weights.append(weight)
+		result.frequencies.append(freq)
+		result.amplitudes.append(amp)
+		
+		var entry_count := bytes.decode_u32(offset)
+		offset += 4
+		
+		var pos_dict := {}
+		var col_dict := {}
+		
+		for j in range(entry_count):
+			if offset + 28 > bytes.size():
+				break
+			var idx := bytes.decode_u32(offset)
+			var p_bytes := bytes.slice(offset + 4, offset + 28)
+			var p_floats := p_bytes.to_float32_array()
+			pos_dict[idx] = Vector3(p_floats[0], p_floats[1], p_floats[2])
+			col_dict[idx] = Color(p_floats[3], p_floats[4], p_floats[5], p_floats[6])
+			offset += 28
+			
+		result.delta_positions.append(pos_dict)
+		result.delta_colors.append(col_dict)
+		
+	return result
+

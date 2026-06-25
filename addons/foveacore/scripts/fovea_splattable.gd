@@ -156,8 +156,8 @@ func save_delta_file(path: String) -> void:
 	FoveaDeltaData.save_to_file(path, loaded_splats.size(), delta_positions, delta_colors, {})
 
 func load_delta_file(path: String) -> void:
-	var result = FoveaDeltaData.load_from_file(path)
-	if not result.is_empty():
+	var result: Variant = FoveaDeltaData.load_from_file(path)
+	if result is Dictionary and not result.is_empty():
 		delta_positions = result.delta_positions
 		delta_colors = result.delta_colors
 
@@ -257,7 +257,7 @@ func _setup_native_renderer() -> void:
 		print("FoveaSplattable: Rendu natif local détecté pour ", splat_file_path)
 	
 	# Instancier dynamiquement FoveaCoreSplatRenderer pour les assets natifs
-	var renderer: Node = get_node_or_null("FoveaCoreSplatRenderer")
+	var renderer: FoveaCoreSplatRenderer = get_node_or_null("FoveaCoreSplatRenderer") as FoveaCoreSplatRenderer
 	if not renderer:
 		renderer = FoveaCoreSplatRenderer.new()
 		renderer.name = "FoveaCoreSplatRenderer"
@@ -268,6 +268,84 @@ func _setup_native_renderer() -> void:
 
 
 
+## Calculates the gravity vector and aligns the entire splat cloud's up direction with absolute Vector3.UP.
+func align_to_gravity_plane() -> void:
+	if loaded_splats.is_empty():
+		push_warning("FoveaSplattable: Cannot align splats, loaded_splats is empty.")
+		return
+	
+	# 1. Collect all Y coordinates to find the lowest 10%
+	var y_coords: Array[float] = []
+	for splat in loaded_splats:
+		y_coords.append(splat.position.y)
+	y_coords.sort()
+	
+	var threshold_idx: int = int(y_coords.size() * 0.1)
+	if threshold_idx == 0:
+		threshold_idx = 1
+	var y_threshold: float = y_coords[threshold_idx]
+	
+	# 2. Extract bottom splats
+	var bottom_points: Array[Vector3] = []
+	for splat in loaded_splats:
+		if splat.position.y <= y_threshold:
+			bottom_points.append(splat.position)
+	
+	if bottom_points.size() < 3:
+		push_warning("FoveaSplattable: Not enough points in the lowest 10% to compute gravity plane.")
+		return
+		
+	# 3. Calculate plane normal using least squares fit (y = ax + bz + c)
+	var sum_xx: float = 0.0
+	var sum_xz: float = 0.0
+	var sum_x: float = 0.0
+	var sum_zz: float = 0.0
+	var sum_z: float = 0.0
+	var sum_xy: float = 0.0
+	var sum_zy: float = 0.0
+	var sum_y: float = 0.0
+	var n_pts: float = float(bottom_points.size())
+	
+	for pt in bottom_points:
+		sum_xx += pt.x * pt.x
+		sum_xz += pt.x * pt.z
+		sum_x += pt.x
+		sum_zz += pt.z * pt.z
+		sum_z += pt.z
+		sum_xy += pt.x * pt.y
+		sum_zy += pt.z * pt.y
+		sum_y += pt.y
+		
+	var det: float = sum_xx * (sum_zz * n_pts - sum_z * sum_z) - \
+					 sum_xz * (sum_xz * n_pts - sum_x * sum_z) + \
+					 sum_x  * (sum_xz * sum_z - sum_x * sum_zz)
+					
+	var normal: Vector3 = Vector3.UP
+	if abs(det) > 1e-6:
+		var a: float = ((sum_zz * n_pts - sum_z * sum_z) * sum_xy + \
+						(sum_x * sum_z - sum_xz * n_pts) * sum_zy + \
+						(sum_xz * sum_z - sum_x * sum_zz) * sum_y) / det
+						
+		var b: float = ((sum_x * sum_z - sum_xz * n_pts) * sum_xy + \
+						(sum_xx * n_pts - sum_x * sum_x) * sum_zy + \
+						(sum_x * sum_xz - sum_xx * sum_z) * sum_y) / det
+		
+		# Normal points generally upwards, from Y = ax + bz + c it corresponds to (-a, 1, -b)
+		normal = Vector3(-a, 1.0, -b).normalized()
+	
+	# 4. Calculate rotation quaternion Q from normal to Vector3.UP
+	var q: Quaternion = Quaternion(normal, Vector3.UP)
+	
+	# 5. Apply Q to all splats: position, rotation
+	for splat in loaded_splats:
+		splat.position = q * splat.position
+		splat.rotation = q * splat.rotation
+		
+	# 6. Update local renderer and print result
+	_update_local_renderer()
+	print("FoveaSplattable: Gravitational Up-Vector alignment complete using normal: ", normal)
+
+
 func _update_local_renderer() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
@@ -275,13 +353,13 @@ func _update_local_renderer() -> void:
 		if has_ply_splats and not loaded_splats.is_empty():
 			var renderer: Node = get_node_or_null("SplatRenderer")
 			if not renderer:
-				var SplatRendererScript: GDScript = load("res://addons/foveacore/scripts/reconstruction/splat_renderer.gd")
+				var SplatRendererScript: GDScript = load("res://addons/foveacore/scripts/reconstruction/splat_renderer.gd") as GDScript
 				if SplatRendererScript:
-					renderer = SplatRendererScript.new()
+					renderer = SplatRendererScript.new() as Node
 					renderer.name = "SplatRenderer"
 					add_child(renderer)
 			if renderer:
-				renderer.load_splats(loaded_splats)
+				renderer.call("load_splats", loaded_splats)
 
 
 ## Runs 3D semantic segmentation on this splattable using the specified prompt.

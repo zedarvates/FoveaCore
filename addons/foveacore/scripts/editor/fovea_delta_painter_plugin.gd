@@ -112,10 +112,10 @@ func _paint_at_mouse(camera: Camera3D, mouse_pos: Vector2) -> void:
 	# Recherche brute simplifiée du splat le plus proche pour peindre
 	var step := max(1, selected_node.loaded_splats.size() / 1000) # Échantillonner pour rester fluide
 	for i in range(0, selected_node.loaded_splats.size(), step):
-		var splat = selected_node.loaded_splats[i]
-		var to_splat := splat.position - local_origin
-		var projection := to_splat.dot(local_dir)
-		var perp_dist := to_splat.length_squared() - (projection * projection)
+		var splat: GaussianSplat = selected_node.loaded_splats[i]
+		var to_splat: Vector3 = splat.position - local_origin
+		var projection: float = to_splat.dot(local_dir)
+		var perp_dist: float = to_splat.length_squared() - (projection * projection)
 		
 		if perp_dist < 0.25 and projection > 0:
 			if projection < closest_dist:

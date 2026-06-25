@@ -171,15 +171,18 @@ func _read_index_buffer(count: int) -> Array[int]:
 	return indices
 
 func _free_buffers() -> void:
+	# Free the uniform set BEFORE its buffers: freeing a storage buffer first
+	# auto-invalidates the dependent uniform set, so freeing it afterwards hits
+	# an invalid ID ("Attempted to free invalid ID").
+	if _uniform_set != RID():
+		_rd.free_rid(_uniform_set)
+		_uniform_set = RID()
 	if _depth_buffer != RID():
 		_rd.free_rid(_depth_buffer)
 		_depth_buffer = RID()
 	if _index_buffer != RID():
 		_rd.free_rid(_index_buffer)
 		_index_buffer = RID()
-	if _uniform_set != RID():
-		_rd.free_rid(_uniform_set)
-		_uniform_set = RID()
 
 func _cpu_sort_fallback(splats: Array[GaussianSplat], camera: Camera3D) -> Array[int]:
 	"""Tri CPU simple par distance décroissante (back to front)."""
