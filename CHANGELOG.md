@@ -5,6 +5,32 @@
 
 ---
 
+## 🚀 v0.2.0 — Phase 0 Foundation + Phase 1 Capture (June 2026)
+
+### Public API & packaging (Phase 0)
+- **`FoveaSplat3D`** — single public node: drop it in a scene, assign a `.fovea`/`.ply`/`.spz`/`.splat` source, done. Minimal surface (`source_path`, `enabled`, `quality_preset`, `generate_collisions`, `opacity`, `is_static`); advanced config via `get_advanced()`.
+- **Table-driven plugin registration** with symmetric cleanup; experimental tools split into the optional **`fovea_labs`** plugin.
+- **"Add FoveaSplat3D…"** viewport action (file picker → configured node, with undo/redo).
+- **Release pipeline**: `release.yml` (tag `v*` → multi-platform GDExtension build, universal macOS dylib, zipped addon + SHA-256 + GitHub Release); macOS arm64 added to the build matrix; CI split into hard-fail non-GPU tests, informational GPU tests, a startup non-crash matrix, and a lavapipe visual-regression job.
+
+### Import — mobile / SOTA formats (Phase 1, Chantier J)
+- **`SplatFormatLoader`** routes by extension: `.ply` → PLYLoader (unchanged), **`.splat`** → new 32-bytes/splat binary parser (antimatter15 / Luma / Polycam exports). `.spz`/`.sog` stubbed (J2/J3). 14/14 round-trip tests.
+
+### Capture → asset (Phase 1, Chantier F)
+- **`FoveaDependencyManager`** (unified tool status/resolution, honors `[fovea] tools/*_path`) and **`FoveaDependencyInstaller`** (in-editor download + extract + portable Python/pip post-install).
+
+### In-editor tooling
+- Delta-splat painting (manager + 3D brush) activated via a registration wrapper addon; lattice/cloud animators; GPU skinning; indirect-draw / instance culling; octree & LOD-texture bakers; mobile presets; live-link receiver; mocap bridge.
+
+### Fixes
+- PLYLoader infinite loop on truncated headers (EOF guard).
+- `fovea_lattice_animator.gd` Variant type-inference parse error.
+- `splat_sorter.gd` "free invalid ID" (free uniform set before its buffers).
+- StudioTo3D log highlighter "color regions must start with a symbol" (×5).
+- `SplatSorter`/`FoveaStreamingManager` headless null-safety + `wait_to_finish` guards.
+
+---
+
 ## 🛠️ v0.1.2 — Import, Export, Compression, Segmentation, & Editor Preview (June 2026)
 
 ### 🚀 New Features & Enhancements
