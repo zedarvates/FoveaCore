@@ -29,8 +29,8 @@ enum QualityPreset {
 }
 
 ## Path to the Gaussian Splatting asset to render ([code].fovea[/code] native,
-## [code].ply[/code] 3DGS training output, or [code].spz[/code]).
-@export_file("*.fovea", "*.ply", "*.spz") var source_path: String = "":
+## [code].ply[/code] 3DGS training output, [code].splat[/code] binary, or [code].spz[/code]).
+@export_file("*.fovea", "*.ply", "*.splat", "*.spz") var source_path: String = "":
 	set(val):
 		source_path = val
 		_apply_source_path()
