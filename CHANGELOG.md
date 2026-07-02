@@ -5,6 +5,31 @@
 
 ---
 
+## 🩹 v0.2.1 — Stability & import polish (July 2026)
+
+### Fixes
+- **Thread safety**: guard every `wait_to_finish()` join with `is_started()`
+  (thread pool, floaters detector, surface extractor, streaming manager,
+  dependency installer) — prevents `Condition "!thread.is_started()" is true`
+  when a `start()` fails.
+- **`SplatSorter` "free invalid ID"**: free the GPU uniform set before its
+  storage buffers (freeing a buffer auto-invalidates the dependent set).
+- **StudioTo3D log highlighter**: `CodeHighlighter` regions must start with a
+  symbol — emoji/word prefixes replaced by `add_keyword_color` for ERROR/WARNING.
+- **`fovea_lattice_animator.gd`**: `:=` on Variant dictionary access → `: float`
+  (was a hard parse error that stopped the script from loading).
+
+### Import
+- **`FoveaSplat3D` file picker** now offers `*.splat` (J1 already supported it).
+
+### Tooling
+- **Delta Splat Painter** activated via a registration wrapper addon
+  (`addons/fovea_delta_painter`) so its 3D brush toolbar actually appears.
+
+*Repo health at release: 0 parse/type errors, startup smoke green.*
+
+---
+
 ## 🚀 v0.2.0 — Phase 0 Foundation + Phase 1 Capture (June 2026)
 
 ### Public API & packaging (Phase 0)
