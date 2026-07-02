@@ -1,6 +1,6 @@
 [package]
 name = "foveacore"
-version = "0.1.2"
+version = "0.2.1"
 edition = "2021"
 
 [lib]
@@ -11,6 +11,10 @@ path = "src/lib.rs"
 godot = { git = "https://github.com/godot-rust/gdext", tag = "v0.2.1" }
 
 [workspace]
-members = [
-    "splat_sorter",
-]
+members = []
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"

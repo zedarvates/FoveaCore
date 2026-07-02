@@ -28,6 +28,11 @@ extends MultiMeshInstance3D
 @export var enable_palette: bool = true
 @export var use_dithering: bool = true
 @export_range(0.0, 2.0) var dither_strength: float = 1.0
+@export var enable_gpu_driven: bool = false
+@export var use_gpu_instance_culling: bool = false
+
+var texture_rd_output: Texture2DRD = null
+var texture_rd_counter: Texture2DRD = null
 
 var instanced_culler: FoveaInstancedCuller
 var splat_mesh: ArrayMesh
@@ -43,6 +48,9 @@ var instance_morph_types: Array[int] = []
 var instance_morph_weights: Array[float] = []
 var instance_morph_frequencies: Array[float] = []
 var instance_morph_amplitudes: Array[float] = []
+var instance_delta_colors: Array[Dictionary] = []
+var instance_delta_positions: Array[Dictionary] = []
+var instance_delta_weights: Array[float] = []
 
 var _last_colors: Array[Color] = []
 var _last_scales: Array[float] = []
@@ -51,11 +59,16 @@ var _last_morph_types: Array[int] = []
 var _last_morph_weights: Array[float] = []
 var _last_morph_frequencies: Array[float] = []
 var _last_morph_amplitudes: Array[float] = []
+var _last_delta_colors_hashes: Array[int] = []
+var _last_delta_positions_hashes: Array[int] = []
+var _last_delta_weights: Array[float] = []
 
 var _cached_main_light: DirectionalLight3D = null
+var delta_manager: RefCounted = null
 
 func _ready() -> void:
 	instanced_culler = FoveaInstancedCuller.new()
+	delta_manager = preload("res://addons/foveacore/scripts/advanced/fovea_delta_manager.gd").new()
 	triangle_mesh_generator = load("res://addons/foveacore/scripts/advanced/triangle_splat_mesh.gd")
 
 	# 1. Création de la géométrie de base (Maillage TRIANGLE)
@@ -97,6 +110,8 @@ func _ready() -> void:
 		call_deferred("_upload_covar_codebook")
 
 func _process(_delta: float) -> void:
+	if delta_manager:
+		delta_manager.process_interpolation(_delta)
 	var camera := get_viewport().get_camera_3d()
 	if camera == null or material_override == null:
 		return
@@ -111,6 +126,11 @@ func _process(_delta: float) -> void:
 	var morph_weights: Array[float] = []
 	var morph_frequencies: Array[float] = []
 	var morph_amplitudes: Array[float] = []
+	var delta_colors: Array[Dictionary] = []
+	var delta_positions: Array[Dictionary] = []
+	var delta_weights: Array[float] = []
+	var delta_colors_hashes: Array[int] = []
+	var delta_positions_hashes: Array[int] = []
 	
 	for n in active_nodes:
 		if n is FoveaSplattable and n.splat_file_path == asset_path and n.visible and n.splatting_enabled:
@@ -130,6 +150,12 @@ func _process(_delta: float) -> void:
 			morph_weights.append(n.morph_weight)
 			morph_frequencies.append(n.morph_frequency)
 			morph_amplitudes.append(n.morph_amplitude)
+			
+			delta_colors.append(n.delta_colors)
+			delta_positions.append(n.delta_positions)
+			delta_weights.append(n.delta_weight)
+			delta_colors_hashes.append(n.delta_colors.hash())
+			delta_positions_hashes.append(n.delta_positions.hash())
 
 	var changed := false
 	if transforms.size() != _last_transforms_size:
@@ -164,6 +190,16 @@ func _process(_delta: float) -> void:
 			else:
 				changed = true
 				break
+			if i < _last_delta_colors_hashes.size():
+				if delta_colors_hashes[i] != _last_delta_colors_hashes[i] or delta_positions_hashes[i] != _last_delta_positions_hashes[i]:
+					changed = true
+					break
+				if i < _last_delta_weights.size() and not is_equal_approx(delta_weights[i], _last_delta_weights[i]):
+					changed = true
+					break
+			else:
+				changed = true
+				break
 
 	instance_transforms = transforms
 	instance_colors = colors
@@ -173,6 +209,9 @@ func _process(_delta: float) -> void:
 	instance_morph_weights = morph_weights
 	instance_morph_frequencies = morph_frequencies
 	instance_morph_amplitudes = morph_amplitudes
+	instance_delta_colors = delta_colors
+	instance_delta_positions = delta_positions
+	instance_delta_weights = delta_weights
 
 	_last_transforms = transforms.duplicate()
 	_last_colors = colors.duplicate()
@@ -182,6 +221,9 @@ func _process(_delta: float) -> void:
 	_last_morph_weights = morph_weights.duplicate()
 	_last_morph_frequencies = morph_frequencies.duplicate()
 	_last_morph_amplitudes = morph_amplitudes.duplicate()
+	_last_delta_colors_hashes = delta_colors_hashes.duplicate()
+	_last_delta_positions_hashes = delta_positions_hashes.duplicate()
+	_last_delta_weights = delta_weights.duplicate()
 	_last_transforms_size = transforms.size()
 
 	# Recalculer le culling si la caméra bouge ou si les instances ont changé
@@ -272,15 +314,45 @@ func load_and_render_splats() -> void:
 			depth_tex = attrs.get_depth_texture()
 
 	# 4. Culling GPU d'instances multiples
-	var cull_res: Dictionary = instanced_culler.process_instanced_splats(
+	var cull_res: Dictionary = instanced_culler.process_instanced_splats_ext(
 		raw_bytes,
 		instance_transforms,
 		camera,
 		depth_tex,
 		cull_threshold,
 		aabb_min,
-		aabb_max
+		aabb_max,
+		instance_delta_positions,
+		instance_delta_colors,
+		instance_morph_types,
+		instance_morph_weights,
+		instance_morph_frequencies,
+		instance_morph_amplitudes,
+		enable_gpu_driven,
+		use_gpu_instance_culling
 	)
+
+	if enable_gpu_driven:
+		var out_rid: RID = cull_res.get("output_texture", RID())
+		var cnt_rid: RID = cull_res.get("counter_texture", RID())
+		if out_rid.is_valid() and cnt_rid.is_valid():
+			if texture_rd_output == null:
+				texture_rd_output = Texture2DRD.new()
+			if texture_rd_counter == null:
+				texture_rd_counter = Texture2DRD.new()
+			
+			if texture_rd_output.texture_rd_rid != out_rid:
+				texture_rd_output.texture_rd_rid = out_rid
+			if texture_rd_counter.texture_rd_rid != cnt_rid:
+				texture_rd_counter.texture_rd_rid = cnt_rid
+			
+			if mat:
+				mat.set_shader_parameter("enable_gpu_driven", true)
+				mat.set_shader_parameter("output_texture", texture_rd_output)
+				mat.set_shader_parameter("counter_texture", texture_rd_counter)
+			
+			multimesh.instance_count = instance_transforms.size() * (raw_bytes.size() / 16)
+		return
 
 	var output_buffer_rid: RID = cull_res.buffer_rid
 	var surviving_splats_count: int = cull_res.count
@@ -300,17 +372,17 @@ func load_and_render_splats() -> void:
 	# 5. Nettoyage GPU optionnel
 	if enable_cleaning and surviving_splats_count > 0:
 		var before_clean: int = surviving_splats_count
-		culled_bytes = FoveaSplatCleaner.filter_nan_inf(culled_bytes)
+		culled_bytes = FoveaSplatCleaner.filter_nan_inf(culled_bytes, 20)
 		culled_bytes = FoveaSplatCleaner.filter_floaters(
-			culled_bytes, floater_neighbor_radius, floater_min_neighbors)
+			culled_bytes, floater_neighbor_radius, floater_min_neighbors, 20)
 		if enable_decimation and decimation_target > 0:
-			culled_bytes = FoveaSplatCleaner.decimate(culled_bytes, decimation_target)
-		surviving_splats_count = culled_bytes.size() / 16
+			culled_bytes = FoveaSplatCleaner.decimate(culled_bytes, decimation_target, 20)
+		surviving_splats_count = culled_bytes.size() / 20
 		
 	if enable_coplanar_merge and surviving_splats_count > 0:
 		culled_bytes = FoveaSplatCleaner.merge_coplanar(
-			culled_bytes, coplanar_z_bucket, 24, 1024, coplanar_min_group)
-		surviving_splats_count = culled_bytes.size() / 16
+			culled_bytes, coplanar_z_bucket, 24, 1024, coplanar_min_group, 20)
+		surviving_splats_count = culled_bytes.size() / 20
 
 	multimesh.instance_count = surviving_splats_count
 
@@ -323,6 +395,9 @@ func load_and_render_splats() -> void:
 	var active_morph_weights: Array[float] = []
 	var active_morph_frequencies: Array[float] = []
 	var active_morph_amplitudes: Array[float] = []
+	var active_delta_colors: Array[Dictionary] = []
+	var active_delta_positions: Array[Dictionary] = []
+	var active_delta_weights: Array[float] = []
 	
 	for idx in active_instance_indices:
 		active_transforms.append(instance_transforms[idx])
@@ -333,6 +408,9 @@ func load_and_render_splats() -> void:
 		active_morph_weights.append(instance_morph_weights[idx] if idx < instance_morph_weights.size() else 0.0)
 		active_morph_frequencies.append(instance_morph_frequencies[idx] if idx < instance_morph_frequencies.size() else 1.0)
 		active_morph_amplitudes.append(instance_morph_amplitudes[idx] if idx < instance_morph_amplitudes.size() else 0.5)
+		active_delta_colors.append(instance_delta_colors[idx] if idx < instance_delta_colors.size() else {})
+		active_delta_positions.append(instance_delta_positions[idx] if idx < instance_delta_positions.size() else {})
+		active_delta_weights.append(instance_delta_weights[idx] if idx < instance_delta_weights.size() else 0.0)
 
 	# 6. Décodage parallèle
 	var decode_result := FoveaThreadPool.decode_parallel(
@@ -347,7 +425,11 @@ func load_and_render_splats() -> void:
 		active_morph_types,
 		active_morph_weights,
 		active_morph_frequencies,
-		active_morph_amplitudes
+		active_morph_amplitudes,
+		active_delta_colors,
+		active_delta_positions,
+		active_delta_weights,
+		20
 	)
 
 	multimesh.transform_array = decode_result.xf_array

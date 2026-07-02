@@ -4,6 +4,8 @@ class_name FoveaReconstructionManager
 ## ReconstructionManager — Coordinates reconstruction sessions
 ## Interaces with externally compiled tools for SfM and 3DGS-Training
 
+const DepMgr := preload("res://addons/foveacore/scripts/reconstruction/fovea_dependency_manager.gd")
+
 ## Emitted when a new reconstruction session begins.
 ## [param name] represents the unique name/identifier of the started [ReconstructionSession].
 signal session_started(name: String)
@@ -139,7 +141,7 @@ func _propagate_artifixer_bridge_script() -> void:
 
 
 # Fichier de configuration utilisateur (hors projet)
-var _user_config_path: String = OS.get_user_data_dir() + "/fovea_engine_user_settings.cfg"
+var _user_config_path: String = ""
 
 
 @export var metrics: ReconstructionMetrics = null
@@ -149,7 +151,7 @@ var _user_config_path: String = OS.get_user_data_dir() + "/fovea_engine_user_set
 		dry_run = val
 		if backend: backend.dry_run = dry_run
 
-var active_sessions: Dictionary = {}
+var active_sessions: Dictionary[String, ReconstructionSession] = {}
 
 func _ready() -> void:
 	# Initialiser le chemin de config utilisateur
@@ -176,12 +178,16 @@ func _ready() -> void:
 	if ProjectSettings.has_setting("fovea/tools/artifixer_bridge_script"):
 		artifixer_bridge_script = ProjectSettings.get_setting("fovea/tools/artifixer_bridge_script")
 
+	# Prioritize FoveaDependencyManager resolution (local user://fovea_tools/ builds)
+	ffmpeg_path = DepMgr.resolve("ffmpeg")
+	colmap_path = DepMgr.resolve("colmap")
+	python_path = DepMgr.resolve("python")
 
 	if processor == null:
 		processor = StudioProcessor.new()
 		add_child(processor)
 	processor.ffmpeg_path = ffmpeg_path
-	processor.error_occurred.connect(func(err): reconstruction_failed.emit(err))
+	processor.error_occurred.connect(func(err: String) -> void: reconstruction_failed.emit(err))
 
 	if exporter == null:
 		exporter = DatasetExporter.new()
@@ -201,13 +207,24 @@ func _ready() -> void:
 		backend.command_started.connect(_on_backend_started)
 		backend.command_progress.connect(_on_backend_progress)
 		backend.command_finished.connect(_on_backend_finished)
-		backend.error_occurred.connect(func(err): reconstruction_failed.emit(err))
-		backend.oom_detected.connect(func(cmd, details): reconstruction_failed.emit(details))
+		backend.error_occurred.connect(func(err: String) -> void: reconstruction_failed.emit(err))
+		backend.oom_detected.connect(func(cmd: String, details: String) -> void: reconstruction_failed.emit(details))
 
 	call_deferred("check_tools")
 
 func check_tools() -> Dictionary:
-	var results = {
+	# Re-resolve paths from FoveaDependencyManager to catch fresh installs
+	ffmpeg_path = DepMgr.resolve("ffmpeg")
+	colmap_path = DepMgr.resolve("colmap")
+	python_path = DepMgr.resolve("python")
+	
+	if processor:
+		processor.ffmpeg_path = ffmpeg_path
+	if backend:
+		backend.colmap_path = colmap_path
+		backend.python_path = python_path
+
+	var results: Dictionary = {
 		"ffmpeg": {"found": false, "version": "", "error": ""},
 		"colmap": {"found": false, "version": "", "error": ""},
 		"python": {"found": false, "version": "", "error": ""}
@@ -216,7 +233,7 @@ func check_tools() -> Dictionary:
 	# Vérification FFmpeg
 	if not _is_tool_available(ffmpeg_path, ["-version"]):
 		_auto_detect_ffmpeg()
-	var ff_info = _validate_tool_version(ffmpeg_path, "-version")
+	var ff_info: Dictionary = _validate_tool_version(ffmpeg_path, "-version")
 	results["ffmpeg"] = ff_info
 	if not ff_info.found:
 		_auto_detect_ffmpeg()
@@ -226,7 +243,7 @@ func check_tools() -> Dictionary:
 	# Vérification COLMAP
 	if not _is_tool_available(colmap_path, ["--help"]):
 		_auto_detect_colmap()
-	var cm_info = _validate_tool_version(colmap_path, "--help")
+	var cm_info: Dictionary = _validate_tool_version(colmap_path, "--help")
 	results["colmap"] = cm_info
 	if not cm_info.found:
 		_auto_detect_colmap()
@@ -236,7 +253,7 @@ func check_tools() -> Dictionary:
 	# Vérification Python
 	if not _is_tool_available(python_path, ["--version"]):
 		_auto_detect_python()
-	var py_info = _validate_tool_version(python_path, "--version")
+	var py_info: Dictionary = _validate_tool_version(python_path, "--version")
 	results["python"] = py_info
 	if not py_info.found:
 		_auto_detect_python()
@@ -261,40 +278,40 @@ func check_tools() -> Dictionary:
 
 	return results
 
-func _is_tool_available(path: String, args: Array) -> bool:
-	var out = []
-	var err = OS.execute(path, args, out)
+func _is_tool_available(path: String, args: Array[String]) -> bool:
+	var out: Array[String] = []
+	var err: int = OS.execute(path, args, out)
 	return err == 0
 
-func _validate_tool_version(path: String, version_arg: String, min_version: String = "") -> Dictionary:
+func _validate_tool_version(path: String, version_arg: String, _min_version: String = "") -> Dictionary:
 	"""Vérifie la version d'un outil. Retourne {found: bool, version: str, error: str}."""
-	var out = []
-	var err = OS.execute(path, [version_arg], out)
+	var out: Array[String] = []
+	var err: int = OS.execute(path, [version_arg], out)
 	if err != 0:
 		return {"found": false, "version": "", "error": "Tool not found or failed"}
 
 	if not out.is_empty():
-		var version_line = out[0].strip_edges()
+		var version_line: String = out[0].strip_edges()
 		# Parse version (simplifié)
 		return {"found": true, "version": version_line, "error": ""}
 
 	return {"found": true, "version": "unknown", "error": ""}
 
 func _auto_detect_ffmpeg() -> void:
-	var cmd = "where" if OS.has_feature("windows") else "which"
-	var out = []
-	var err = OS.execute(cmd, ["ffmpeg"], out)
+	var cmd: String = "where" if OS.has_feature("windows") else "which"
+	var out: Array[String] = []
+	var err: int = OS.execute(cmd, ["ffmpeg"], out)
 	if err == 0 and not out.is_empty():
 		ffmpeg_path = out[0].strip_edges().split("\n")[0]
 		print("FoveaManager: FFmpeg détecté automatiquement via PATH : ", ffmpeg_path)
 		return
 		
 	# Fallback sur chemins communs si non dans PATH
-	var home_path = OS.get_environment("HOME") if OS.has_feature("unix") else OS.get_environment("USERPROFILE")
-	var is_windows = OS.has_feature("windows")
-	var bin_name = "ffmpeg.exe" if is_windows else "ffmpeg"
+	var home_path: String = OS.get_environment("HOME") if OS.has_feature("unix") else OS.get_environment("USERPROFILE")
+	var is_windows: bool = OS.has_feature("windows")
+	var bin_name: String = "ffmpeg.exe" if is_windows else "ffmpeg"
 	
-	var possible_paths = [
+	var possible_paths: Array[String] = [
 		"C:/ffmpeg/bin/ffmpeg.exe",
 		"/usr/bin/ffmpeg",
 		"/usr/local/bin/ffmpeg",
@@ -306,26 +323,26 @@ func _auto_detect_ffmpeg() -> void:
 		possible_paths.append(home_path + "/Documents/ffmpeg-master-latest-win64-gpl-shared/ffmpeg-master-latest-win64-gpl-shared/bin/" + bin_name)
 		possible_paths.append(home_path + "/Documents/ffmpeg/bin/" + bin_name)
 	
-	for p in possible_paths:
+	for p: String in possible_paths:
 		if _is_tool_available(p, ["-version"]):
 			print("FoveaManager: FFmpeg détecté automatiquement à : ", p)
 			ffmpeg_path = p 
 			return
 
 func _auto_detect_colmap() -> void:
-	var cmd = "where" if OS.has_feature("windows") else "which"
-	var out = []
-	var err = OS.execute(cmd, ["colmap"], out)
+	var cmd: String = "where" if OS.has_feature("windows") else "which"
+	var out: Array[String] = []
+	var err: int = OS.execute(cmd, ["colmap"], out)
 	if err == 0 and not out.is_empty():
 		colmap_path = out[0].strip_edges().split("\n")[0]
 		print("FoveaManager: COLMAP détecté automatiquement via PATH : ", colmap_path)
 		return
 
-	var home_path = OS.get_environment("HOME") if OS.has_feature("unix") else OS.get_environment("USERPROFILE")
-	var is_windows = OS.has_feature("windows")
-	var bin_name = "colmap.exe" if is_windows else "colmap"
+	var home_path: String = OS.get_environment("HOME") if OS.has_feature("unix") else OS.get_environment("USERPROFILE")
+	var is_windows: bool = OS.has_feature("windows")
+	var bin_name: String = "colmap.exe" if is_windows else "colmap"
 
-	var possible_paths = [
+	var possible_paths: Array[String] = [
 		"colmap",
 		"C:/colmap/colmap.exe",
 		"/usr/bin/colmap",
@@ -338,29 +355,29 @@ func _auto_detect_colmap() -> void:
 		possible_paths.append(home_path + "/Documents/colmap/bin/" + bin_name)
 		possible_paths.append(home_path + "/Documents/colmap/" + bin_name)
 
-	for p in possible_paths:
+	for p: String in possible_paths:
 		if _is_tool_available(p, ["--help"]):
 			print("FoveaManager: COLMAP détecté automatiquement à : ", p)
 			colmap_path = p
 			return
 
 func _auto_detect_python() -> void:
-	var cmd = "where" if OS.has_feature("windows") else "which"
-	var out = []
-	var err = OS.execute(cmd, ["python"], out)
+	var cmd: String = "where" if OS.has_feature("windows") else "which"
+	var out: Array[String] = []
+	var err: int = OS.execute(cmd, ["python"], out)
 	if err == 0 and not out.is_empty():
 		python_path = out[0].strip_edges().split("\n")[0]
 		print("FoveaManager: Python détecté automatiquement via PATH : ", python_path)
 		return
 
 	# Fallback sur chemins communs si non dans PATH
-	var possible_paths = [
+	var possible_paths: Array[String] = [
 		"python",
 		"/usr/bin/python3",
 		"/usr/local/bin/python3"
 	]
 
-	for p in possible_paths:
+	for p: String in possible_paths:
 		if _is_tool_available(p, ["--version"]):
 			print("FoveaManager: Python détecté automatiquement à : ", p)
 			python_path = p
@@ -370,7 +387,7 @@ func _auto_detect_python() -> void:
 
 func _save_user_settings() -> void:
 	"""Sauvegarde les chemins outils dans un fichier cfg utilisateur (hors projet)."""
-	var config = ConfigFile.new()
+	var config: ConfigFile = ConfigFile.new()
 	config.set_value("tools", "ffmpeg_path", ffmpeg_path)
 	config.set_value("tools", "colmap_path", colmap_path)
 	config.set_value("tools", "python_path", python_path)
@@ -380,8 +397,7 @@ func _save_user_settings() -> void:
 	config.set_value("tools", "triposplat_bridge_script", triposplat_bridge_script)
 	config.set_value("tools", "artifixer_bridge_script", artifixer_bridge_script)
 
-
-	var err = config.save(_user_config_path)
+	var err: Error = config.save(_user_config_path)
 	if err != OK:
 		push_error("Failed to save user settings to " + _user_config_path)
 	else:
@@ -393,8 +409,8 @@ func _load_user_settings() -> void:
 		print("FoveaManager: No user settings file found, using defaults.")
 		return
 
-	var config = ConfigFile.new()
-	var err = config.load(_user_config_path)
+	var config: ConfigFile = ConfigFile.new()
+	var err: Error = config.load(_user_config_path)
 	if err != OK:
 		push_error("Failed to load user settings from " + _user_config_path)
 		return
@@ -416,7 +432,6 @@ func _load_user_settings() -> void:
 	if config.has_section_key("tools", "artifixer_bridge_script"):
 		artifixer_bridge_script = config.get_value("tools", "artifixer_bridge_script")
 
-
 	print("FoveaManager: User settings loaded from ", _user_config_path)
 
 ## Start a reconstruction session
@@ -431,17 +446,17 @@ func create_new_session(video_path: String, name: String = "") -> Reconstruction
 
 ## Save/Load Session
 func save_session(session: ReconstructionSession) -> Error:
-	var dir = ProjectSettings.globalize_path(session.output_directory)
+	var dir: String = ProjectSettings.globalize_path(session.output_directory)
 	if not DirAccess.dir_exists_absolute(dir):
 		DirAccess.make_dir_recursive_absolute(dir)
 		
-	var path = session.output_directory.path_join("session.json")
-	var file = FileAccess.open(path, FileAccess.WRITE)
+	var path: String = session.output_directory.path_join("session.json")
+	var file: FileAccess = FileAccess.open(path, FileAccess.WRITE)
 	if not file:
 		push_error("Manager: Failed to save session JSON to " + path)
 		return ERR_CANT_OPEN
 		
-	var json_str = JSON.stringify(session.to_dict(), "\t")
+	var json_str: String = JSON.stringify(session.to_dict(), "\t")
 	file.store_string(json_str)
 	file.close()
 	print("Manager: Session saved to ", path)
@@ -450,23 +465,23 @@ func save_session(session: ReconstructionSession) -> Error:
 func load_session(path: String) -> ReconstructionSession:
 	if not FileAccess.file_exists(path):
 		return null
-	var file = FileAccess.open(path, FileAccess.READ)
+	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
 	if not file:
 		return null
-	var json_str = file.get_as_text()
+	var json_str: String = file.get_as_text()
 	file.close()
 	
-	var json = JSON.new()
-	var err = json.parse(json_str)
+	var json: JSON = JSON.new()
+	var err: Error = json.parse(json_str)
 	if err != OK:
 		push_error("Manager: Failed to parse session JSON from " + path)
 		return null
 		
-	var dict = json.get_data()
+	var dict: Variant = json.get_data()
 	if not (dict is Dictionary):
 		return null
 		
-	var session = ReconstructionSession.new(dict.get("session_name", "session"))
+	var session: ReconstructionSession = ReconstructionSession.new(dict.get("session_name", "session"))
 	session.from_dict(dict)
 	active_sessions[session.session_name] = session
 	print("Manager: Session loaded: ", session.session_name)
@@ -482,7 +497,7 @@ func delete_session(session: ReconstructionSession, delete_disk_files: bool = fa
 		print("Manager: Erased active session: ", session.session_name)
 		
 	if delete_disk_files:
-		var global_dir = ProjectSettings.globalize_path(session.output_directory)
+		var global_dir: String = ProjectSettings.globalize_path(session.output_directory)
 		if DirAccess.dir_exists_absolute(global_dir):
 			print("Manager: Deleting session directory recursively: ", global_dir)
 			_delete_dir_recursive(global_dir)
@@ -490,13 +505,13 @@ func delete_session(session: ReconstructionSession, delete_disk_files: bool = fa
 			print("Manager: Session directory does not exist: ", global_dir)
 
 func _delete_dir_recursive(path: String) -> void:
-	var dir = DirAccess.open(path)
+	var dir: DirAccess = DirAccess.open(path)
 	if dir:
 		dir.list_dir_begin()
-		var file_name = dir.get_next()
+		var file_name: String = dir.get_next()
 		while file_name != "":
 			if file_name != "." and file_name != "..":
-				var full_path = path.path_join(file_name)
+				var full_path: String = path.path_join(file_name)
 				if dir.current_is_dir():
 					_delete_dir_recursive(full_path)
 				else:
@@ -518,15 +533,15 @@ func run_extraction(session: ReconstructionSession, mask_mode: String = "Studio 
 	metrics = ReconstructionMetrics.new()
 	
 	# Connecter le masquage automatique pendant l'extraction (utilisation d'un tableau pour le passage par référence dans la closure)
-	var exported_count = [0]
-	var masking_func = func(idx, img): 
-		var blur = processor.calculate_blur_score(img) if not session.dry_run else 1.0
-		var effective_mode = "None" if mask_mode == "Temporal Variance" else mask_mode
-		var mask = processor.mask_background(img, effective_mode, session.background_threshold, session.roi_rect)
-		var coverage = _calculate_mask_coverage(mask)
+	var exported_count: Array[int] = [0]
+	var masking_func: Callable = func(idx: int, img: Image) -> void: 
+		var blur: float = processor.calculate_blur_score(img) if not session.dry_run else 1.0
+		var effective_mode: String = "None" if mask_mode == "Temporal Variance" else mask_mode
+		var mask: Image = processor.mask_background(img, effective_mode, session.background_threshold, session.roi_rect)
+		var coverage: float = _calculate_mask_coverage(mask)
 		
 		# Calculer luminosité et variance de couleur
-		var color_metrics = processor.calculate_brightness_and_variance(img) if not session.dry_run else {"brightness": 0.5, "variance": 0.25}
+		var color_metrics: Dictionary = processor.calculate_brightness_and_variance(img) if not session.dry_run else {"brightness": 0.5, "variance": 0.25}
 		metrics.add_frame_metrics(idx, blur, coverage, color_metrics.brightness, color_metrics.variance)
 		
 		if blur < session.blur_threshold:
@@ -552,13 +567,13 @@ func run_extraction(session: ReconstructionSession, mask_mode: String = "Studio 
 	if mask_mode == "Temporal Variance":
 		session.status = "Generating Temporal Masks"
 		print("ReconstructionManager: Generating Temporal Variance masks via python...")
-		var abs_path = ProjectSettings.globalize_path(session.output_directory)
-		var input_dir = abs_path + "/input"
-		var masks_dir = abs_path + "/masks"
-		var py_script = ProjectSettings.globalize_path("res://addons/foveacore/scripts/reconstruction/generate_variance_masks.py")
-		var args = [py_script, "--input", input_dir, "--output", masks_dir]
-		var out = []
-		var exit_code = OS.execute(python_path, args, out)
+		var abs_path: String = ProjectSettings.globalize_path(session.output_directory)
+		var input_dir: String = abs_path + "/input"
+		var masks_dir: String = abs_path + "/masks"
+		var py_script: String = ProjectSettings.globalize_path("res://addons/foveacore/scripts/reconstruction/generate_variance_masks.py")
+		var args: Array[String] = [py_script, "--input", input_dir, "--output", masks_dir]
+		var out: Array[String] = []
+		var exit_code: int = OS.execute(python_path, args, out)
 		if exit_code != 0:
 			push_error("ReconstructionManager: Temporal variance mask generation failed: " + str(out))
 		else:
@@ -571,18 +586,19 @@ func run_extraction(session: ReconstructionSession, mask_mode: String = "Studio 
 
 func _calculate_mask_coverage(mask: Image) -> float:
 	# Estimate surface covered by non-transparent pixels
-	var transparent_pixels = 0
-	var size = mask.get_size()
+	var transparent_pixels: int = 0
+	var size: Vector2i = mask.get_size()
 	# Sample every 10th pixel for performance
-	for y in range(0, size.y, 10):
-		for x in range(0, size.x, 10):
+	for y: int in range(0, size.y, 10):
+		for x: int in range(0, size.x, 10):
 			if mask.get_pixel(x, y).a < 0.1:
 				transparent_pixels += 1
 	
-	var total_sampled = (size.x/10) * (size.y/10)
+	var total_sampled: int = (size.x/10) * (size.y/10)
 	if total_sampled <= 0:
 		return 0.0
 	return 1.0 - (float(transparent_pixels) / float(total_sampled))
+
 
 ## Lancer le pipeline complet en séquence (Phase 1 + 2 + 3)
 func run_reconstruction(session: ReconstructionSession) -> void:
@@ -595,12 +611,12 @@ func run_reconstruction(session: ReconstructionSession) -> void:
 	print("ReconstructionManager: Démarrage du pipeline complet pour '", session.session_name, "'")
 	
 	# Clean up previous COLMAP cache files
-	var abs_path := ProjectSettings.globalize_path(session.output_directory)
-	var db_file := abs_path.path_join("database.db")
+	var abs_path: String = ProjectSettings.globalize_path(session.output_directory)
+	var db_file: String = abs_path.path_join("database.db")
 	if FileAccess.file_exists(db_file):
 		DirAccess.remove_absolute(db_file)
 		print("ReconstructionManager: Cleaned up old database.db cache")
-	var sparse_dir := abs_path.path_join("sparse")
+	var sparse_dir: String = abs_path.path_join("sparse")
 	if DirAccess.dir_exists_absolute(sparse_dir):
 		_delete_dir_recursive(sparse_dir)
 		print("ReconstructionManager: Cleaned up old sparse reconstruction cache")
@@ -608,24 +624,24 @@ func run_reconstruction(session: ReconstructionSession) -> void:
 	save_session(session) # Auto-save initiale
 
 	# Phase 1 : Extraction & Masquage
-	var is_single_image := false
-	var ext := session.video_path.get_extension().to_lower()
+	var is_single_image: bool = false
+	var ext: String = session.video_path.get_extension().to_lower()
 	if ext == "png" or ext == "jpg" or ext == "jpeg" or ext == "webp":
 		is_single_image = true
 
 	if is_single_image:
 		print("Manager: Single image input detected. Skipping video extraction.")
 		exporter.prepare_workspace(session)
-		var dest_dir = ProjectSettings.globalize_path(session.output_directory).path_join("input")
+		var dest_dir: String = ProjectSettings.globalize_path(session.output_directory).path_join("input")
 		if not DirAccess.dir_exists_absolute(dest_dir):
 			DirAccess.make_dir_recursive_absolute(dest_dir)
-		var dest_path = dest_dir.path_join(session.video_path.get_file())
+		var dest_path: String = dest_dir.path_join(session.video_path.get_file())
 		DirAccess.copy_absolute(ProjectSettings.globalize_path(session.video_path), dest_path)
 		session.frame_count = 1
 		session.status = "Pre-processed"
 		session_progress_updated.emit(33.0)
 	else:
-		var mask_mode := session.mask_mode if ("mask_mode" in session and not session.mask_mode.is_empty()) else "Smart Studio"
+		var mask_mode: String = session.mask_mode if ("mask_mode" in session and not session.mask_mode.is_empty()) else "Smart Studio"
 		print("Manager: Starting Phase 1 (Extraction) with mode: ", mask_mode)
 		await run_extraction(session, mask_mode)
 
@@ -758,8 +774,8 @@ func run_sfm(session: ReconstructionSession) -> void:
 	print("ReconstructionManager: Phase 2 - COLMAP SfM...")
 	backend.execute_reconstruction(session)
 	# Attendre la fin du backend
-	var finished_result = await backend.command_finished
-	var finished_status = finished_result[0] if finished_result is Array else finished_result
+	var finished_result: Variant = await backend.command_finished
+	var finished_status: int = finished_result[0] if finished_result is Array else finished_result
 	if finished_status != 0:
 		session.status = "Erreur"
 		reconstruction_failed.emit("Échec Phase 2 : COLMAP SfM")
@@ -767,7 +783,7 @@ func run_sfm(session: ReconstructionSession) -> void:
 		return
 	
 	# Vérification des fichiers générés
-	var output_ok = exporter.verify_reconstruction_outputs(session)
+	var output_ok: bool = exporter.verify_reconstruction_outputs(session)
 	if not output_ok:
 		session.status = "Erreur"
 		reconstruction_failed.emit("Échec Phase 2 : La vérification des sorties COLMAP a échoué. Les fichiers de reconstruction sparse/0 sont manquants.")
@@ -797,7 +813,7 @@ func run_star_sync(session: ReconstructionSession) -> void:
 	await backend.command_finished
 	
 	# Vérification du workspace STAR
-	var star_path = ProjectSettings.globalize_path(session.output_directory) + "/star_workspace/star_metadata.json"
+	var star_path: String = ProjectSettings.globalize_path(session.output_directory) + "/star_workspace/star_metadata.json"
 	if FileAccess.file_exists(star_path):
 		session_progress_updated.emit(60.0)
 		session.status = "STAR Workspace Ready"
@@ -820,15 +836,15 @@ func run_triposplat(session: ReconstructionSession) -> void:
 	print("ReconstructionManager: Phase 2 - TripoSplat Single-Image...")
 
 	if session.dry_run:
-		var global_dir = ProjectSettings.globalize_path(session.output_directory)
-		var target_ply = global_dir.path_join("gaussians.ply")
+		var global_dir: String = ProjectSettings.globalize_path(session.output_directory)
+		var target_ply: String = global_dir.path_join("gaussians.ply")
 		if not FileAccess.file_exists(target_ply):
-			var f = FileAccess.open(target_ply, FileAccess.WRITE)
+			var f: FileAccess = FileAccess.open(target_ply, FileAccess.WRITE)
 			if f:
 				f.store_string("ply\nformat ascii 1.0\nelement vertex 0\nend_header\n")
 				f.close()
-		var marker_path = global_dir.path_join(".triposplat_done")
-		var marker = FileAccess.open(marker_path, FileAccess.WRITE)
+		var marker_path: String = global_dir.path_join(".triposplat_done")
+		var marker: FileAccess = FileAccess.open(marker_path, FileAccess.WRITE)
 		if marker:
 			marker.store_string('{"engine": "FoveaCore TripoSplat", "elapsed_s": 0.1}')
 			marker.close()
@@ -838,27 +854,27 @@ func run_triposplat(session: ReconstructionSession) -> void:
 	await backend.command_finished
 
 	# Vérifier le marqueur de complétion
-	var marker_path = ProjectSettings.globalize_path(session.output_directory) + "/.triposplat_done"
+	var marker_path: String = ProjectSettings.globalize_path(session.output_directory) + "/.triposplat_done"
 	if not FileAccess.file_exists(marker_path):
 		session.status = "Erreur"
 		reconstruction_failed.emit("TripoSplat: aucun marqueur de complétion trouvé.")
 		_end_task()
 		return
 
-	var marker = FileAccess.open(marker_path, FileAccess.READ)
+	var marker: FileAccess = FileAccess.open(marker_path, FileAccess.READ)
 	if marker:
-		var content = marker.get_as_text()
+		var content: String = marker.get_as_text()
 		print("ReconstructionManager: TripoSplat results -> ", content)
 		marker.close()
 
 	# Charger le PLY directement
-	var ply_path = session.output_directory.path_join("gaussians.ply")
-	var global_ply = ProjectSettings.globalize_path(ply_path)
+	var ply_path: String = session.output_directory.path_join("gaussians.ply")
+	var global_ply: String = ProjectSettings.globalize_path(ply_path)
 	if FileAccess.file_exists(global_ply):
 		_post_process_reconstruction_splats(session, global_ply)
 		print("ReconstructionManager: Loading TripoSplat PLY from ", global_ply)
-		var gaussians = PLYLoader.load_gaussians_from_ply(global_ply)
-		if gaussians and not gaussians.is_empty():
+		var gaussians: Array[GaussianSplat] = PLYLoader.load_gaussians_from_ply(global_ply)
+		if not gaussians.is_empty():
 			session.splat_data_path = ply_path
 			session.status = "Terminé (%d splats)" % gaussians.size()
 		else:
@@ -884,46 +900,45 @@ func run_worldmirror(session: ReconstructionSession) -> void:
 	print("ReconstructionManager: Phase 2 - WorldMirror 2.0 Feed-forward...")
 
 	if session.dry_run:
-		var global_dir = ProjectSettings.globalize_path(session.output_directory)
-		var target_ply = global_dir.path_join("gaussians.ply")
+		var global_dir: String = ProjectSettings.globalize_path(session.output_directory)
+		var target_ply: String = global_dir.path_join("gaussians.ply")
 		if not FileAccess.file_exists(target_ply):
-			var f = FileAccess.open(target_ply, FileAccess.WRITE)
+			var f: FileAccess = FileAccess.open(target_ply, FileAccess.WRITE)
 			if f:
 				f.store_string("ply\nformat ascii 1.0\nelement vertex 0\nend_header\n")
 				f.close()
-		var marker_path = global_dir.path_join(".worldmirror_done")
-		var marker = FileAccess.open(marker_path, FileAccess.WRITE)
+		var marker_path: String = global_dir.path_join(".worldmirror_done")
+		var marker: FileAccess = FileAccess.open(marker_path, FileAccess.WRITE)
 		if marker:
 			marker.store_string('{"engine": "FoveaCore WorldMirror-2.0", "elapsed_s": 0.1}')
 			marker.close()
 
 	backend.execute_reconstruction(session)
 
-
 	await backend.command_finished
 
 	# Vérifier le marqueur de complétion
-	var marker_path = ProjectSettings.globalize_path(session.output_directory) + "/.worldmirror_done"
+	var marker_path: String = ProjectSettings.globalize_path(session.output_directory) + "/.worldmirror_done"
 	if not FileAccess.file_exists(marker_path):
 		session.status = "Erreur"
 		reconstruction_failed.emit("WorldMirror 2.0: aucun marqueur de complétion trouvé.")
 		_end_task()
 		return
 
-	var marker = FileAccess.open(marker_path, FileAccess.READ)
+	var marker: FileAccess = FileAccess.open(marker_path, FileAccess.READ)
 	if marker:
-		var content = marker.get_as_text()
+		var content: String = marker.get_as_text()
 		print("ReconstructionManager: WorldMirror 2.0 results -> ", content)
 		marker.close()
 
 	# Charger le PLY directement (WorldMirror produit gaussians.ply à la racine du workspace)
-	var ply_path = session.output_directory.path_join("gaussians.ply")
-	var global_ply = ProjectSettings.globalize_path(ply_path)
+	var ply_path: String = session.output_directory.path_join("gaussians.ply")
+	var global_ply: String = ProjectSettings.globalize_path(ply_path)
 	if FileAccess.file_exists(global_ply):
 		_post_process_reconstruction_splats(session, global_ply)
 		print("ReconstructionManager: Loading WorldMirror PLY from ", global_ply)
-		var gaussians = PLYLoader.load_gaussians_from_ply(global_ply)
-		if gaussians and not gaussians.is_empty():
+		var gaussians: Array[GaussianSplat] = PLYLoader.load_gaussians_from_ply(global_ply)
+		if not gaussians.is_empty():
 			session.splat_data_path = ply_path
 			session.status = "Terminé (%d splats)" % gaussians.size()
 		else:
@@ -945,8 +960,8 @@ func run_training(session: ReconstructionSession) -> void:
 	backend.execute_reconstruction(session)
 	
 	# Attendre la fin du processus réel
-	var finished_result = await backend.command_finished
-	var finished_status = finished_result[0] if finished_result is Array else finished_result
+	var finished_result: Variant = await backend.command_finished
+	var finished_status: int = finished_result[0] if finished_result is Array else finished_result
 	if finished_status != 0:
 		session.status = "Erreur"
 		reconstruction_failed.emit("Échec Phase 3 : 3DGS Training")
@@ -958,13 +973,13 @@ func run_training(session: ReconstructionSession) -> void:
 		exporter.finalize_session(session)
 		
 		# Load the resulting PLY if it exists
-		var ply_path = session.output_directory.path_join("output/point_cloud/iteration_7000/point_cloud.ply")
-		var global_ply = ProjectSettings.globalize_path(ply_path)
+		var ply_path: String = session.output_directory.path_join("output/point_cloud/iteration_7000/point_cloud.ply")
+		var global_ply: String = ProjectSettings.globalize_path(ply_path)
 		if FileAccess.file_exists(global_ply):
 			_post_process_reconstruction_splats(session, global_ply)
 			print("ReconstructionManager: Loading result PLY from ", global_ply)
-			var gaussians = PLYLoader.load_gaussians_from_ply(global_ply)
-			if gaussians and not gaussians.is_empty():
+			var gaussians: Array[GaussianSplat] = PLYLoader.load_gaussians_from_ply(global_ply)
+			if not gaussians.is_empty():
 				session.splat_data_path = ply_path
 				session.status = "Terminé (%d splats)" % gaussians.size()
 			else:
@@ -982,46 +997,45 @@ func run_artifixer(session: ReconstructionSession) -> void:
 	print("ReconstructionManager: Phase 4 - ArtiFixer Refinement...")
 
 	if session.dry_run:
-		var global_dir = ProjectSettings.globalize_path(session.output_directory)
-		var target_ply = global_dir.path_join("artifixer_refined.ply")
+		var global_dir: String = ProjectSettings.globalize_path(session.output_directory)
+		var target_ply: String = global_dir.path_join("artifixer_refined.ply")
 		if not FileAccess.file_exists(target_ply):
-			var f = FileAccess.open(target_ply, FileAccess.WRITE)
+			var f: FileAccess = FileAccess.open(target_ply, FileAccess.WRITE)
 			if f:
 				f.store_string("ply\nformat ascii 1.0\nelement vertex 0\nend_header\n")
 				f.close()
-		var marker_path = global_dir.path_join(".artifixer_done")
-		var marker = FileAccess.open(marker_path, FileAccess.WRITE)
+		var marker_path: String = global_dir.path_join(".artifixer_done")
+		var marker: FileAccess = FileAccess.open(marker_path, FileAccess.WRITE)
 		if marker:
 			marker.store_string('{"engine": "FoveaCore ArtiFixer-Refiner", "mode": "dry-run", "elapsed_s": 0.1}')
 			marker.close()
 
 	backend.execute_artifixer(session)
 
-	
 	await backend.command_finished
 	
 	# Vérifier le marqueur de complétion
-	var marker_path = ProjectSettings.globalize_path(session.output_directory) + "/.artifixer_done"
+	var marker_path: String = ProjectSettings.globalize_path(session.output_directory) + "/.artifixer_done"
 	if not FileAccess.file_exists(marker_path):
 		session.status = "Erreur"
 		reconstruction_failed.emit("ArtiFixer: aucun marqueur de complétion trouvé.")
 		_end_task()
 		return
 
-	var marker = FileAccess.open(marker_path, FileAccess.READ)
+	var marker: FileAccess = FileAccess.open(marker_path, FileAccess.READ)
 	if marker:
-		var content = marker.get_as_text()
+		var content: String = marker.get_as_text()
 		print("ReconstructionManager: ArtiFixer results -> ", content)
 		marker.close()
 
 	# Charger le PLY raffiné
-	var ply_path = session.output_directory.path_join("artifixer_refined.ply")
-	var global_ply = ProjectSettings.globalize_path(ply_path)
+	var ply_path: String = session.output_directory.path_join("artifixer_refined.ply")
+	var global_ply: String = ProjectSettings.globalize_path(ply_path)
 	if FileAccess.file_exists(global_ply):
 		_post_process_reconstruction_splats(session, global_ply)
 		print("ReconstructionManager: Loading ArtiFixer PLY from ", global_ply)
-		var gaussians = PLYLoader.load_gaussians_from_ply(global_ply)
-		if gaussians and not gaussians.is_empty():
+		var gaussians: Array[GaussianSplat] = PLYLoader.load_gaussians_from_ply(global_ply)
+		if not gaussians.is_empty():
 			session.splat_data_path = ply_path
 			session.status = "Terminé (%d splats raffinés)" % gaussians.size()
 		else:
@@ -1037,14 +1051,14 @@ func _on_backend_started(task: String) -> void:
 	print("Manager: Backend started -> ", task)
 	log_line_received.emit(">>> Starting: " + task)
 	# Logger dans la session active
-	for sess in active_sessions.values():
+	for sess: ReconstructionSession in active_sessions.values():
 		if sess.status != "Terminé":
 			sess.status = task
 
 func _on_backend_progress(line: String, percent: float) -> void:
 	log_line_received.emit(line)
 	if percent >= 0:
-		var mapped_percent := 0.0
+		var mapped_percent: float = 0.0
 		match _current_phase:
 			1:
 				mapped_percent = percent * 0.33
@@ -1062,8 +1076,8 @@ func _on_backend_finished(status: int, output: String) -> void:
 
 func _post_process_reconstruction_splats(session: ReconstructionSession, global_ply: String) -> void:
 	print("ReconstructionManager: Post-processing splats...")
-	var gaussians = PLYLoader.load_gaussians_from_ply(global_ply)
-	if gaussians == null or gaussians.is_empty():
+	var gaussians: Array[GaussianSplat] = PLYLoader.load_gaussians_from_ply(global_ply)
+	if gaussians.is_empty():
 		push_error("ReconstructionManager: Failed to load PLY for post-processing.")
 		return
 		
@@ -1079,14 +1093,14 @@ func _post_process_reconstruction_splats(session: ReconstructionSession, global_
 		
 	# 3. Density Decimation
 	if session.splat_count_density < 0.99:
-		var old_size = gaussians.size()
+		var old_size: int = gaussians.size()
 		gaussians = SplatProcessorHelper.decimate_splats(gaussians, session.splat_count_density)
 		print("ReconstructionManager: Decimated splats from %d to %d" % [old_size, gaussians.size()])
 		
 	# Save back to PLY
-	var temp_renderer = SplatRenderer.new()
+	var temp_renderer: SplatRenderer = SplatRenderer.new()
 	temp_renderer.load_splats(gaussians)
-	var err = temp_renderer.export_to_ply(global_ply)
+	var err: Error = temp_renderer.export_to_ply(global_ply)
 	temp_renderer.queue_free()
 	if err == OK:
 		print("ReconstructionManager: Post-processed splats written back to ", global_ply)

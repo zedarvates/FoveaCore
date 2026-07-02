@@ -57,7 +57,11 @@ static func decode_parallel(
 	instance_morph_types: Array[int] = [],
 	instance_morph_weights: Array[float] = [],
 	instance_morph_frequencies: Array[float] = [],
-	instance_morph_amplitudes: Array[float] = []
+	instance_morph_amplitudes: Array[float] = [],
+	instance_delta_colors: Array[Dictionary] = [],
+	instance_delta_positions: Array[Dictionary] = [],
+	instance_delta_weights: Array[float] = [],
+	splat_byte_size: int = -1
 ) -> DecodeResult:
 	var result: DecodeResult = DecodeResult.new()
 	result.splat_count = num_splats
@@ -69,6 +73,13 @@ static func decode_parallel(
 	result.xf_array.resize(num_splats * 4)
 	result.cd_array.resize(num_splats)
 	result.original_transforms.resize(num_splats)
+
+	# Déterminer la taille réelle d'un splat dans le buffer
+	var byte_size: int = splat_byte_size
+	if byte_size <= 0:
+		byte_size = 16
+		if num_splats > 0 and culled_bytes.size() >= num_splats * 20:
+			byte_size = 20
 
 	# Déterminer le nombre de threads optimal
 	var cpu_count: int = OS.get_processor_count()
@@ -83,7 +94,8 @@ static func decode_parallel(
 		_decode_chunk(culled_bytes, result.xf_array, result.cd_array,
 				result.original_transforms, 0, num_splats, aabb_min, aabb_max,
 				instance_transforms, instance_colors, instance_scales, instance_alphas,
-				instance_morph_types, instance_morph_weights, instance_morph_frequencies, instance_morph_amplitudes)
+				instance_morph_types, instance_morph_weights, instance_morph_frequencies, instance_morph_amplitudes,
+				instance_delta_colors, instance_delta_positions, instance_delta_weights, byte_size)
 		return result
 
 	# Découper en chunks et dispatcher
@@ -119,16 +131,22 @@ static func decode_parallel(
 		var _inst_m_weight := instance_morph_weights
 		var _inst_m_freq := instance_morph_frequencies
 		var _inst_m_amp := instance_morph_amplitudes
+		var _inst_d_col := instance_delta_colors
+		var _inst_d_pos := instance_delta_positions
+		var _inst_d_weight := instance_delta_weights
+		var _byte_size := byte_size
 
 		thread.start(func() -> void:
 			_decode_chunk(_culled, _xf, _cd, _orig, _start, _end, _min, _max,
 					_inst_xf, _inst_col, _inst_scl, _inst_alp,
-					_inst_m_type, _inst_m_weight, _inst_m_freq, _inst_m_amp)
+					_inst_m_type, _inst_m_weight, _inst_m_freq, _inst_m_amp,
+					_inst_d_col, _inst_d_pos, _inst_d_weight, _byte_size)
 		)
 
 	# Attendre tous les threads
 	for t: int in range(thread_count):
-		threads[t].wait_to_finish()
+		if threads[t].is_started():
+			threads[t].wait_to_finish()
 
 	return result
 
@@ -152,13 +170,17 @@ static func _decode_chunk(
 		instance_morph_types: Array[int] = [],
 		instance_morph_weights: Array[float] = [],
 		instance_morph_frequencies: Array[float] = [],
-		instance_morph_amplitudes: Array[float] = []
+		instance_morph_amplitudes: Array[float] = [],
+		instance_delta_colors: Array[Dictionary] = [],
+		instance_delta_positions: Array[Dictionary] = [],
+		instance_delta_weights: Array[float] = [],
+		splat_byte_size:      int = 16
 ) -> void:
 	var temp_buf := PackedByteArray()
 	temp_buf.resize(4)
 
 	for i: int in range(start, end):
-		var src: int = i * SPLAT_BYTE_SIZE
+		var src: int = i * splat_byte_size
 
 		# Décoder position quantisée 16-bit → float monde (dé-quantisation spatiale via AABB réelle)
 		var qx: float = float(culled_bytes.decode_u16(src))     / 65535.0
@@ -190,6 +212,21 @@ static func _decode_chunk(
 				morph_weight = instance_morph_weights[instance_id]
 				morph_freq = instance_morph_frequencies[instance_id]
 				morph_amp = instance_morph_amplitudes[instance_id]
+
+		# Décoder local_idx si présent (splat_byte_size >= 20)
+		var local_idx: int = -1
+		if splat_byte_size >= 20:
+			local_idx = culled_bytes.decode_u32(src + 16)
+
+		# Appliquer le Delta-Splat (position/deformation locale)
+		if instance_id >= 0 and local_idx >= 0:
+			if instance_id < instance_delta_positions.size():
+				var deltas: Dictionary = instance_delta_positions[instance_id]
+				if deltas.has(local_idx):
+					var d_weight := 1.0
+					if instance_id < instance_delta_weights.size():
+						d_weight = instance_delta_weights[instance_id]
+					local_pos += (deltas[local_idx] as Vector3) * d_weight
 
 		# Appliquer le morphing local si configuré
 		if morph_type > 0 and morph_weight > 0.0:
@@ -269,6 +306,30 @@ static func _decode_chunk(
 				var b_val := float(color_index & 0x1F) / 31.0
 				
 				var col := Color(r_val, g_val, b_val) * tint
+				var r5 := int(clamp(col.r * 31.0, 0, 31))
+				var g6 := int(clamp(col.g * 63.0, 0, 63))
+				var b5 := int(clamp(col.b * 31.0, 0, 31))
+				var new_rgb565 := (r5 << 11) | (g6 << 5) | b5
+				
+				w2 = (w2 & 0xFFFF0000) | new_rgb565
+				w2_modified = true
+
+		# Appliquer le Delta-Splat (tints locaux)
+		if instance_id >= 0 and local_idx >= 0 and instance_id < instance_delta_colors.size():
+			var deltas: Dictionary = instance_delta_colors[instance_id]
+			if deltas.has(local_idx):
+				var delta_color: Color = deltas[local_idx] as Color
+				var d_weight := 1.0
+				if instance_id < instance_delta_weights.size():
+					d_weight = instance_delta_weights[instance_id]
+				var final_delta := Color(1, 1, 1, 1).lerp(delta_color, d_weight)
+				
+				var color_index := w2 & 0xFFFF
+				var r_val := float((color_index >> 11) & 0x1F) / 31.0
+				var g_val := float((color_index >> 5) & 0x3F) / 63.0
+				var b_val := float(color_index & 0x1F) / 31.0
+				
+				var col := Color(r_val, g_val, b_val) * final_delta
 				var r5 := int(clamp(col.r * 31.0, 0, 31))
 				var g6 := int(clamp(col.g * 63.0, 0, 63))
 				var b5 := int(clamp(col.b * 31.0, 0, 31))

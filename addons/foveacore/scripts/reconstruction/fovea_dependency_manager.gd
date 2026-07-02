@@ -11,11 +11,11 @@ class_name FoveaDependencyManager
 ## F1 scope: status + resolution only. Downloading/installing is F2/F3.
 
 ## Local install root for tools fetched by the integrated installer.
-const TOOLS_DIR := "user://fovea_tools"
+const TOOLS_DIR: String = "user://fovea_tools"
 
 ## Tool registry: name → probe + per-OS download metadata.
 ## [code]bin[/code] is the executable basename expected under TOOLS_DIR/<name>/.
-const TOOLS := {
+const TOOLS: Dictionary = {
 	"ffmpeg": {
 		"bin": "ffmpeg",
 		"setting": "fovea/tools/ffmpeg_path",
@@ -33,9 +33,9 @@ const TOOLS := {
 		"probe_args": ["--help"],
 		"version_regex": "COLMAP ([0-9][^ \n]*)",
 		"urls": {
-			"Windows": "https://github.com/colmap/colmap/releases/latest",
-			"Linux": "https://github.com/colmap/colmap/releases/latest",
-			"macOS": "https://github.com/colmap/colmap/releases/latest",
+			"Windows": "https://github.com/colmap/colmap/releases/download/3.11.0/colmap-x64-windows-cuda.zip",
+			"Linux": "https://github.com/colmap/colmap/releases/download/3.11.0/colmap-x86_64-linux.tar.gz",
+			"macOS": "https://github.com/colmap/colmap/releases/download/3.11.0/colmap-x64-mac.zip",
 		},
 	},
 	"python": {
@@ -44,10 +44,9 @@ const TOOLS := {
 		"probe_args": ["--version"],
 		"version_regex": "Python ([0-9][^ \n]*)",
 		"urls": {
-			# python-build-standalone (astral) — resolved precisely in F3.
-			"Windows": "https://github.com/astral-sh/python-build-standalone/releases/latest",
-			"Linux": "https://github.com/astral-sh/python-build-standalone/releases/latest",
-			"macOS": "https://github.com/astral-sh/python-build-standalone/releases/latest",
+			"Windows": "https://github.com/indygreg/python-build-standalone/releases/download/20240107/cpython-3.10.13+20240107-x86_64-pc-windows-msvc-shared-install_only.tar.gz",
+			"Linux": "https://github.com/indygreg/python-build-standalone/releases/download/20240107/cpython-3.10.13+20240107-x86_64-unknown-linux-gnu-install_only.tar.gz",
+			"macOS": "https://github.com/indygreg/python-build-standalone/releases/download/20240107/cpython-3.10.13+20240107-x86_64-apple-darwin-install_only.tar.gz",
 		},
 	},
 }
@@ -56,36 +55,36 @@ const TOOLS := {
 ## Returns the command/path used to invoke [param name]. Resolution order:
 ## explicit project setting → local TOOLS_DIR binary → bare command (system PATH).
 static func resolve(name: String) -> String:
-	return _resolved(name)["path"]
+	return _resolved(name)["path"] as String
 
 
 ## Probes a single tool. Returns {found: bool, version: String, path: String,
 ## source: "setting"|"local"|"path"|"", download_url: String}.
 static func probe(name: String) -> Dictionary:
-	var result := {"found": false, "version": "", "path": "", "source": "", "download_url": download_url(name)}
+	var result: Dictionary = {"found": false, "version": "", "path": "", "source": "", "download_url": download_url(name)}
 	if not TOOLS.has(name):
 		return result
 
 	var info: Dictionary = TOOLS[name]
-	var res := _resolved(name)
-	var exe: String = res["path"]
+	var res: Dictionary = _resolved(name)
+	var exe: String = res["path"] as String
 
 	var output: Array = []
-	var code := OS.execute(exe, info["probe_args"], output, true, false)
+	var code: int = OS.execute(exe, info["probe_args"] as Array[String], output, true, false)
 	if code != 0:
 		return result
 
 	result["found"] = true
 	result["path"] = exe
 	result["source"] = res["source"]
-	result["version"] = _extract_version(output, info.get("version_regex", ""))
+	result["version"] = _extract_version(output, info.get("version_regex", "") as String)
 	return result
 
 
 ## Probes every registered tool. Returns {name: probe_dict}.
 static func get_status() -> Dictionary:
-	var status := {}
-	for name in TOOLS:
+	var status: Dictionary = {}
+	for name: String in TOOLS:
 		status[name] = probe(name)
 	return status
 
@@ -94,13 +93,13 @@ static func get_status() -> Dictionary:
 static func download_url(name: String) -> String:
 	if not TOOLS.has(name):
 		return ""
-	return TOOLS[name]["urls"].get(OS.get_name(), "")
+	return TOOLS[name]["urls"].get(OS.get_name(), "") as String
 
 
 ## True if every tool required for the minimal pipeline is available.
 static func minimal_pipeline_ready() -> bool:
-	var s := get_status()
-	return s.get("ffmpeg", {}).get("found", false) and s.get("python", {}).get("found", false)
+	var s: Dictionary = get_status()
+	return (s.get("ffmpeg", {}) as Dictionary).get("found", false) as bool and (s.get("python", {}) as Dictionary).get("found", false) as bool
 
 
 # ── internals ───────────────────────────────────────────────────────────────
@@ -113,9 +112,9 @@ static func _resolved(name: String) -> Dictionary:
 	var info: Dictionary = TOOLS[name]
 
 	# 1. Explicit project setting (a deliberate user choice wins).
-	var setting_key: String = info.get("setting", "")
+	var setting_key: String = info.get("setting", "") as String
 	if setting_key != "" and ProjectSettings.has_setting(setting_key):
-		var configured := String(ProjectSettings.get_setting(setting_key)).strip_edges()
+		var configured: String = String(ProjectSettings.get_setting(setting_key)).strip_edges()
 		if configured != "":
 			# An absolute/relative path must exist; a bare command is taken as-is.
 			if ("/" in configured) or ("\\" in configured):
@@ -125,7 +124,7 @@ static func _resolved(name: String) -> Dictionary:
 				return {"path": configured, "source": "setting"}
 
 	# 2. Binary installed by the integrated downloader under user://fovea_tools/.
-	var local := _local_binary_path(name, info["bin"])
+	var local: String = _local_binary_path(name, info["bin"] as String)
 	if local != "":
 		return {"path": local, "source": "local"}
 
@@ -133,8 +132,10 @@ static func _resolved(name: String) -> Dictionary:
 	return {"path": String(info["bin"]), "source": "path"}
 
 static func _local_binary_path(name: String, bin: String) -> String:
-	var ext := ".exe" if OS.get_name() == "Windows" else ""
-	var candidate := "%s/%s/%s%s" % [TOOLS_DIR, name, bin, ext]
+	var ext: String = ".exe" if OS.get_name() == "Windows" else ""
+	var candidate: String = "%s/%s/%s%s" % [TOOLS_DIR, name, bin, ext]
+	if name == "python" and OS.get_name() != "Windows":
+		candidate = "%s/%s/bin/%s%s" % [TOOLS_DIR, name, bin, ext]
 	if FileAccess.file_exists(candidate):
 		return ProjectSettings.globalize_path(candidate)
 	return ""
@@ -142,9 +143,9 @@ static func _local_binary_path(name: String, bin: String) -> String:
 static func _extract_version(output: Array, pattern: String) -> String:
 	if output.is_empty() or pattern == "":
 		return ""
-	var text := String(output[0])
-	var re := RegEx.new()
+	var text: String = String(output[0])
+	var re: RegEx = RegEx.new()
 	if re.compile(pattern) != OK:
 		return ""
-	var m := re.search(text)
+	var m: RegExMatch = re.search(text)
 	return m.get_string(1) if m else ""

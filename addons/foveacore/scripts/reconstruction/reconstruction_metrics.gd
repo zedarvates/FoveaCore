@@ -57,14 +57,14 @@ func add_color_metrics(brightness: float, variance: float) -> void:
 func add_splat_metrics(density: float, count: int) -> void:
 	splat_density = density
 	
-	var good_splats = count * density
+	var _good_splats: float = float(count) * density
 	reconstruction_quality_score = _calculate_quality_score()
 
 func _calculate_quality_score() -> float:
 	if frame_count == 0:
 		return 0.0
 	
-	var score = 0.0
+	var score: float = 0.0
 	
 	score += background_coverage * 40.0
 	
@@ -82,14 +82,14 @@ func _calculate_quality_score() -> float:
 	if depth_confidence > 0.7:
 		score += 10.0
 	
-	var bad_ratio = float(bad_frames_indices.size()) / float(frame_count)
+	var bad_ratio: float = float(bad_frames_indices.size()) / float(frame_count)
 	score -= bad_ratio * 20.0
 	
 	quality_score_updated.emit(score)
 	return clampf(score, 0.0, 100.0)
 
 func get_quality_grade() -> String:
-	var score = reconstruction_quality_score
+	var score: float = reconstruction_quality_score
 	if score >= 80.0:
 		return "A (Excellent)"
 	elif score >= 60.0:
@@ -102,15 +102,15 @@ func get_quality_grade() -> String:
 		return "F (Failed)"
 
 func get_worst_frames(count: int = 5) -> Array[int]:
-	var sorted = _frame_metrics.duplicate()
-	sorted.sort_custom(func(a, b): return a["blur"] < b["blur"] or a["coverage"] < b["coverage"])
+	var sorted: Array = _frame_metrics.duplicate()
+	sorted.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return (a["blur"] as float) < (b["blur"] as float) or (a["coverage"] as float) < (b["coverage"] as float))
 	var result: Array[int] = []
-	for i in range(min(count, sorted.size())):
-		result.append(sorted[i]["index"])
+	for i: int in range(min(count, sorted.size())):
+		result.append(sorted[i]["index"] as int)
 	return result
 
 func get_quality_report() -> String:
-	var report = "=== Reconstruction Quality Report ===\n"
+	var report: String = "=== Reconstruction Quality Report ===\n"
 	report += "Grade: %s\n\n" % get_quality_grade()
 	report += "Overall Score: %.1f/100\n\n" % reconstruction_quality_score
 	report += "Frame Analysis:\n"

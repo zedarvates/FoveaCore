@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://b3vskydibijwv"
+path="res://.godot/imported/indirect_draw_cmd.glsl-dc95711f7f61d8d1afddd0ee6ff33da1.res"
+
+[deps]
+
+source_file="res://addons/foveacore/shaders/indirect_draw_cmd.glsl"
+dest_files=["res://.godot/imported/indirect_draw_cmd.glsl-dc95711f7f61d8d1afddd0ee6ff33da1.res"]
+
+[params]
+

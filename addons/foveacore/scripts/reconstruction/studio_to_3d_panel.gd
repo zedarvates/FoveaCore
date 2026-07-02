@@ -9,10 +9,14 @@ const _SplatRendererScript = preload("res://addons/foveacore/scripts/reconstruct
 const _PLYLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/ply_loader.gd")
 const _GaussianSplatScript = preload("res://addons/foveacore/scripts/reconstruction/gaussian_splat.gd")
 const _ConfigWizardScript = preload("res://addons/foveacore/scripts/editor/fovea_config_wizard.gd")
+const _DependencyInstallerScript = preload("res://addons/foveacore/scripts/reconstruction/fovea_dependency_installer.gd")
+const DepMgr := preload("res://addons/foveacore/scripts/reconstruction/fovea_dependency_manager.gd")
 
 var manager: FoveaReconstructionManager = null
 var current_session: ReconstructionSession = null
 var _preview_manager: StudioPreviewManager = null
+var installer: Node = null
+var _tool_rows: Dictionary = {}
 
 var _is_running: bool = false
 var _animation_timer: float = 0.0
@@ -85,6 +89,8 @@ var floaters_detector: FloatersDetector = null
 @onready var reload_ply_btn: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Pipeline/ReloadPLY")
 @onready var export_btn: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Pipeline/ExportPLY")
 @onready var toggle_renderer_btn: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Pipeline/ToggleRenderer")
+@onready var segment_prompt: LineEdit = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/SegmentRow/SegmentPrompt")
+@onready var segment_btn: Button = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings/SegmentRow/SegmentBtn")
 
 # Log actions
 @onready var clear_logs_btn: Button = get_node_or_null("VBoxMain/Tabs/Logs/HBoxLogButtons/Clear")
@@ -156,6 +162,7 @@ func _ready() -> void:
 	_safe_connect_btn(reset_button, _on_reset_pressed)
 	_safe_connect_btn(reload_ply_btn, _on_reload_ply_pressed)
 	_safe_connect_btn(export_btn, _on_export_pressed)
+	_safe_connect_btn(segment_btn, _on_segment_pressed)
 
 	# ArtiFixer UI connections
 	if artifixer_mode_check:
@@ -194,11 +201,11 @@ func _ready() -> void:
 		
 	if log_text:
 		var highlighter = CodeHighlighter.new()
-		highlighter.add_color_region("❌", "", Color(1.0, 0.35, 0.35), true)
-		highlighter.add_color_region("✅", "", Color(0.35, 1.0, 0.35), true)
-		highlighter.add_color_region("⚠️", "", Color(1.0, 0.85, 0.35), true)
-		highlighter.add_color_region("ERROR:", "", Color(1.0, 0.35, 0.35), true)
-		highlighter.add_color_region("WARNING:", "", Color(1.0, 0.85, 0.35), true)
+		# CodeHighlighter color regions must START WITH A SYMBOL — emoji and word
+		# prefixes are rejected (spams "color regions must start with a symbol").
+		# Colorize ERROR/WARNING as keywords instead; keep the [..] region.
+		highlighter.add_keyword_color("ERROR", Color(1.0, 0.35, 0.35))
+		highlighter.add_keyword_color("WARNING", Color(1.0, 0.85, 0.35))
 		highlighter.add_color_region("[", "]", Color(0.6, 0.6, 0.6), false)
 		log_text.syntax_highlighter = highlighter
 	
@@ -238,7 +245,7 @@ func _ready() -> void:
 		pipeline_container.add_child(dry_run_check)
 
 	# Injecter dynamiquement les réglages de Styling & Optimization
-	var settings_box = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings")
+	settings_box = get_node_or_null("VBoxMain/Tabs/Pipeline/VBoxTop/Settings")
 	if settings_box:
 		var sep = HSeparator.new()
 		settings_box.add_child(sep)
@@ -384,7 +391,61 @@ func _ready() -> void:
 	call_deferred("_update_wm2_status")
 	call_deferred("_update_artifixer_status")
 
-	
+	# Dynamically inject the Tools & Installation tab
+	var tabs = get_node_or_null("VBoxMain/Tabs")
+	if tabs:
+		var tools_tab := ScrollContainer.new()
+		tools_tab.name = "Tools"
+		tools_tab.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		tabs.add_child(tools_tab)
+		
+		var tools_vbox := VBoxContainer.new()
+		tools_vbox.name = "ToolsVBox"
+		tools_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tools_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		tools_vbox.add_theme_constant_override("separation", 15)
+		tools_tab.add_child(tools_vbox)
+		
+		var title_lbl := Label.new()
+		title_lbl.text = "Dependency & Tools Installation"
+		title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		title_lbl.add_theme_font_size_override("font_size", 18)
+		tools_vbox.add_child(title_lbl)
+		
+		var desc_lbl := Label.new()
+		desc_lbl.text = "FoveaEngine can automatically download and install local, portable builds of required tools under user://fovea_tools/. This provides a 100% terminal-free experience."
+		desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
+		tools_vbox.add_child(desc_lbl)
+		
+		tools_vbox.add_child(HSeparator.new())
+		
+		_create_tool_row(tools_vbox, "ffmpeg", "FFmpeg (Video extraction)")
+		_create_tool_row(tools_vbox, "colmap", "COLMAP (Structure from Motion / SfM)")
+		_create_tool_row(tools_vbox, "python", "Python Standalone (3DGS Trainer & Bridges)")
+
+		var progress_box := VBoxContainer.new()
+		progress_box.name = "ProgressBox"
+		progress_box.visible = false
+		
+		var progress_lbl := Label.new()
+		progress_lbl.name = "ProgressLabel"
+		progress_lbl.text = "Initializing install..."
+		progress_box.add_child(progress_lbl)
+		
+		var installer_progress_bar := ProgressBar.new()
+		installer_progress_bar.name = "ProgressBar"
+		installer_progress_bar.min_value = 0.0
+		installer_progress_bar.max_value = 100.0
+		progress_box.add_child(installer_progress_bar)
+		
+		tools_vbox.add_child(progress_box)
+		
+		installer = _DependencyInstallerScript.new()
+		add_child(installer)
+		installer.progress_updated.connect(_on_installer_progress)
+		installer.install_completed.connect(_on_installer_completed)
+		installer.install_failed.connect(_on_installer_failed)
+
 	_log("StudioTo3D UI Initialized (Safe Mode).")
 	
 	# 4. Vérifier les outils au démarrage
@@ -643,6 +704,45 @@ func _on_auto_roi_pressed() -> void:
 	if FileAccess.file_exists(temp_path):
 		DirAccess.remove_absolute(temp_path)
 
+func _on_segment_pressed() -> void:
+	var prompt: String = segment_prompt.text if segment_prompt else ""
+	if prompt.is_empty():
+		_log("Error: Please specify a segmentation prompt.")
+		return
+
+	# Tenter de trouver le nœud FoveaSplattable actif
+	var splattable: Node = null
+	
+	# Option 1: Chercher par le nom de session
+	if current_session:
+		var node_name = "Splat_" + current_session.session_name
+		var root = get_tree().root
+		splattable = root.find_child(node_name, true, false)
+		if splattable == null:
+			var editor_interface = Engine.get_singleton("EditorInterface")
+			if editor_interface:
+				var scene_root = editor_interface.get_edited_scene_root()
+				if scene_root:
+					splattable = scene_root.find_child(node_name, true, false)
+
+	# Option 2: Fallback sur le premier FoveaSplattable dans le groupe "splattables"
+	if splattable == null:
+		var active_nodes = get_tree().get_nodes_in_group("splattables")
+		for n in active_nodes:
+			if n is FoveaSplattable:
+				splattable = n
+				break
+
+	if splattable == null:
+		_log("Error: No active FoveaSplattable node found to segment. Make sure the splat scene is loaded.")
+		return
+
+	_log("Starting AI segmentation on splattable node '%s' with prompt: '%s'..." % [splattable.name, prompt])
+	if splattable.has_method("run_segmentation"):
+		splattable.run_segmentation(prompt)
+	else:
+		_log("Error: FoveaSplattable node does not have run_segmentation() method.")
+
 func _on_browse_pressed() -> void:
 	var dialog = FileDialog.new()
 	dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
@@ -666,6 +766,8 @@ func _on_video_selected(path: String) -> void:
 	if img:
 		_log("Aperçu généré avec succès.")
 		_preview_manager.set_preview_image(img)
+		# Déclenchement automatique de l'Auto-ROI par IA
+		_on_auto_roi_pressed()
 
 func _setup_preview_manager() -> void:
 	_preview_manager = StudioPreviewManager.new()
@@ -1386,6 +1488,7 @@ func _on_log_line_received(line: String) -> void:
 		log_text.scroll_vertical = log_text.get_line_count() * 20.0
 
 func _check_tools_and_popup(at_startup: bool = false) -> void:
+	_refresh_tool_statuses()
 	var results = manager.check_tools()
 	
 	if ffmpeg_path_edit: ffmpeg_path_edit.text = manager.ffmpeg_path
@@ -1478,11 +1581,10 @@ func _on_popout_pressed() -> void:
 	popout_edit.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	
 	var highlighter = CodeHighlighter.new()
-	highlighter.add_color_region("❌", "", Color(1.0, 0.35, 0.35), true)
-	highlighter.add_color_region("✅", "", Color(0.35, 1.0, 0.35), true)
-	highlighter.add_color_region("⚠️", "", Color(1.0, 0.85, 0.35), true)
-	highlighter.add_color_region("ERROR:", "", Color(1.0, 0.35, 0.35), true)
-	highlighter.add_color_region("WARNING:", "", Color(1.0, 0.85, 0.35), true)
+	# See note above: region delimiters must start with a symbol, so ERROR/WARNING
+	# are keyword colors and emoji prefixes are dropped.
+	highlighter.add_keyword_color("ERROR", Color(1.0, 0.35, 0.35))
+	highlighter.add_keyword_color("WARNING", Color(1.0, 0.85, 0.35))
 	highlighter.add_color_region("[", "]", Color(0.6, 0.6, 0.6), false)
 	popout_edit.syntax_highlighter = highlighter
 	
@@ -1809,3 +1911,107 @@ func _dismiss_config_banner() -> void:
 	if _config_banner != null and is_instance_valid(_config_banner):
 		_config_banner.queue_free()
 		_config_banner = null
+
+func _create_tool_row(container: VBoxContainer, tool_name: String, label_text: String) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	
+	var label := Label.new()
+	label.text = label_text
+	label.custom_minimum_size = Vector2(250, 0)
+	row.add_child(label)
+	
+	var status_lbl := Label.new()
+	status_lbl.name = "StatusLabel"
+	status_lbl.text = "Checking..."
+	status_lbl.custom_minimum_size = Vector2(120, 0)
+	row.add_child(status_lbl)
+	
+	var path_lbl := Label.new()
+	path_lbl.name = "PathLabel"
+	path_lbl.text = ""
+	path_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	path_lbl.clip_text = true
+	row.add_child(path_lbl)
+	
+	var btn := Button.new()
+	btn.name = "InstallButton"
+	btn.text = "Install"
+	btn.custom_minimum_size = Vector2(100, 0)
+	btn.pressed.connect(_on_install_btn_pressed.bind(tool_name))
+	row.add_child(btn)
+	
+	container.add_child(row)
+	_tool_rows[tool_name] = {
+		"row": row,
+		"status": status_lbl,
+		"path": path_lbl,
+		"button": btn
+	}
+
+func _on_install_btn_pressed(tool_name: String) -> void:
+	_set_install_buttons_enabled(false)
+	var progress_box = get_node_or_null("VBoxMain/Tabs/Tools/ToolsVBox/ProgressBox")
+	if progress_box:
+		progress_box.visible = true
+		var progress_lbl = progress_box.get_node("ProgressLabel")
+		var progress_bar = progress_box.get_node("ProgressBar")
+		progress_lbl.text = "Starting installation of %s..." % tool_name
+		progress_bar.value = 0.0
+	installer.start_install(tool_name)
+
+func _set_install_buttons_enabled(enabled: bool) -> void:
+	for tool_name in _tool_rows:
+		var btn: Button = _tool_rows[tool_name]["button"]
+		if btn:
+			btn.disabled = not enabled
+
+func _on_installer_progress(tool_name: String, _stage: String, pct: float, status_text: String) -> void:
+	var progress_box = get_node_or_null("VBoxMain/Tabs/Tools/ToolsVBox/ProgressBox")
+	if progress_box:
+		var progress_lbl = progress_box.get_node("ProgressLabel")
+		var progress_bar = progress_box.get_node("ProgressBar")
+		progress_lbl.text = "[%s] %s" % [tool_name.to_upper(), status_text]
+		progress_bar.value = pct
+
+func _on_installer_completed(tool_name: String) -> void:
+	_log("Installation of %s completed successfully!" % tool_name)
+	_set_install_buttons_enabled(true)
+	var progress_box = get_node_or_null("VBoxMain/Tabs/Tools/ToolsVBox/ProgressBox")
+	if progress_box:
+		progress_box.visible = false
+	_refresh_tool_statuses()
+	if manager:
+		manager.check_tools()
+
+func _on_installer_failed(tool_name: String, error_msg: String) -> void:
+	_log("❌ Installation of %s failed: %s" % [tool_name, error_msg])
+	_set_install_buttons_enabled(true)
+	var progress_box = get_node_or_null("VBoxMain/Tabs/Tools/ToolsVBox/ProgressBox")
+	if progress_box:
+		progress_box.visible = false
+	var err_dialog := AcceptDialog.new()
+	err_dialog.title = "Installation Failed"
+	err_dialog.dialog_text = "Failed to install %s:\n\n%s" % [tool_name, error_msg]
+	add_child(err_dialog)
+	err_dialog.popup_centered()
+	_refresh_tool_statuses()
+
+func _refresh_tool_statuses() -> void:
+	var statuses: Dictionary = DepMgr.get_status()
+	for tool_name in _tool_rows:
+		var info: Dictionary = statuses.get(tool_name, {"found": false, "version": "", "path": "", "source": ""})
+		var row_ui: Dictionary = _tool_rows[tool_name]
+		var status_lbl: Label = row_ui["status"]
+		var path_lbl: Label = row_ui["path"]
+		var btn: Button = row_ui["button"]
+		if info["found"]:
+			status_lbl.text = "✅ OK (%s)" % info["version"]
+			status_lbl.add_theme_color_override("font_color", Color(0.35, 1.0, 0.35))
+			path_lbl.text = info["path"]
+			btn.text = "Re-install"
+		else:
+			status_lbl.text = "❌ Not Found"
+			status_lbl.add_theme_color_override("font_color", Color(1.0, 0.35, 0.35))
+			path_lbl.text = ""
+			btn.text = "Install"

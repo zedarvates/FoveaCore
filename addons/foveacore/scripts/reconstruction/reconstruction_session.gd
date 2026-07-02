@@ -42,7 +42,7 @@ class_name ReconstructionSession
 @export var splat_data_path: String = ""
 @export var preview_image: Texture2D = null
 
-func _init(p_name: String = "new_session"):
+func _init(p_name: String = "new_session") -> void:
 	session_name = p_name
 
 func to_dict() -> Dictionary:
@@ -79,35 +79,35 @@ func to_dict() -> Dictionary:
 	}
 
 func from_dict(dict: Dictionary) -> void:
-	session_name = dict.get("session_name", session_name)
-	video_path = dict.get("video_path", video_path)
-	output_directory = dict.get("output_directory", output_directory)
-	extraction_fps = dict.get("extraction_fps", extraction_fps)
-	background_threshold = dict.get("background_threshold", background_threshold)
-	blur_threshold = dict.get("blur_threshold", blur_threshold)
-	mask_mode = dict.get("mask_mode", mask_mode)
+	session_name = dict.get("session_name", session_name) as String
+	video_path = dict.get("video_path", video_path) as String
+	output_directory = dict.get("output_directory", output_directory) as String
+	extraction_fps = dict.get("extraction_fps", extraction_fps) as int
+	background_threshold = dict.get("background_threshold", background_threshold) as float
+	blur_threshold = dict.get("blur_threshold", blur_threshold) as float
+	mask_mode = dict.get("mask_mode", mask_mode) as String
 	if dict.has("roi_rect"):
-		var r = dict["roi_rect"]
+		var r: Variant = dict["roi_rect"]
 		if r is Array and r.size() == 4:
 			roi_rect = Rect2i(int(r[0]), int(r[1]), int(r[2]), int(r[3]))
-	use_fast_sync = dict.get("use_fast_sync", use_fast_sync)
-	use_worldmirror = dict.get("use_worldmirror", use_worldmirror)
-	use_triposplat = dict.get("use_triposplat", use_triposplat)
-	target_size = dict.get("target_size", target_size)
-	use_artifixer = dict.get("use_artifixer", use_artifixer)
-	artifixer_checkpoint = dict.get("artifixer_checkpoint", artifixer_checkpoint)
-	dry_run = dict.get("dry_run", dry_run)
-	exhaustive_matching = dict.get("exhaustive_matching", exhaustive_matching)
-	visual_style = dict.get("visual_style", visual_style)
-	splat_shape = dict.get("splat_shape", splat_shape)
-	splat_count_density = dict.get("splat_count_density", splat_count_density)
-	auto_tag_color = dict.get("auto_tag_color", auto_tag_color)
-	enable_wind = dict.get("enable_wind", enable_wind)
-	wind_speed = dict.get("wind_speed", wind_speed)
-	wind_strength = dict.get("wind_strength", wind_strength)
-	is_processed = dict.get("is_processed", is_processed)
-	frame_count = dict.get("frame_count", frame_count)
-	reconstruction_progress = dict.get("reconstruction_progress", reconstruction_progress)
-	status = dict.get("status", status)
-	low_poly_mesh_path = dict.get("low_poly_mesh_path", low_poly_mesh_path)
-	splat_data_path = dict.get("splat_data_path", splat_data_path)
+	use_fast_sync = dict.get("use_fast_sync", use_fast_sync) as bool
+	use_worldmirror = dict.get("use_worldmirror", use_worldmirror) as bool
+	use_triposplat = dict.get("use_triposplat", use_triposplat) as bool
+	target_size = dict.get("target_size", target_size) as int
+	use_artifixer = dict.get("use_artifixer", use_artifixer) as bool
+	artifixer_checkpoint = dict.get("artifixer_checkpoint", artifixer_checkpoint) as String
+	dry_run = dict.get("dry_run", dry_run) as bool
+	exhaustive_matching = dict.get("exhaustive_matching", exhaustive_matching) as bool
+	visual_style = dict.get("visual_style", visual_style) as String
+	splat_shape = dict.get("splat_shape", splat_shape) as String
+	splat_count_density = dict.get("splat_count_density", splat_count_density) as float
+	auto_tag_color = dict.get("auto_tag_color", auto_tag_color) as bool
+	enable_wind = dict.get("enable_wind", enable_wind) as bool
+	wind_speed = dict.get("wind_speed", wind_speed) as float
+	wind_strength = dict.get("wind_strength", wind_strength) as float
+	is_processed = dict.get("is_processed", is_processed) as bool
+	frame_count = dict.get("frame_count", frame_count) as int
+	reconstruction_progress = dict.get("reconstruction_progress", reconstruction_progress) as float
+	status = dict.get("status", status) as String
+	low_poly_mesh_path = dict.get("low_poly_mesh_path", low_poly_mesh_path) as String
+	splat_data_path = dict.get("splat_data_path", splat_data_path) as String

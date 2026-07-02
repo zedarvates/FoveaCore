@@ -227,12 +227,12 @@ static func quantize_colors(splats: Array[GaussianSplat], k: int) -> Array[Color
 		sums_b.resize(centroids.size())
 		counts.resize(centroids.size())
 		
-		for s in splats:
+		for s: GaussianSplat in splats:
 			var best_idx := 0
 			var min_dist := INF
 			var c := s.color
 			for j in range(centroids.size()):
-				var cent := centroids[j]
+				var cent: Color = centroids[j]
 				var dr := c.r - cent.r
 				var dg := c.g - cent.g
 				var db := c.b - cent.b
@@ -250,7 +250,7 @@ static func quantize_colors(splats: Array[GaussianSplat], k: int) -> Array[Color
 				centroids[j] = Color(sums_r[j] / counts[j], sums_g[j] / counts[j], sums_b[j] / counts[j])
 				
 	return centroids
-
+ 
 ## Quantification K-Means pour le codebook de covariance
 static func quantize_covariances(splats: Array[GaussianSplat], k: int) -> Array[Dictionary]:
 	var centroids: Array[Dictionary] = []
@@ -267,8 +267,8 @@ static func quantize_covariances(splats: Array[GaussianSplat], k: int) -> Array[
 		
 	# 3 itérations de K-Means
 	for iter in range(3):
-		var sum_scale := []
-		var sum_rot := []
+		var sum_scale: Array[Vector3] = []
+		var sum_rot: Array[Quaternion] = []
 		var counts := PackedInt32Array()
 		sum_scale.resize(centroids.size())
 		sum_rot.resize(centroids.size())
@@ -277,7 +277,7 @@ static func quantize_covariances(splats: Array[GaussianSplat], k: int) -> Array[
 			sum_scale[j] = Vector3.ZERO
 			sum_rot[j] = Quaternion(0, 0, 0, 0)
 			
-		for s in splats:
+		for s: GaussianSplat in splats:
 			var best_idx := 0
 			var min_dist := INF
 			for j in range(centroids.size()):
@@ -294,7 +294,7 @@ static func quantize_covariances(splats: Array[GaussianSplat], k: int) -> Array[
 			sum_scale[best_idx] += s.scale
 			
 			# Moyenne de quaternions (avec gestion du signe pour double couverture)
-			var dot := s.rotation.dot(centroids[best_idx]["rotation"])
+			var dot := s.rotation.dot(centroids[best_idx]["rotation"] as Quaternion)
 			if dot >= 0.0:
 				sum_rot[best_idx] = Quaternion(
 					sum_rot[best_idx].x + s.rotation.x,
@@ -313,8 +313,8 @@ static func quantize_covariances(splats: Array[GaussianSplat], k: int) -> Array[
 			
 		for j in range(centroids.size()):
 			if counts[j] > 0:
-				var avg_scale = sum_scale[j] / float(counts[j])
-				var avg_rot = sum_rot[j].normalized()
+				var avg_scale: Vector3 = sum_scale[j] / float(counts[j])
+				var avg_rot: Quaternion = sum_rot[j].normalized()
 				centroids[j] = {
 					"scale": avg_scale,
 					"rotation": avg_rot

@@ -13,7 +13,7 @@ enum ExportFormat { PLY, SPLAT, GLB, JSON_METADATA }
 func export_session(session: ReconstructionSession, format: ExportFormat, output_path: String) -> bool:
 	export_started.emit(ExportFormat.keys()[format])
 	
-	var input_path = ProjectSettings.globalize_path(session.output_directory)
+	var input_path: String = ProjectSettings.globalize_path(session.output_directory)
 	
 	match format:
 		ExportFormat.PLY:
@@ -27,7 +27,7 @@ func export_session(session: ReconstructionSession, format: ExportFormat, output
 			return false
 
 func _export_ply(input_path: String, output_path: String) -> bool:
-	var splat_file = input_path + "/point_cloud/points.ply"
+	var splat_file: String = input_path + "/point_cloud/points.ply"
 	if not FileAccess.file_exists(splat_file):
 		splat_file = input_path + "/splats.ply"
 	
@@ -35,20 +35,20 @@ func _export_ply(input_path: String, output_path: String) -> bool:
 		export_failed.emit("Fichier splats source introuvable")
 		return false
 	
-	var source = FileAccess.open(splat_file, FileAccess.READ)
-	var dest = FileAccess.open(output_path, FileAccess.WRITE)
+	var source: FileAccess = FileAccess.open(splat_file, FileAccess.READ)
+	var dest: FileAccess = FileAccess.open(output_path, FileAccess.WRITE)
 	
 	if not source or not dest:
 		export_failed.emit("Erreur d'ouverture des fichiers")
 		return false
 	
-	var header_end = _find_header_end(source)
+	var header_end: int = _find_header_end(source)
 	source.seek(header_end)
 	dest.store_string(_read_header(source))
 	
-	var line_count = 0
+	var line_count: int = 0
 	while source.get_position() < source.get_length():
-		var line = source.get_line()
+		var line: String = source.get_line()
 		dest.store_line(line)
 		line_count += 1
 		if line_count % 1000 == 0:
@@ -63,23 +63,23 @@ func _export_ply(input_path: String, output_path: String) -> bool:
 func _find_header_end(file: FileAccess) -> int:
 	file.seek(0)
 	while file.get_position() < file.get_length():
-		var line = file.get_line()
+		var line: String = file.get_line()
 		if line.strip_edges().begins_with("end_header"):
 			return file.get_position()
 	return 0
 
 func _read_header(file: FileAccess) -> String:
 	file.seek(0)
-	var header = ""
+	var header: String = ""
 	while file.get_position() < file.get_length():
-		var line = file.get_line()
+		var line: String = file.get_line()
 		header += line + "\n"
 		if line.strip_edges().begins_with("end_header"):
 			break
 	return header
 
 func _export_splat(input_path: String, output_path: String) -> bool:
-	var splat_file = input_path + "/point_cloud/points.ply"
+	var splat_file: String = input_path + "/point_cloud/points.ply"
 	if not FileAccess.file_exists(splat_file):
 		splat_file = input_path + "/splats.ply"
 	
@@ -87,31 +87,31 @@ func _export_splat(input_path: String, output_path: String) -> bool:
 		export_failed.emit("Fichier splats source introuvable")
 		return false
 	
-	var source = FileAccess.open(splat_file, FileAccess.READ)
-	var dest = FileAccess.open(output_path, FileAccess.WRITE)
+	var source: FileAccess = FileAccess.open(splat_file, FileAccess.READ)
+	var dest: FileAccess = FileAccess.open(output_path, FileAccess.WRITE)
 	
 	if not source or not dest:
 		export_failed.emit("Erreur d'ouverture des fichiers")
 		return false
 	
-	var header_lines = []
-	var vertex_count = 0
+	var header_lines: Array[String] = []
+	var vertex_count: int = 0
 	
 	while source.get_position() < source.get_length():
-		var line = source.get_line()
+		var line: String = source.get_line()
 		if line.begins_with("element vertex"):
 			vertex_count = int(line.split(" ")[2])
 		header_lines.append(line)
 		if line.strip_edges().begins_with("end_header"):
 			break
 	
-	for hl in header_lines:
+	for hl: String in header_lines:
 		dest.store_line(hl)
 	dest.store_line("end_header")
 	
-	var line_num = 0
+	var line_num: int = 0
 	while source.get_position() < source.get_length():
-		var line = source.get_line()
+		var line: String = source.get_line()
 		dest.store_line(line)
 		line_num += 1
 		if line_num % 5000 == 0:
@@ -124,7 +124,7 @@ func _export_splat(input_path: String, output_path: String) -> bool:
 	return true
 
 func _export_metadata_json(session: ReconstructionSession, output_path: String) -> bool:
-	var metadata = {
+	var metadata: Dictionary = {
 		"session_name": session.session_name,
 		"created_at": Time.get_datetime_string_from_system(),
 		"video_path": session.video_path,
@@ -139,8 +139,8 @@ func _export_metadata_json(session: ReconstructionSession, output_path: String) 
 		"quality_metrics": session.metrics.get_quality_report() if session.metrics else ""
 	}
 	
-	var json = JSON.stringify(metadata, "\t")
-	var file = FileAccess.open(output_path, FileAccess.WRITE)
+	var json: String = JSON.stringify(metadata, "\t")
+	var file: FileAccess = FileAccess.open(output_path, FileAccess.WRITE)
 	if not file:
 		export_failed.emit("Impossible de créer le fichier JSON")
 		return false
@@ -155,7 +155,7 @@ func export_to_super_splat_format(session: ReconstructionSession, output_path: S
 	return export_session(session, ExportFormat.SPLAT, output_path)
 
 func export_quality_report_html(session: ReconstructionSession, output_path: String) -> bool:
-	var html = """
+	var html: String = """
 <!DOCTYPE html>
 <html>
 <head>
@@ -228,7 +228,7 @@ func export_quality_report_html(session: ReconstructionSession, output_path: Str
 		session.metrics.get_quality_report() if session.metrics else "No metrics available"
 	]
 	
-	var file = FileAccess.open(output_path, FileAccess.WRITE)
+	var file: FileAccess = FileAccess.open(output_path, FileAccess.WRITE)
 	if not file:
 		export_failed.emit("Impossible de créer le rapport HTML")
 		return false

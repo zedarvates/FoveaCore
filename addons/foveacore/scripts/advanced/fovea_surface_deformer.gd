@@ -21,6 +21,11 @@ enum DeformationType {
 @export var wave_tiling_size: float = 10.0
 @export var wave_loop_period: float = 4.0
 
+@export_group("Water Level Bobbing")
+@export var water_level_amplitude: float = 0.0
+@export var water_level_frequency: float = 0.5
+@export var water_level_offset: float = 0.0
+
 ## Limiter le nombre de splats traités par frame pour les performances CPU
 ## 0 = pas de limite (tout traiter à chaque frame)
 @export var max_splats_per_frame: int = 50000
@@ -186,7 +191,8 @@ func _apply_deformation(mm: MultiMesh) -> void:
 		var wave_basis := Basis(t_vec, b_vec, n_vec)
 		
 		var final_xf := original_xf
-		final_xf.origin.y += displacement_y
+		var bobbing := sin(_time * water_level_frequency * 2.0 * PI) * water_level_amplitude + water_level_offset
+		final_xf.origin.y += displacement_y + bobbing
 		final_xf.basis = wave_basis * original_xf.basis
 		
 		FoveaMultiMeshBulk.write_transform(buf, i * stride, final_xf)

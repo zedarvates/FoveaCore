@@ -30,7 +30,7 @@ project/assembly_name="FoveaEngine"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/fovea_labs/plugin.cfg", "res://addons/foveacore/plugin.cfg")
+enabled=PackedStringArray("res://addons/fovea_labs/plugin.cfg", "res://addons/foveacore/plugin.cfg", "res://addons/fovea_delta_painter/plugin.cfg")
 
 [fovea]
 
@@ -40,6 +40,8 @@ tools/python_path="python"
 tools/gaussian_train_script="train.py"
 tools/star_bridge_script="star_bridge.py"
 tools/worldmirror_bridge_script="worldmirror_bridge.py"
+tools/triposplat_bridge_script="triposplat_bridge.py"
+tools/artifixer_bridge_script="artifixer_bridge.py"
 
 [physics]
 

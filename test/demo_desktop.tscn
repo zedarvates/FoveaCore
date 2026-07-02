@@ -1,0 +1,27 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://test/demo_desktop_camera.gd" id="1_2rj1w"]
+[ext_resource type="Script" path="res://addons/foveacore/scripts/advanced/fovea_core_splat_renderer.gd" id="2_1rqoa"]
+[ext_resource type="Script" path="res://test/demo_desktop_ui.gd" id="3_7hjl0"]
+
+[sub_resource type="Environment" id="Environment_ghsxl"]
+background_color = Color(0.1, 0.1, 0.1, 1)
+
+[node name="DemoDesktop" type="Node3D" unique_id=846796591]
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=743568595]
+transform = Transform3D(0.70710677, -0.49999997, 0.49999997, 0, 0.70710677, 0.70710677, -0.70710677, -0.49999997, 0.49999997, 0, 0, 0)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=72232855]
+environment = SubResource("Environment_ghsxl")
+
+[node name="FlyingCamera" type="Camera3D" parent="." unique_id=1817903925]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 3)
+script = ExtResource("1_2rj1w")
+
+[node name="SplatRenderer" type="MultiMeshInstance3D" parent="." unique_id=551701414]
+script = ExtResource("2_1rqoa")
+asset_path = "res://test/demo_bonsai.fovea"
+
+[node name="DesktopUI" type="CanvasLayer" parent="." unique_id=1309985766]
+script = ExtResource("3_7hjl0")

@@ -23,7 +23,15 @@ extends MultiMeshInstance3D
 @export var splat_subdivisions: int = 16    # Nombre de segments pour l'ellipse
 @export var sort_distance_threshold: float = 0.1  # Distance minimale de déplacement de la caméra pour recalculer le tri/culling
 @export var chunk_load_radius: float = 20.0  # Distance maximum pour charger un chunk spatial
-@export var enable_layered_splatting: bool = true
+@export var enable_gpu_driven: bool = false
+@export var is_static: bool = true
+
+enum PerformanceProfile { MOBILE, VR, DESKTOP_HIGH }
+@export var performance_profile: PerformanceProfile = PerformanceProfile.DESKTOP_HIGH:
+    set(val):
+        performance_profile = val
+        _update_performance_profile_budget()
+
 
 @export_group("Cleaning (FoveaSplatCleaner)")
 ## Activer le filtrage des floaters et NaN apres le GPU culling
@@ -119,6 +127,7 @@ extends MultiMeshInstance3D
 @export var hlod_distances: Array[float] = [8.0, 18.0, 30.0]
 ## Activer le rendu par tuiles d'écran (16x16) via Compute Shader (Tile-Based Rasterization)
 @export var enable_tile_rasterizer := false
+@export var enable_layered_splatting: bool = true
 
 @export_group("Surface Waves (Dynamic, Repeating & Looping)")
 ## Activer les vagues de surface dynamique (GPU)
@@ -163,6 +172,9 @@ var culler_pipeline: GPUCullerPipeline
 var splat_mesh: ArrayMesh
 var triangle_mesh_generator
 
+var texture_rd_output: Texture2DRD = null
+var texture_rd_counter: Texture2DRD = null
+
 ## Référence optionnelle au FoveaClayDeformer attaché à ce renderer.
 ## Peut être assigné manuellement ou automatiquement par le deformer lui-même.
 var deformer: FoveaClayDeformer = null
@@ -182,6 +194,18 @@ func _ready() -> void:
     culler_pipeline = GPUCullerPipeline.new()
     culler_pipeline.interleave_factor = sort_interleave_factor
     _propagate_cleaning_parameters()
+    _update_performance_profile_budget()
+
+func _update_performance_profile_budget() -> void:
+    if not culler_pipeline:
+        return
+    match performance_profile:
+        PerformanceProfile.MOBILE:
+            culler_pipeline.max_dynamic_splats = 50000
+        PerformanceProfile.VR:
+            culler_pipeline.max_dynamic_splats = 200000
+        PerformanceProfile.DESKTOP_HIGH:
+            culler_pipeline.max_dynamic_splats = 1000000
     
     # Charger le générateur de maillage triangle
     triangle_mesh_generator = load("res://addons/foveacore/scripts/advanced/triangle_splat_mesh.gd")
@@ -270,6 +294,14 @@ func _process(_delta: float) -> void:
     # ou si de nouveaux chunks ont été chargés asynchronement.
     var cam_pos: Vector3 = camera.global_position
     var camera_moved := (cam_pos - _last_camera_pos).length() > sort_distance_threshold
+    
+    # Task 230: Optimisation d'autonomie énergétique sur mobile.
+    # Si l'asset est configuré comme statique/stable (is_static) et que la caméra ne bouge pas
+    # significativement, on évite complètement de relancer le dispatch GPU et le tri de splats.
+    var should_update_culling := true
+    if is_static and not camera_moved:
+        should_update_culling = false
+        
     var new_chunks_loaded := false
     var streaming_mgr: RefCounted = culler_pipeline.streaming_manager if culler_pipeline else null
     if _compositor_effect and _compositor_effect.culler_pipeline:
@@ -280,14 +312,14 @@ func _process(_delta: float) -> void:
             new_chunks_loaded = true
             streaming_mgr.has_newly_loaded_chunks = false
 
-    if asset_path != "" and (camera_moved or new_chunks_loaded):
+    if asset_path != "" and (should_update_culling or new_chunks_loaded):
         _last_camera_pos = cam_pos
         if enable_tile_rasterizer:
             multimesh.instance_count = 0
             if streaming_mgr:
                 streaming_mgr.update_streaming(camera, chunk_load_radius)
         else:
-            load_and_render_splats()
+            load_and_render_splats(camera_moved)
 
     # Gérer la transition HLOD pour les splats procéduraux
     if enable_hlod and not hlod_levels.is_empty():
@@ -549,7 +581,7 @@ func update_material_shader() -> void:
     mat.set_shader_parameter("wave_tiling_size", wave_tiling_size)
     mat.set_shader_parameter("wave_loop_period", wave_loop_period)
 
-func load_and_render_splats() -> void:
+func load_and_render_splats(camera_moved: bool = true) -> void:
     var camera: Camera3D = get_viewport().get_camera_3d()
     if not camera:
         push_error("FoveaCoreSplatRenderer: No camera in viewport.")
@@ -589,9 +621,47 @@ func load_and_render_splats() -> void:
 
     # 3. Exécution du Compute Shader ultra-rapide (Culling)
     culler_pipeline.chunk_load_radius = chunk_load_radius
+    culler_pipeline.skip_sync = enable_gpu_driven
+    var manager: Node = get_node_or_null("/root/FoveaCoreManager")
+    if manager:
+        if "max_dynamic_splats" in manager:
+            culler_pipeline.max_dynamic_splats = manager.max_dynamic_splats
+        if "max_dynamic_splats_ratio" in manager:
+            culler_pipeline.max_dynamic_splats_ratio = manager.max_dynamic_splats_ratio
     var output_buffer_rid: RID = culler_pipeline.process_splats_from_file(
-        asset_path, camera, depth_tex, cull_threshold, aabb_min, aabb_max, null, hlod_distances)
+        asset_path, camera, depth_tex, cull_threshold, aabb_min, aabb_max, null, hlod_distances,
+        RID(), RID(), false, 16, Transform3D.IDENTITY, RID(), 0.0, is_static, camera_moved)
     if not output_buffer_rid.is_valid():
+        return
+        
+    if enable_gpu_driven:
+        var cache: Dictionary = culler_pipeline._gpu_buffers.get(asset_path, {})
+        if not cache.is_empty():
+            var out_rid: RID = cache.get("output_texture", RID())
+            var cnt_rid: RID = cache.get("counter_texture", RID())
+            if out_rid.is_valid() and cnt_rid.is_valid():
+                if texture_rd_output == null:
+                    texture_rd_output = Texture2DRD.new()
+                if texture_rd_counter == null:
+                    texture_rd_counter = Texture2DRD.new()
+                
+                if texture_rd_output.texture_rd_rid != out_rid:
+                    texture_rd_output.texture_rd_rid = out_rid
+                if texture_rd_counter.texture_rd_rid != cnt_rid:
+                    texture_rd_counter.texture_rd_rid = cnt_rid
+                
+                if mat:
+                    mat.set_shader_parameter("enable_gpu_driven", true)
+                    mat.set_shader_parameter("output_texture", texture_rd_output)
+                    mat.set_shader_parameter("counter_texture", texture_rd_counter)
+                
+                var streaming_asset = culler_pipeline.streaming_manager.register_asset(asset_path, aabb_min, aabb_max)
+                if streaming_asset:
+                    multimesh.instance_count = streaming_asset.total_splats
+            else:
+                push_error("FoveaCoreSplatRenderer: GPU-driven textures not valid in cache.")
+        else:
+            push_error("FoveaCoreSplatRenderer: Cache not found for asset: " + asset_path)
         return
         
     # 3. Récupération des données filtrées depuis la VRAM
@@ -856,3 +926,35 @@ func _find_light_recursive(node: Node) -> DirectionalLight3D:
         if found:
             return found
     return null
+
+## Permet le rendu de multiples objets distincts via un seul appel indirect multi-draw.
+## Reçoit une liste de RIDs de buffers indirects individuels.
+static func draw_multi_assets_indirect(rendering_device: RenderingDevice, draw_list: int, indirect_draw_buffers: Array[RID], is_indexed: bool = false) -> void:
+    if indirect_draw_buffers.is_empty():
+        return
+        
+    var count := indirect_draw_buffers.size()
+    var stride := 20 if is_indexed else 16
+    
+    # Créer un buffer d'arguments consolidé (multi-draw arguments buffer)
+    var combined_bytes := PackedByteArray()
+    combined_bytes.resize(count * stride)
+    
+    for i in range(count):
+        var buf := indirect_draw_buffers[i]
+        if buf.is_valid():
+            var data := rendering_device.buffer_get_data(buf)
+            if data.size() >= stride:
+                for b in range(stride):
+                    combined_bytes[i * stride + b] = data[b]
+                    
+    var multi_draw_buffer := rendering_device.storage_buffer_create(combined_bytes.size(), combined_bytes)
+    
+    # Transition memory barrier
+    rendering_device.barrier()
+    
+    # Dessiner tous les assets avec un seul appel multi-draw indirect
+    rendering_device.draw_list_draw_indirect(draw_list, is_indexed, multi_draw_buffer, 0, count, stride)
+    
+    # Libérer le buffer temporaire après le dessin
+    rendering_device.free_rid(multi_draw_buffer)
