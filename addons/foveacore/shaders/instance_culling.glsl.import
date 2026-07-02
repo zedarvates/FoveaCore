@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://ch4iug8ajgv70"
+path="res://.godot/imported/instance_culling.glsl-5f280d9533bb6fe23f5005e46783d317.res"
+
+[deps]
+
+source_file="res://addons/foveacore/shaders/instance_culling.glsl"
+dest_files=["res://.godot/imported/instance_culling.glsl-5f280d9533bb6fe23f5005e46783d317.res"]
+
+[params]
+

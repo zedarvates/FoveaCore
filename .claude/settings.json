@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"C:\\Users\\redga\\miniconda3\\python.exe\" -m skills.preflight.hook",
+            "cwd": "F:\\foveaengine\\fovea-engine\\botte-secrete"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -60,6 +60,10 @@ func _ready() -> void:
 		if parent is FoveaSplattable:
 			splattable = parent
 
+	if splattable and splattable.is_static:
+		print("FoveaSplatCloth3D: Asset is static. Skipping physics simulation initialization.")
+		return
+
 	if not soft_body_path.is_empty():
 		_soft_body_ref = get_node_or_null(soft_body_path) as SoftBody3D
 		if _soft_body_ref:
@@ -73,6 +77,12 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if delta <= 0.0: return
 	
+	# Task 268: Connection du Verlet Solver ou des forces physiques aux entités dynamiques uniquement.
+	# Si l'objet est configuré comme statique/stable (is_static == true), on évite complètement de faire tourner le Verlet Solver
+	# ou d'appliquer les calculs de déformations physiques sur l'objet.
+	if splattable and splattable.is_static:
+		return
+
 	if _soft_body_ref:
 		# Mettre à jour l'oscillateur d'écrasement/rebond pour SoftBody3D
 		for i: int in range(_sb_deformation_states.size()):

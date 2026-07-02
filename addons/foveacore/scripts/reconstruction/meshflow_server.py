@@ -112,11 +112,11 @@ def load_ply_point_cloud(ply_path: str) -> np.ndarray:
 
         if is_binary:
             # Each vertex: x(f32) y(f32) z(f32) opacity(f32) r(u8) g(u8) b(u8)
-            # = 16 bytes
-            raw_data = f.read(vertex_count * 16)
+            # = 19 bytes
+            raw_data = f.read(vertex_count * 19)
             points = np.zeros((vertex_count, 4), dtype=np.float32)
             for i in range(vertex_count):
-                offset = i * 16
+                offset = i * 19
                 x, y, z, opacity = struct.unpack_from("<4f", raw_data, offset)
                 points[i] = [x, y, z, opacity]
         else:

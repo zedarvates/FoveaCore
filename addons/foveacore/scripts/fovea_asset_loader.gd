@@ -107,7 +107,7 @@ static func _deserialize_style_json(json_str: String) -> FoveaStyle:
 		push_error("FoveaAssetFormatLoader: Erreur de parsing JSON du Style.")
 		return style
 	
-	var data = parser.data
+	var data: Variant = parser.data
 	if not data is Dictionary:
 		return style
 		
@@ -122,13 +122,13 @@ static func _deserialize_style_json(json_str: String) -> FoveaStyle:
 	style.temporal_coherence = data.get("temporal_coherence", true)
 	
 	if data.has("stone_params") and data["stone_params"] is Dictionary:
-		style.stone_params = _deserialize_material(data["stone_params"])
+		style.stone_params = _deserialize_material(data["stone_params"] as Dictionary)
 	if data.has("wood_params") and data["wood_params"] is Dictionary:
-		style.wood_params = _deserialize_material(data["wood_params"])
+		style.wood_params = _deserialize_material(data["wood_params"] as Dictionary)
 	if data.has("metal_params") and data["metal_params"] is Dictionary:
-		style.metal_params = _deserialize_material(data["metal_params"])
+		style.metal_params = _deserialize_material(data["metal_params"] as Dictionary)
 	if data.has("skin_params") and data["skin_params"] is Dictionary:
-		style.skin_params = _deserialize_material(data["skin_params"])
+		style.skin_params = _deserialize_material(data["skin_params"] as Dictionary)
 		
 	return style
 
@@ -136,7 +136,7 @@ static func _deserialize_material(data: Dictionary) -> FoveaMaterial:
 	var mat := FoveaMaterial.new()
 	mat.material_type = data.get("material_type", 0) as FoveaMaterial.MaterialType
 	
-	var col_arr = data.get("base_color", [0.5, 0.5, 0.5, 1.0])
+	var col_arr: Variant = data.get("base_color", [0.5, 0.5, 0.5, 1.0])
 	mat.base_color = Color(col_arr[0], col_arr[1], col_arr[2], col_arr[3])
 	
 	mat.roughness = data.get("roughness", 0.8)

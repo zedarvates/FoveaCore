@@ -82,6 +82,8 @@ var _depth_shader:   RID
 var _depth_pipeline: RID
 var _sort_shader:   RID
 var _sort_pipeline: RID
+var _skinning_shader: RID
+var _skinning_pipeline: RID
 
 ## Compteur de frames pour l'entrelacement temporel du tri
 var _frame_counter: int = 0
@@ -116,6 +118,12 @@ func _load_shaders() -> void:
 	var sort_spirv: RDShaderSPIRV = sort_file.get_spirv()
 	_sort_shader   = rd.shader_create_from_spirv(sort_spirv)
 	_sort_pipeline = rd.compute_pipeline_create(_sort_shader)
+
+	# Shader de skinning squelettique (LBS/DQS)
+	var skin_file: RDShaderFile = preload("res://addons/foveacore/shaders/compute_skinning.glsl")
+	var skin_spirv: RDShaderSPIRV = skin_file.get_spirv()
+	_skinning_shader   = rd.shader_create_from_spirv(skin_spirv)
+	_skinning_pipeline = rd.compute_pipeline_create(_skinning_shader)
 
 # ── API publique ──────────────────────────────────────────────────────────────
 
@@ -282,6 +290,94 @@ func process_frame(camera: Camera3D, depth_tex: RID, cull_threshold: float = 0.0
 
 	return { "buffer_rid": output_buffer, "count": valid_count }
 
+## Applique le skinning sur GPU à l'aide de compute_skinning.glsl.
+## Retourne un PackedByteArray contenant les splats déformés.
+func dispatch_skinning(
+	input_splats_bytes: PackedByteArray,
+	influences_bytes: PackedByteArray,
+	bone_transforms: PackedFloat32Array,
+	use_dqs: bool,
+	aabb_min: Vector3,
+	aabb_max: Vector3
+) -> PackedByteArray:
+	if not rd:
+		push_error("FoveaSplatDispatcher: RenderingDevice non disponible.")
+		return PackedByteArray()
+
+	var total_splats: int = input_splats_bytes.size() / SPLAT_BYTE_SIZE
+	if total_splats == 0:
+		return PackedByteArray()
+
+	# 1. Créer les buffers GPU
+	var input_buf := rd.storage_buffer_create(input_splats_bytes.size(), input_splats_bytes)
+	var influence_buf := rd.storage_buffer_create(influences_bytes.size(), influences_bytes)
+	
+	# S'assurer que les matrices d'os sont converties en PackedByteArray
+	var bone_bytes := bone_transforms.to_byte_array()
+	var bone_buf := rd.storage_buffer_create(bone_bytes.size(), bone_bytes)
+	
+	var output_buf := rd.storage_buffer_create(input_splats_bytes.size())
+
+	# 2. Associer les uniforms
+	var u_input := RDUniform.new()
+	u_input.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+	u_input.binding = 0
+	u_input.add_id(input_buf)
+
+	var u_infl := RDUniform.new()
+	u_infl.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+	u_infl.binding = 1
+	u_infl.add_id(influence_buf)
+
+	var u_bone := RDUniform.new()
+	u_bone.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+	u_bone.binding = 2
+	u_bone.add_id(bone_buf)
+
+	var u_output := RDUniform.new()
+	u_output.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+	u_output.binding = 3
+	u_output.add_id(output_buf)
+
+	var set0: RID = rd.uniform_set_create([u_input, u_infl, u_bone, u_output], _skinning_shader, 0)
+
+	# 3. Préparer les push constants (48 bytes)
+	var push := PackedByteArray()
+	push.resize(48)
+	push.encode_u32(0, total_splats)
+	push.encode_u32(4, 1 if use_dqs else 0)
+	# offset 8..15 padding
+	push.encode_float(16, aabb_min.x)
+	push.encode_float(20, aabb_min.y)
+	push.encode_float(24, aabb_min.z)
+	push.encode_float(28, 0.0) # pad1
+	push.encode_float(32, aabb_max.x)
+	push.encode_float(36, aabb_max.y)
+	push.encode_float(40, aabb_max.z)
+	push.encode_float(44, 0.0) # pad2
+
+	# 4. Dispatcher le compute shader
+	var wg: int = ceili(float(total_splats) / 256.0)
+	var cl: int = rd.compute_list_begin()
+	rd.compute_list_bind_compute_pipeline(cl, _skinning_pipeline)
+	rd.compute_list_bind_uniform_set(cl, set0, 0)
+	rd.compute_list_set_push_constant(cl, push, 48)
+	rd.compute_list_dispatch(cl, wg, 1, 1)
+	rd.compute_list_end()
+	rd.submit()
+	rd.sync()
+
+	# 5. Récupérer les données de sortie
+	var result_bytes: PackedByteArray = rd.buffer_get_data(output_buf)
+
+	# 6. Nettoyage des RIDs
+	rd.free_rid(input_buf)
+	rd.free_rid(influence_buf)
+	rd.free_rid(bone_buf)
+	rd.free_rid(output_buf)
+
+	return result_bytes
+
 ## Libère toutes les ressources GPU (appeler à la destruction de la scène).
 func cleanup() -> void:
 	if rd:
@@ -303,6 +399,12 @@ func cleanup() -> void:
 		if _sort_shader.is_valid():
 			rd.free_rid(_sort_shader)
 			_sort_shader = RID()
+		if _skinning_pipeline.is_valid():
+			rd.free_rid(_skinning_pipeline)
+			_skinning_pipeline = RID()
+		if _skinning_shader.is_valid():
+			rd.free_rid(_skinning_shader)
+			_skinning_shader = RID()
 		rd.free()
 		rd = null
 

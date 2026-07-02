@@ -181,3 +181,6 @@ rtk init --global       # Add RTK to ~/.claude/CLAUDE.md
 
 Overall average: **60-90% token reduction** on common development operations.
 <!-- /rtk-instructions -->
+
+## Botte Secrète policy
+This project follows `.botte/policy.md` (prefer local models for cheap work, improve prompts locally, run `/checkup` after updates). Read it.

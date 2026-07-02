@@ -11,8 +11,8 @@ signal cleaning_failed(reason: String)
 @export var max_splat_size: float = 0.05
 @export var auto_clean_on_load: bool = false
 
-var _splats_data: Array = []
-var _floating_indices: Array = []
+var _splats_data: Array[Dictionary] = []
+var _floating_indices: Array[int] = []
 var _workspace_path: String = ""
 
 func _ready() -> void:
@@ -23,7 +23,7 @@ func analyze_workspace(workspace_dir: String) -> Dictionary:
 	_splats_data.clear()
 	_floating_indices.clear()
 	
-	var splat_file_path = workspace_dir + "/point_cloud/points.ply"
+	var splat_file_path: String = workspace_dir + "/point_cloud/points.ply"
 	if not FileAccess.file_exists(splat_file_path):
 		splat_file_path = workspace_dir + "/splats.ply"
 	
@@ -38,7 +38,7 @@ func analyze_workspace(workspace_dir: String) -> Dictionary:
 	
 	_floating_indices = _detect_floating_splats()
 	
-	var result = {
+	var result: Dictionary = {
 		"total_splats": _splats_data.size(),
 		"floating_count": _floating_indices.size(),
 		"floating_percentage": float(_floating_indices.size()) / float(_splats_data.size()) * 100.0,
@@ -50,25 +50,25 @@ func analyze_workspace(workspace_dir: String) -> Dictionary:
 	
 	return result
 
-func _parse_ply_splats(file_path: String) -> Array:
-	var splats: Array = []
-	var file = FileAccess.open(file_path, FileAccess.READ)
+func _parse_ply_splats(file_path: String) -> Array[Dictionary]:
+	var splats: Array[Dictionary] = []
+	var file: FileAccess = FileAccess.open(file_path, FileAccess.READ)
 	if not file:
 		push_error("FloatersDetector: Cannot open file: " + file_path)
 		return splats
 	
-	var header_found = false
-	var vertex_count = 0
-	var properties: Array = []
+	var header_found: bool = false
+	var vertex_count: int = 0
+	var properties: Array[String] = []
 
-	var file_error = file.get_error()
+	var file_error: Error = file.get_error()
 	if file_error != OK:
 		push_error("FloatersDetector: File error: " + str(file_error))
 		file.close()
 		return splats
 	
 	while file.get_position() < file.get_length():
-		var line = file.get_line().strip_edges()
+		var line: String = file.get_line().strip_edges()
 		if line.begins_with("end_header"):
 			header_found = true
 			break
@@ -81,20 +81,20 @@ func _parse_ply_splats(file_path: String) -> Array:
 		file.close()
 		return splats
 	
-	var x_idx = properties.find("property float x")
-	var y_idx = properties.find("property float y")
-	var z_idx = properties.find("property float z")
-	var nx_idx = properties.find("property float nx")
-	var ny_idx = properties.find("property float ny")
-	var nz_idx = properties.find("property float nz")
-	var scale_idx = properties.find("property float scale_0")
-	var opacity_idx = properties.find("property float opacity")
-	var color_idx = properties.find("property float red")
+	var x_idx: int = properties.find("property float x")
+	var y_idx: int = properties.find("property float y")
+	var z_idx: int = properties.find("property float z")
+	var nx_idx: int = properties.find("property float nx")
+	var ny_idx: int = properties.find("property float ny")
+	var nz_idx: int = properties.find("property float nz")
+	var scale_idx: int = properties.find("property float scale_0")
+	var opacity_idx: int = properties.find("property float opacity")
+	var color_idx: int = properties.find("property float red")
 	
-	for i in range(vertex_count):
+	for i: int in range(vertex_count):
 		if file.get_position() >= file.get_length():
 			break
-		var parts = file.get_line().split(" ")
+		var parts: PackedStringArray = file.get_line().split(" ")
 		if parts.size() < 3:
 			continue
 		
@@ -131,22 +131,22 @@ func _parse_ply_splats(file_path: String) -> Array:
 	file.close()
 	return splats
 
-func _detect_floating_splats() -> Array:
-	var floating: Array = []
-	var splat_count = _splats_data.size()
+func _detect_floating_splats() -> Array[int]:
+	var floating: Array[int] = []
+	var splat_count: int = _splats_data.size()
 
 	if splat_count == 0:
 		return floating
 
 	# Parallel detection using threads
-	var num_threads = max(1, OS.get_processor_count() - 1)
-	var chunk_size = max(1, splat_count / num_threads)
+	var num_threads: int = max(1, OS.get_processor_count() - 1)
+	var chunk_size: int = max(1, splat_count / num_threads)
 	var threads: Array[Thread] = []
-	var mutex = Mutex.new()
-	var results = []
+	var mutex: Mutex = Mutex.new()
+	var results: Array[int] = []
 
-	for t in range(num_threads):
-		var thread = Thread.new()
+	for t: int in range(num_threads):
+		var thread: Thread = Thread.new()
 		thread.start(_detect_chunk.bind(
 			t,
 			t * chunk_size,
@@ -161,44 +161,41 @@ func _detect_floating_splats() -> Array:
 		threads.append(thread)
 
 	# Wait all threads
-	for thread in threads:
-		thread.wait_to_finish()
+	for thread: Thread in threads:
+		if thread.is_started():
+			thread.wait_to_finish()
 
 	floating.append_array(results)
 
 	return floating
 
-func _detect_chunk(thread_id: int, start: int, end: int, splats_data: Array, min_dist: float, min_opacity: float, max_size: float, results: Array, mutex: Mutex) -> void:
-	var local_floating: Array = []
-	for i in range(start, end):
-		var splat = splats_data[i]
+func _detect_chunk(_thread_id: int, start: int, end: int, splats_data: Array[Dictionary], _min_dist: float, min_opacity: float, max_size: float, results: Array[int], mutex: Mutex) -> void:
+	var local_floating: Array[int] = []
+	for i: int in range(start, end):
+		var splat: Dictionary = splats_data[i]
 
 		# Check opacity
-		if splat["opacity"] < min_opacity:
+		if (splat["opacity"] as float) < min_opacity:
 			local_floating.append(i)
 			continue
 
 		# Check scale
-		if splat["scale"] > max_size:
+		if (splat["scale"] as float) > max_size:
 			local_floating.append(i)
 			continue
-
-	# Neighbor isolation check skipped in parallel mode (thread-safety).
-	# For sparse floaters, use _validate_against_spatial_hash() after parallel pass
-	# which leverages the existing SpatialHashGrid for O(1) neighbor queries.
 
 	# Append to shared results array atomically
 	mutex.lock()
 	results.append_array(local_floating)
 	mutex.unlock()
 
-func _build_kd_tree() -> Object:
-	var tree = KD_Tree.new()
-	for i in range(_splats_data.size()):
-		tree.insert_point(_splats_data[i]["pos"], i)
+func _build_kd_tree() -> KD_Tree:
+	var tree: KD_Tree = KD_Tree.new()
+	for i: int in range(_splats_data.size()):
+		tree.insert_point(_splats_data[i]["pos"] as Vector3, i)
 	return tree
 
-func _find_nearest_neighbors(kd_tree: Object, pos: Vector3, radius: float) -> Array:
+func _find_nearest_neighbors(kd_tree: KD_Tree, pos: Vector3, radius: float) -> Array[int]:
 	return kd_tree.find_in_radius(pos, radius)
 
 func remove_floating_splats(target_directory: String) -> bool:
@@ -208,33 +205,33 @@ func remove_floating_splats(target_directory: String) -> bool:
 	
 	cleaning_started.emit(_floating_indices.size())
 	
-	var input_path = _workspace_path + "/point_cloud/points.ply"
+	var input_path: String = _workspace_path + "/point_cloud/points.ply"
 	if not FileAccess.file_exists(input_path):
 		input_path = _workspace_path + "/splats.ply"
 	
-	var output_path = target_directory + "/splats_cleaned.ply"
+	var output_path: String = target_directory + "/splats_cleaned.ply"
 	
-	var input_file = FileAccess.open(input_path, FileAccess.READ)
+	var input_file: FileAccess = FileAccess.open(input_path, FileAccess.READ)
 	if not input_file:
 		cleaning_failed.emit("Impossible d'ouvrir le fichier source")
 		return false
 	
-	var header_end_pos = _find_header_end(input_file)
+	var header_end_pos: int = _find_header_end(input_file)
 	input_file.seek(header_end_pos)
 	
-	var output_file = FileAccess.open(output_path, FileAccess.WRITE)
+	var output_file: FileAccess = FileAccess.open(output_path, FileAccess.WRITE)
 	if not output_file:
 		cleaning_failed.emit("Impossible de creer le fichier de sortie")
 		return false
 	
-	var header = _read_header(input_file)
+	var header: String = _read_header(input_file)
 	header = header.replace("element vertex " + str(_splats_data.size()), "element vertex " + str(_splats_data.size() - _floating_indices.size()))
 	output_file.store_string(header)
 	
-	var line_idx = 0
-	var removed_count = 0
-	var floating_set = {}
-	for idx in _floating_indices:
+	var line_idx: int = 0
+	var removed_count: int = 0
+	var floating_set: Dictionary = {}
+	for idx: int in _floating_indices:
 		floating_set[idx] = true
 	
 	while input_file.get_position() < input_file.get_length():
@@ -245,7 +242,7 @@ func remove_floating_splats(target_directory: String) -> bool:
 			cleaning_progress_updated.emit(removed_count, _floating_indices.size())
 			continue
 		
-		var line = input_file.get_line()
+		var line: String = input_file.get_line()
 		output_file.store_line(line)
 		line_idx += 1
 	
@@ -257,24 +254,22 @@ func remove_floating_splats(target_directory: String) -> bool:
 	return true
 
 func _find_header_end(file: FileAccess) -> int:
-	var pos = 0
+	var pos: int = 0
 	while file.get_position() < file.get_length():
-		var line = file.get_line()
-		if line.strip_edges().begins_with("end_header"):
-			return file.get_position()
+		file.get_line()
 		pos = file.get_position()
 	return pos
 
 func _read_header(file: FileAccess) -> String:
 	file.seek(0)
-	var header_lines: Array = []
+	var header_lines: Array[String] = []
 	while file.get_position() < file.get_length():
-		var line = file.get_line()
+		var line: String = file.get_line()
 		header_lines.append(line)
 		if line.strip_edges().begins_with("end_header"):
 			break
-	var full_header = ""
-	for l in header_lines:
+	var full_header: String = ""
+	for l: String in header_lines:
 		full_header += l + "\n"
 	return full_header
 
@@ -282,7 +277,7 @@ func get_floating_report() -> String:
 	if _floating_indices.is_empty():
 		return "Aucun artifact flottant detecte."
 	
-	var report = "=== Floaters Detection Report ===\n"
+	var report: String = "=== Floaters Detection Report ===\n"
 	report += "Total splats: %d\n" % _splats_data.size()
 	report += "Floating artifacts: %d (%f%%)\n" % [_floating_indices.size(), float(_floating_indices.size()) / float(_splats_data.size()) * 100.0]
 	report += "Seuil d'isolement: %f\n" % min_isolated_distance
@@ -292,16 +287,16 @@ func get_floating_report() -> String:
 
 
 class KD_Tree:
-	var _points: Array = []
-	var _indices: Array = []
+	var _points: Array[Vector3] = []
+	var _indices: Array[int] = []
 	
 	func insert_point(pos: Vector3, idx: int) -> void:
 		_points.append(pos)
 		_indices.append(idx)
 	
-	func find_in_radius(pos: Vector3, radius: float) -> Array:
-		var results: Array = []
-		for i in range(_points.size()):
+	func find_in_radius(pos: Vector3, radius: float) -> Array[int]:
+		var results: Array[int] = []
+		for i: int in range(_points.size()):
 			if pos.distance_to(_points[i]) <= radius:
 				results.append(_indices[i])
 		return results

@@ -96,7 +96,7 @@ impl Color3D {
 
 /// Classe exposée à Godot pour charger les assets de manière asynchrone et sécurisée
 #[derive(GodotClass)]
-#[class(base=RefCounted)]
+#[class(tool, base=RefCounted)]
 pub struct FoveaAssetLoader {
     base: Base<RefCounted>,
 }
@@ -672,6 +672,107 @@ impl FoveaAssetLoader {
     #[func]
     pub fn load_covariance_codebook(path: GString) -> PackedByteArray {
         Self::load_covar_codebook(path)
+    }
+
+    /// Charge directement un segment de fichier dans un buffer GPU (Style DirectStorage)
+    #[func]
+    pub fn upload_file_slice_to_gpu_buffer(
+        &self,
+        mut rd: Gd<godot::classes::RenderingDevice>,
+        file_path: GString,
+        file_offset: i64,
+        size: i64,
+        buffer_rid: Rid,
+        buffer_offset: i64,
+    ) -> bool {
+        let path_str = file_path.to_string();
+        let mut file = match File::open(&path_str) {
+            Ok(f) => f,
+            Err(e) => {
+                godot_print!("FoveaEngine DirectStorage [Error] : Impossible d'ouvrir le fichier {} - {}", path_str, e);
+                return false;
+            }
+        };
+        use std::io::Seek;
+        if file.seek(std::io::SeekFrom::Start(file_offset as u64)).is_err() {
+            godot_print!("FoveaEngine DirectStorage [Error] : Echec de seek dans le fichier");
+            return false;
+        }
+        let mut buffer = vec![0u8; size as usize];
+        if let Err(e) = file.read_exact(&mut buffer) {
+            godot_print!("FoveaEngine DirectStorage [Error] : Echec de read_exact dans le fichier : {}", e);
+            return false;
+        }
+        let packed_bytes = PackedByteArray::from(buffer.as_slice());
+        rd.buffer_update(buffer_rid, buffer_offset as u32, size as u32, &packed_bytes);
+        true
+    }
+
+    /// Charge asynchronement un segment de fichier dans un buffer GPU (Style DirectStorage)
+    #[func]
+    pub fn upload_file_slice_to_gpu_buffer_async(
+        &self,
+        rd: Gd<godot::classes::RenderingDevice>,
+        file_path: GString,
+        file_offset: i64,
+        size: i64,
+        buffer_rid: Rid,
+        buffer_offset: i64,
+    ) -> bool {
+        let path_str = file_path.to_string();
+        
+        struct SendGd(Gd<godot::classes::RenderingDevice>);
+        unsafe impl Send for SendGd {}
+        unsafe impl Sync for SendGd {}
+        
+        let mut rd_send = SendGd(rd);
+        let rid_send = buffer_rid;
+        
+        std::thread::spawn(move || {
+            let mut file = match File::open(&path_str) {
+                Ok(f) => f,
+                Err(e) => {
+                    godot_print!("FoveaEngine DirectStorage Async [Error] : Impossible d'ouvrir le fichier {} - {}", path_str, e);
+                    return;
+                }
+            };
+            use std::io::Seek;
+            if file.seek(std::io::SeekFrom::Start(file_offset as u64)).is_err() {
+                godot_print!("FoveaEngine DirectStorage Async [Error] : Echec de seek dans le fichier");
+                return;
+            }
+            let mut buffer = vec![0u8; size as usize];
+            if let Err(e) = file.read_exact(&mut buffer) {
+                godot_print!("FoveaEngine DirectStorage Async [Error] : Echec de read_exact : {}", e);
+                return;
+            }
+            let packed_bytes = PackedByteArray::from(buffer.as_slice());
+            
+            let mut rd_wrap = rd_send;
+            unsafe {
+                let rd_raw = &mut rd_wrap.0 as *mut Gd<godot::classes::RenderingDevice>;
+                (*rd_raw).buffer_update(rid_send, buffer_offset as u32, size as u32, &packed_bytes);
+            }
+        });
+        
+        true
+    }
+
+    /// Réordonne les octets des splats selon un tableau d'indices triés
+    #[func]
+    pub fn reorder_splats(&self, bytes: PackedByteArray, sorted_indices: PackedInt32Array) -> PackedByteArray {
+        let splats_slice = bytes.as_slice();
+        let indices_slice = sorted_indices.as_slice();
+        let total_splats = splats_slice.len() / 16;
+        let mut out_buffer = vec![0u8; bytes.len()];
+        
+        for i in 0..total_splats {
+            let orig_idx = indices_slice[i] as usize;
+            if orig_idx * 16 + 15 < splats_slice.len() {
+                out_buffer[i * 16 .. (i + 1) * 16].copy_from_slice(&splats_slice[orig_idx * 16 .. (orig_idx + 1) * 16]);
+            }
+        }
+        PackedByteArray::from(out_buffer.as_slice())
     }
 
     /// Extrait les triangles visibles en espace mondial avec backface culling rapide en Rust

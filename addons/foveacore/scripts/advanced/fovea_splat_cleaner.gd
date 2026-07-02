@@ -7,17 +7,17 @@ extends RefCounted
 const SPLAT_BYTE_SIZE = 16
 
 ## Nettoie les NaN/Inf (fallback au niveau GDScript)
-static func filter_nan_inf(bytes: PackedByteArray) -> PackedByteArray:
-	if bytes.size() == 0 or bytes.size() % SPLAT_BYTE_SIZE != 0:
+static func filter_nan_inf(bytes: PackedByteArray, splat_byte_size: int = 16) -> PackedByteArray:
+	if bytes.size() == 0 or bytes.size() % splat_byte_size != 0:
 		return bytes
 		
 	var out_bytes: PackedByteArray = PackedByteArray()
-	var total_splats: int = bytes.size() / SPLAT_BYTE_SIZE
+	var total_splats: int = bytes.size() / splat_byte_size
 	out_bytes.resize(bytes.size())
 	
 	var valid_count: int = 0
 	for i in range(total_splats):
-		var offset: int = i * SPLAT_BYTE_SIZE
+		var offset: int = i * splat_byte_size
 		var px: int = bytes.decode_u16(offset)
 		var py: int = bytes.decode_u16(offset + 2)
 		var pz: int = bytes.decode_u16(offset + 4)
@@ -26,20 +26,20 @@ static func filter_nan_inf(bytes: PackedByteArray) -> PackedByteArray:
 		if px == 65535 and py == 65535 and pz == 65535:
 			continue # Ignorer splat suspect
 			
-		for b in range(SPLAT_BYTE_SIZE):
-			out_bytes[valid_count * SPLAT_BYTE_SIZE + b] = bytes[offset + b]
+		for b in range(splat_byte_size):
+			out_bytes[valid_count * splat_byte_size + b] = bytes[offset + b]
 		valid_count += 1
 		
-	out_bytes.resize(valid_count * SPLAT_BYTE_SIZE)
+	out_bytes.resize(valid_count * splat_byte_size)
 	return out_bytes
 
 ## Filtre les floaters (splats "fantômes" isolés)
 ## Utilise une grille spatiale simplifiée pour trouver les splats qui n'ont pas de voisins proches
-static func filter_floaters(bytes: PackedByteArray, neighbor_radius_voxels: int = 1, min_neighbors: int = 2) -> PackedByteArray:
+static func filter_floaters(bytes: PackedByteArray, neighbor_radius_voxels: int = 1, min_neighbors: int = 2, splat_byte_size: int = 16) -> PackedByteArray:
 	if bytes.size() == 0:
 		return bytes
 		
-	var total_splats: int = bytes.size() / SPLAT_BYTE_SIZE
+	var total_splats: int = bytes.size() / splat_byte_size
 	var out_bytes: PackedByteArray = PackedByteArray()
 	
 	# Voxelisation simplifiée pour la recherche de voisins proches
@@ -49,7 +49,7 @@ static func filter_floaters(bytes: PackedByteArray, neighbor_radius_voxels: int 
 	
 	# Pass 1: Remplir la grille de voxels
 	for i in range(total_splats):
-		var offset: int = i * SPLAT_BYTE_SIZE
+		var offset: int = i * splat_byte_size
 		var vx: int = int(bytes.decode_u16(offset) / voxel_size)
 		var vy: int = int(bytes.decode_u16(offset + 2) / voxel_size)
 		var vz: int = int(bytes.decode_u16(offset + 4) / voxel_size)
@@ -78,22 +78,22 @@ static func filter_floaters(bytes: PackedByteArray, neighbor_radius_voxels: int 
 			surviving_indices.append_array(splats_in_cell)
 			
 	# Construire le buffer final
-	out_bytes.resize(surviving_indices.size() * SPLAT_BYTE_SIZE)
+	out_bytes.resize(surviving_indices.size() * splat_byte_size)
 	for i in range(surviving_indices.size()):
-		var src_offset: int = surviving_indices[i] * SPLAT_BYTE_SIZE
-		var dst_offset: int = i * SPLAT_BYTE_SIZE
-		for b in range(SPLAT_BYTE_SIZE):
+		var src_offset: int = surviving_indices[i] * splat_byte_size
+		var dst_offset: int = i * splat_byte_size
+		for b in range(splat_byte_size):
 			out_bytes[dst_offset + b] = bytes[src_offset + b]
 			
 	print("FoveaSplatCleaner: Floaters filtrés. %d -> %d splats." % [total_splats, surviving_indices.size()])
 	return out_bytes
 
 ## Décime le nombre de splats en fusionnant les plus proches spatialement
-static func decimate(bytes: PackedByteArray, target_count: int) -> PackedByteArray:
-	if bytes.size() == 0 or bytes.size() / SPLAT_BYTE_SIZE <= target_count:
+static func decimate(bytes: PackedByteArray, target_count: int, splat_byte_size: int = 16) -> PackedByteArray:
+	if bytes.size() == 0 or bytes.size() / splat_byte_size <= target_count:
 		return bytes
 		
-	var total_splats: int = bytes.size() / SPLAT_BYTE_SIZE
+	var total_splats: int = bytes.size() / splat_byte_size
 	var out_bytes: PackedByteArray = PackedByteArray()
 	
 	# On regroupe les splats proches dans une grille plus grossière et on les fusionne
@@ -103,7 +103,7 @@ static func decimate(bytes: PackedByteArray, target_count: int) -> PackedByteArr
 	
 	var grid: Dictionary = {}
 	for i in range(total_splats):
-		var offset: int = i * SPLAT_BYTE_SIZE
+		var offset: int = i * splat_byte_size
 		var vx: int = int(bytes.decode_u16(offset) / grid_res)
 		var vy: int = int(bytes.decode_u16(offset + 2) / grid_res)
 		var vz: int = int(bytes.decode_u16(offset + 4) / grid_res)
@@ -114,7 +114,7 @@ static func decimate(bytes: PackedByteArray, target_count: int) -> PackedByteArr
 		grid[key].append(offset)
 		
 	# Fusionner chaque cellule en un seul splat moyen
-	out_bytes.resize(grid.size() * SPLAT_BYTE_SIZE)
+	out_bytes.resize(grid.size() * splat_byte_size)
 	var idx: int = 0
 	
 	for key in grid.keys():
@@ -145,14 +145,14 @@ static func decimate(bytes: PackedByteArray, target_count: int) -> PackedByteArr
 		var avg_z: int = int(sum_z / count)
 		var avg_opac: int = int(sum_opac / count)
 		
-		var dst: int = idx * SPLAT_BYTE_SIZE
+		var dst: int = idx * splat_byte_size
 		# Écriture de la position moyenne
 		out_bytes.encode_u16(dst, avg_x)
 		out_bytes.encode_u16(dst + 2, avg_y)
 		out_bytes.encode_u16(dst + 4, avg_z)
 		
 		# Copie des autres attributs (normale, couleur, covariance, layer, dither) du splat dominant
-		for b in range(6, SPLAT_BYTE_SIZE):
+		for b in range(6, splat_byte_size):
 			out_bytes[dst + b] = bytes[max_opac_offset + b]
 			
 		# Ré-injecter l'opacité moyenne
@@ -180,11 +180,12 @@ static func merge_coplanar(
 		z_bucket: int        = 512,
 		normal_bucket: int   = 24,
 		xy_bucket: int       = 1024,
-		min_group_size: int  = 4
+		min_group_size: int  = 4,
+		splat_byte_size: int = 16
 ) -> PackedByteArray:
 	if bytes.is_empty():
 		return bytes
-	var total_splats: int = bytes.size() / SPLAT_BYTE_SIZE
+	var total_splats: int = bytes.size() / splat_byte_size
 	if total_splats < min_group_size * 2:
 		return bytes  # Pas assez de splats pour profiter de la fusion
 
@@ -195,7 +196,7 @@ static func merge_coplanar(
 	var grid: Dictionary = {}
 
 	for i: int in range(total_splats):
-		var off: int = i * SPLAT_BYTE_SIZE
+		var off: int = i * splat_byte_size
 
 		var qx: int = bytes.decode_u16(off)
 		var qy: int = bytes.decode_u16(off + 2)
@@ -233,9 +234,9 @@ static func merge_coplanar(
 		if n < min_group_size:
 			# Groupe trop petit → copier les splats tels quels
 			for idx: int in group:
-				var src: int = idx * SPLAT_BYTE_SIZE
-				var dst: int = out_count * SPLAT_BYTE_SIZE
-				for b: int in range(SPLAT_BYTE_SIZE):
+				var src: int = idx * splat_byte_size
+				var dst: int = out_count * splat_byte_size
+				for b: int in range(splat_byte_size):
 					out_bytes[dst + b] = bytes[src + b]
 				out_count += 1
 		else:
@@ -245,10 +246,10 @@ static func merge_coplanar(
 			var sum_z: float = 0.0
 			var sum_opac: float = 0.0
 			var max_opac: int = 0
-			var dominant_off: int = group[0] * SPLAT_BYTE_SIZE
+			var dominant_off: int = group[0] * splat_byte_size
 
 			for idx: int in group:
-				var src: int = idx * SPLAT_BYTE_SIZE
+				var src: int = idx * splat_byte_size
 				sum_x += float(bytes.decode_u16(src))
 				sum_y += float(bytes.decode_u16(src + 2))
 				sum_z += float(bytes.decode_u16(src + 4))
@@ -263,7 +264,7 @@ static func merge_coplanar(
 			var avg_z: int = int(sum_z / float(n))
 			var avg_opac: int = mini(255, int(sum_opac / float(n)))
 
-			var dst: int = out_count * SPLAT_BYTE_SIZE
+			var dst: int = out_count * splat_byte_size
 
 			# Position : centroïde du groupe
 			out_bytes.encode_u16(dst,     avg_x)
@@ -271,7 +272,7 @@ static func merge_coplanar(
 			out_bytes.encode_u16(dst + 4, avg_z)
 
 			# Normale, couleur, covariance : copié du splat dominant (le plus opaque)
-			for b: int in range(6, SPLAT_BYTE_SIZE):
+			for b: int in range(6, splat_byte_size):
 				out_bytes[dst + b] = bytes[dominant_off + b]
 
 			# Réinjecter l'opacité moyenne
@@ -280,7 +281,7 @@ static func merge_coplanar(
 			out_count += 1
 			merged_groups += 1
 
-	out_bytes.resize(out_count * SPLAT_BYTE_SIZE)
+	out_bytes.resize(out_count * splat_byte_size)
 	var reduction_pct: float = (1.0 - float(out_count) / float(total_splats)) * 100.0
 	print("FoveaSplatCleaner: merge_coplanar: %d → %d splats (-%d groupes, -%.1f%% overdraw)." % [
 		total_splats, out_count, merged_groups, reduction_pct])

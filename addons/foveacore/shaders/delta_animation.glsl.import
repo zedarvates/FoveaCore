@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://dcvb3bqbfwb23"
+path="res://.godot/imported/delta_animation.glsl-01e46ac6112acdad420accaed3efac1f.res"
+
+[deps]
+
+source_file="res://addons/foveacore/shaders/delta_animation.glsl"
+dest_files=["res://.godot/imported/delta_animation.glsl-01e46ac6112acdad420accaed3efac1f.res"]
+
+[params]
+

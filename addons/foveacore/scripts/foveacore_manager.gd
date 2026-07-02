@@ -37,6 +37,10 @@ const _ProxyFaceRendererScript = preload("res://addons/foveacore/scripts/advance
 @export var global_splat_density := 1.0
 ## The maximum number of splats that can be rendered in a single frame.
 @export var max_splats_per_frame := 100000
+## The maximum number of dynamic splats rendered simultaneously (performance profile).
+@export var max_dynamic_splats := 50000
+## The maximum ratio of dynamic splats relative to the total splat count.
+@export var max_dynamic_splats_ratio := 0.5
 ## If [code]true[/code], culls splats that are outside the camera frustum or occluded.
 @export var visible_only_culling := true
 
@@ -106,6 +110,11 @@ func _ready() -> void:
 	_init_subsystems()
 	renderer_initialized = true
 	print("FoveaCore: Manager initialisé (orchestrateur + 3 sous-systèmes).")
+	
+	# Task 227: Préréglages Meta Quest 3 / Mobile VR
+	var mobile_presets_class = load("res://addons/foveacore/scripts/advanced/fovea_mobile_presets.gd")
+	if mobile_presets_class:
+		mobile_presets_class.auto_apply_if_mobile_vr(self)
 
 func _init_culling_nodes() -> void:
 	## Noeuds de bas niveau (Eye culling, visibilité, occlusion, reprojection, hybride)

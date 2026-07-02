@@ -39,16 +39,18 @@ signal generation_completed(splat_count: int)
 
 ## Static reference to the PLYLoader script.
 const _PlyLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/ply_loader.gd")
+## Unified point-cloud loader (routes .ply/.splat/.spz/.sog by extension).
+const _SplatFormatLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/splat_format_loader.gd")
 
 ## Local multiplier for splat density (e.g. 1.0 matches the global density).
 @export var splat_density := 1.0
 
-## Path to a Gaussian Splatting file (.ply, .fovea, .spz).
-@export_file("*.ply", "*.fovea", "*.spz") var splat_file_path: String = "":
+## Path to a Gaussian Splatting file (.ply, .fovea, .spz, .splat).
+@export_file("*.ply", "*.fovea", "*.spz", "*.splat") var splat_file_path: String = "":
 	set(val):
 		splat_file_path = val
 		if is_node_ready():
-			if splat_file_path.ends_with(".ply"):
+			if splat_file_path.ends_with(".ply") or splat_file_path.ends_with(".splat"):
 				_load_splats_from_ply()
 			elif splat_file_path.ends_with(".fovea"):
 				var renderer: Node = get_node_or_null("SplatRenderer")
@@ -93,6 +95,17 @@ const _PlyLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/
 ## If [code]true[/code], enables shared instanced rendering (Global Splat Instancing) for .fovea assets.
 @export var enable_instancing: bool = true
 
+## If [code]true[/code], this asset is treated as completely static/stable.
+## Static assets bypass redundant GPU culling/sorting dispatches on mobile.
+## Dynamic assets support skeletal skinning, physics solver, and get sorted every frame.
+@export var is_static: bool = true:
+	set(val):
+		is_static = val
+		var renderer = get_node_or_null("FoveaCoreSplatRenderer")
+		if renderer:
+			renderer.is_static = val
+
+
 @export_group("Delta-Splat Overrides")
 ## Custom tint color override applied to this instance.
 @export var color_override: Color = Color.WHITE
@@ -104,16 +117,49 @@ const _PlyLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/
 @export_enum("None", "Bend", "Twist", "Squish", "Wave") var morph_type: String = "None"
 ## Force de la déformation (0.0 = aucun effet, 1.0 = effet maximum).
 @export_range(0.0, 1.0) var morph_weight: float = 0.0
+## Valeur cible pour le morphing (permet une interpolation fluide).
+@export_range(0.0, 1.0) var morph_weight_target: float = 0.0
+## Vitesse d'interpolation (0 = instantané, >0 = vitesse d'interpolation).
+@export var morph_interpolation_speed: float = 5.0
 ## Fréquence spatiale du morphing.
 @export var morph_frequency: float = 1.0
 ## Amplitude maximale du morphing.
 @export var morph_amplitude: float = 0.5
+
+## Force de l'application du delta (0.0 = aucun effet, 1.0 = effet maximum).
+@export_range(0.0, 1.0) var delta_weight: float = 0.0
+## Valeur cible pour le delta (permet une interpolation fluide).
+@export_range(0.0, 1.0) var delta_weight_target: float = 0.0
+## Vitesse d'interpolation du delta.
+@export var delta_interpolation_speed: float = 5.0
 
 ## If [code]true[/code], hides the original MeshInstance3D when splatting is active.
 @export var hide_mesh_when_splatting := true
 
 ## Culling priority (0 is culled first, 10 is culled last).
 @export_range(0, 10) var culling_priority := 5
+
+@export_file("*.fvdelta") var delta_file_path: String = "":
+	set(val):
+		delta_file_path = val
+		if not delta_file_path.is_empty():
+			load_delta_file(delta_file_path)
+
+## Delta colors (tint overrides per splat index: local_idx -> Color)
+var delta_colors: Dictionary = {}
+## Delta positions (deform offsets per splat index: local_idx -> Vector3)
+var delta_positions: Dictionary = {}
+
+func save_delta_file(path: String) -> void:
+	if loaded_splats.is_empty():
+		return
+	FoveaDeltaData.save_to_file(path, loaded_splats.size(), delta_positions, delta_colors, {})
+
+func load_delta_file(path: String) -> void:
+	var result: Variant = FoveaDeltaData.load_from_file(path)
+	if result is Dictionary and not result.is_empty():
+		delta_positions = result.delta_positions
+		delta_colors = result.delta_colors
 
 ## Référence au mesh original
 var original_mesh: Mesh = null
@@ -133,6 +179,14 @@ var has_ply_splats: bool = false
 ## Buffer GPU pour les splats (géré par le renderer natif)
 var splat_buffer_rid: RID = RID()
 
+## Sets a delta tint color on a specific splat index.
+func set_delta_color(local_idx: int, color: Color) -> void:
+	delta_colors[local_idx] = color
+
+## Sets a delta position deformation offset on a specific splat index.
+func set_delta_position(local_idx: int, offset: Vector3) -> void:
+	delta_positions[local_idx] = offset
+
 
 func _enter_tree() -> void:
 	add_to_group("splattables")
@@ -148,7 +202,22 @@ func _exit_tree() -> void:
 		manager.unregister_splattable(self)
 
 
+func _process(delta: float) -> void:
+	if not Engine.is_editor_hint():
+		if morph_interpolation_speed > 0.0:
+			morph_weight = move_toward(morph_weight, morph_weight_target, morph_interpolation_speed * delta)
+		else:
+			morph_weight = morph_weight_target
+			
+		if delta_interpolation_speed > 0.0:
+			delta_weight = move_toward(delta_weight, delta_weight_target, delta_interpolation_speed * delta)
+		else:
+			delta_weight = delta_weight_target
+
+
 func _ready() -> void:
+	morph_weight_target = morph_weight
+	delta_weight_target = delta_weight
 	_capture_mesh_reference()
 	
 	# Gestion de la compatibilité des fichiers de splats
@@ -159,9 +228,9 @@ func _ready() -> void:
 	if hide_mesh_when_splatting and splatting_enabled and _mesh_instance_ref != null:
 		_mesh_instance_ref.visible = false
 		
-	# Charger le PLY si un chemin est fourni
+	# Charger le nuage de points si un chemin est fourni
 	if not splat_file_path.is_empty():
-		if splat_file_path.ends_with(".ply"):
+		if splat_file_path.ends_with(".ply") or splat_file_path.ends_with(".splat"):
 			_load_splats_from_ply()
 		elif splat_file_path.ends_with(".fovea"):
 			_setup_native_renderer()
@@ -188,27 +257,109 @@ func _setup_native_renderer() -> void:
 		print("FoveaSplattable: Rendu natif local détecté pour ", splat_file_path)
 	
 	# Instancier dynamiquement FoveaCoreSplatRenderer pour les assets natifs
-	var renderer: Node = get_node_or_null("FoveaCoreSplatRenderer")
+	var renderer: FoveaCoreSplatRenderer = get_node_or_null("FoveaCoreSplatRenderer") as FoveaCoreSplatRenderer
 	if not renderer:
 		renderer = FoveaCoreSplatRenderer.new()
 		renderer.name = "FoveaCoreSplatRenderer"
 		renderer.sort_distance_threshold = 0.1
+		renderer.is_static = is_static
 		add_child(renderer)
 	renderer.asset_path = splat_file_path
 
 
+
+## Calculates the gravity vector and aligns the entire splat cloud's up direction with absolute Vector3.UP.
+func align_to_gravity_plane() -> void:
+	if loaded_splats.is_empty():
+		push_warning("FoveaSplattable: Cannot align splats, loaded_splats is empty.")
+		return
+	
+	# 1. Collect all Y coordinates to find the lowest 10%
+	var y_coords: Array[float] = []
+	for splat in loaded_splats:
+		y_coords.append(splat.position.y)
+	y_coords.sort()
+	
+	var threshold_idx: int = int(y_coords.size() * 0.1)
+	if threshold_idx == 0:
+		threshold_idx = 1
+	var y_threshold: float = y_coords[threshold_idx]
+	
+	# 2. Extract bottom splats
+	var bottom_points: Array[Vector3] = []
+	for splat in loaded_splats:
+		if splat.position.y <= y_threshold:
+			bottom_points.append(splat.position)
+	
+	if bottom_points.size() < 3:
+		push_warning("FoveaSplattable: Not enough points in the lowest 10% to compute gravity plane.")
+		return
+		
+	# 3. Calculate plane normal using least squares fit (y = ax + bz + c)
+	var sum_xx: float = 0.0
+	var sum_xz: float = 0.0
+	var sum_x: float = 0.0
+	var sum_zz: float = 0.0
+	var sum_z: float = 0.0
+	var sum_xy: float = 0.0
+	var sum_zy: float = 0.0
+	var sum_y: float = 0.0
+	var n_pts: float = float(bottom_points.size())
+	
+	for pt in bottom_points:
+		sum_xx += pt.x * pt.x
+		sum_xz += pt.x * pt.z
+		sum_x += pt.x
+		sum_zz += pt.z * pt.z
+		sum_z += pt.z
+		sum_xy += pt.x * pt.y
+		sum_zy += pt.z * pt.y
+		sum_y += pt.y
+		
+	var det: float = sum_xx * (sum_zz * n_pts - sum_z * sum_z) - \
+					 sum_xz * (sum_xz * n_pts - sum_x * sum_z) + \
+					 sum_x  * (sum_xz * sum_z - sum_x * sum_zz)
+					
+	var normal: Vector3 = Vector3.UP
+	if abs(det) > 1e-6:
+		var a: float = ((sum_zz * n_pts - sum_z * sum_z) * sum_xy + \
+						(sum_x * sum_z - sum_xz * n_pts) * sum_zy + \
+						(sum_xz * sum_z - sum_x * sum_zz) * sum_y) / det
+						
+		var b: float = ((sum_x * sum_z - sum_xz * n_pts) * sum_xy + \
+						(sum_xx * n_pts - sum_x * sum_x) * sum_zy + \
+						(sum_x * sum_xz - sum_xx * sum_z) * sum_y) / det
+		
+		# Normal points generally upwards, from Y = ax + bz + c it corresponds to (-a, 1, -b)
+		normal = Vector3(-a, 1.0, -b).normalized()
+	
+	# 4. Calculate rotation quaternion Q from normal to Vector3.UP
+	var q: Quaternion = Quaternion(normal, Vector3.UP)
+	
+	# 5. Apply Q to all splats: position, rotation
+	for splat in loaded_splats:
+		splat.position = q * splat.position
+		splat.rotation = q * splat.rotation
+		
+	# 6. Update local renderer and print result
+	_update_local_renderer()
+	print("FoveaSplattable: Gravitational Up-Vector alignment complete using normal: ", normal)
+
+
 func _update_local_renderer() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
 	if Engine.is_editor_hint() or not get_node_or_null("/root/FoveaCoreManager"):
 		if has_ply_splats and not loaded_splats.is_empty():
 			var renderer: Node = get_node_or_null("SplatRenderer")
 			if not renderer:
-				var SplatRendererScript: GDScript = load("res://addons/foveacore/scripts/reconstruction/splat_renderer.gd")
+				var SplatRendererScript: GDScript = load("res://addons/foveacore/scripts/reconstruction/splat_renderer.gd") as GDScript
 				if SplatRendererScript:
-					renderer = SplatRendererScript.new()
+					renderer = SplatRendererScript.new() as Node
 					renderer.name = "SplatRenderer"
 					add_child(renderer)
 			if renderer:
-				renderer.load_splats(loaded_splats)
+				renderer.call("load_splats", loaded_splats)
 
 
 ## Runs 3D semantic segmentation on this splattable using the specified prompt.
@@ -290,16 +441,18 @@ func _capture_mesh_reference() -> void:
 		original_mesh = _mesh_instance_ref.mesh
 
 
-## Charger les splats depuis le fichier PLY configuré
+## Charge les splats depuis le fichier configuré (.ply / .splat / …), via le
+## routeur de formats. Le nom historique est conservé car des appelants externes
+## (plugin.gd) l'invoquent directement.
 func _load_splats_from_ply() -> void:
-	print("FoveaSplattable: Chargement PLY depuis '", splat_file_path, "'...")
-	var gaussians: Variant = _PlyLoaderScript.load_gaussians_from_ply(splat_file_path)
-	if gaussians == null or gaussians.is_empty():
-		push_error("FoveaSplattable: PLYLoader returned empty")
+	print("FoveaSplattable: Chargement du nuage depuis '", splat_file_path, "'...")
+	var gaussians: Array = _SplatFormatLoaderScript.load_gaussians(splat_file_path)
+	if gaussians.is_empty():
+		push_error("FoveaSplattable: loader returned empty for " + splat_file_path)
 		return
 	loaded_splats = gaussians
 	has_ply_splats = true
-	print("FoveaSplattable: %d splats loaded from PLY" % loaded_splats.size())
+	print("FoveaSplattable: %d splats loaded from %s" % [loaded_splats.size(), splat_file_path.get_extension()])
 	_update_local_renderer()
 
 

@@ -122,7 +122,7 @@ var _handles: Array[ClayHandle] = []
 
 ## Cache des transforms originaux (non déformés)
 ## Clé: MultiMesh RID.get_id(), Valeur: Array[Transform3D]
-var _original_transforms: Dictionary[int, PackedFloat32Array] = {}
+var _original_transforms: Dictionary = {}  ## key: instance_id (int) → value: PackedFloat32Array
 
 ## Référence au renderer parent (si FoveaClayDeformer est enfant d'un SplatRenderer)
 var _renderer: FoveaCoreSplatRenderer = null
