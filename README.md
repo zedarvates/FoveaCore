@@ -4,7 +4,7 @@
 
 [![Godot](https://img.shields.io/badge/Godot-4.6+-478CBF?logo=godot-engine&logoColor=white)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)]()
-[![Status](https://img.shields.io/badge/status-active-brightgreen.svg)]()
+[![Version](https://img.shields.io/badge/version-0.3.0--living--splats-blue)]()
 [![VR](https://img.shields.io/badge/VR-OpenXR-orange)]()
 
 **Next-generation hybrid rendering engine for Godot 4** — combining structural low-poly meshes with real-time 3D Gaussian Splatting (3DGS), feed-forward neural reconstruction, and a procedural style engine. Designed for expressive, high-performance VR on accessible hardware.
@@ -39,6 +39,24 @@
 - **GPU compute culling** — backface culling (compute shader) + Hi-Z occlusion culling
 - **Anisotropic splats** — true ellipses via covariance codebook texture + Gaussian exp() alpha
 
+### 🔷 Delta Splat Variants
+- **Per-instance delta overrides** — color tint, position offset, scale delta
+- **FP16 compressed deltas** — low overhead (≤0.1 ms at 1000 instances)
+- **Delta painter tool** — paint instance overrides in-editor
+
+### 🔷 Animation Subsystem — Living Splats (v0.3.0)
+- **8 GPU-powered animators** — Flow (curl-noise wind), Morph Covariance (PULSE/BREATHE/WOBBLE), Material Oscillation (color/opacity/emission), LOD Stretch, Flipbook (multi-frame), Neural Offset Field (3D grid), Bone Skinning (LBS), Cloth (Verlet GPU)
+- **Compute shader pipeline** — `splat_animate.glsl` + `splat_animate_advanced.glsl` + `cloth_simulation.glsl`
+- **Double-buffered animation** — base buffer immutable, animated buffer per-frame
+- **Foveated animation** — amplitude attenuated by gaze direction in VR
+- **Authoring tools** — Flow Paint 3D, 5 presets (Living Watercolor, Pulsing Metal, Breathing Wood, Alien Bioluminescence, Flickering Flame), editor animation dock
+
+### 🔷 Hermes AI Agent Bridge
+- **WebSocket server** (port 8765) — sandboxed, auth token, JSON protocol
+- **10 operations** — ping, get_scene_info, generate_splats, edit_transform, query_asset, get_stats
+- **Python client** — minimal (20 lines), `hermes_client.py ping|get_scene_info|get_stats`
+- **Blender addon** — scene sync, camera sync, asset round-trip
+
 ### 🔷 StudioTo3D — Video → 3DGS Pipeline
 A complete pipeline to turn video footage into Gaussian Splat assets:
 1. **Smart masking** — white/chroma/luma background removal + ROI lasso tool
@@ -48,6 +66,10 @@ A complete pipeline to turn video footage into Gaussian Splat assets:
 5. **SplatBrush** — VR sculpting, deformation, and flow current painting in real time
 
 ### 🔷 Advanced GPU Pipeline
+- **GPU compute pipeline** — culling, depth precompute, bitonic sort, Hi-Z generation, publish splats, tile rasterizer
+- **Indirect multi-draw** — frustum culling on GPU, single indirect draw call
+- **Instance culling** — per-instance visibility compute
+- **Delta animation** — FP16 delta buffer applied per-frame via compute shader (soft deforms)
 - **GPU bitonic sort** — depth sorting fully on compute shader (0 CPU overhead)
 - **Temporal & interleaved sorting** — distributed over N frames to eliminate CPU-GPU stalls
 - **FP16 depth keys** — pre-computed depth keys before sorting (~4-6× bandwidth reduction)
