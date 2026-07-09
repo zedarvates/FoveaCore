@@ -1,0 +1,42 @@
+[gd_scene load_steps=2 format=3 uid="uid://foveaanimationdock"]
+
+[ext_resource type="Script" path="res://addons/foveacore/scripts/editor/fovea_animation_dock.gd" id="1_fovea_animation_dock"]
+
+[node name="AnimationDock" type="PanelContainer"]
+anchors_preset = 0
+custom_minimum_size = Vector2(250, 300)
+script = ExtResource("1_fovea_animation_dock")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+text = "Animation Controls"
+theme_override_font_sizes/font_size = 14
+
+[node name="PlayPause" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="PlayBtn" type="Button" parent="VBoxContainer/PlayPause"]
+layout_mode = 2
+text = "▶ Play"
+
+[node name="PauseBtn" type="Button" parent="VBoxContainer/PlayPause"]
+layout_mode = 2
+text = "⏸ Pause"
+
+[node name="Scrub" type="HSlider" parent="VBoxContainer"]
+layout_mode = 2
+min_value = 0.0
+max_value = 10.0
+step = 0.01
+value = 0.0
+
+[node name="TimeLabel" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+text = "t = 0.00s"
+
+[node name="AnimatorList" type="ItemList" parent="VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
