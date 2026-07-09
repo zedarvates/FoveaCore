@@ -37,6 +37,8 @@ var publish_pipeline_rid: RID
 
 var delta_shader_rid: RID
 var delta_pipeline_rid: RID
+var animate_shader_rid: RID
+var animate_pipeline_rid: RID
 
 var inst_cull_shader_rid: RID
 var inst_cull_pipeline_rid: RID
