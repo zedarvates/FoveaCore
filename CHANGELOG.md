@@ -5,6 +5,34 @@
 
 ---
 
+## ✨ v0.3.0-dev — Phase 7: Dynamic Splat Animation (CPU foundation)
+
+### New — Animation Subsystem
+- **`FoveaAnimationSubsystem`**: orchestrator for all splat animation modes.
+  Register/unregister animators, global intensity & time scale, CPU/GPU/AUTO backend
+  selector.
+- **`FoveaFlowFieldAnimator`**: curl-noise driven flow field with WIND, WATER, ORGANIC
+  presets, layer-weighted per-splat displacement, foveated amplitude cutoff.
+- **`FoveaMorphCovarianceAnimator`**: PULSE (uniform log-space scaling), BREATHE
+  (dominant axis extend / minor contract), WOBBLE (per-splat quaternion jitter).
+- **`FoveaMaterialOscillation`**: animates splat color, opacity, emission with
+  configurable frequency, base/target color lerp and alpha oscillation.
+- **`FoveaLodStretchAnimator`**: LOD-dependent scale stretch driven by distance
+  curve (optional `Curve` resource).
+- **`FoveaFlipbookAnimator`**: multi-frame splat playback with configurable FPS,
+  looping, crossfade, and frame/phase metadata export.
+- **`FoveaNeuralOffsetField`**: 3D grid of offset vectors with trilinear sampling,
+  `bake_from_numpy()` for Python/NumPy import, optional temporal frames.
+- **`FoveaBoneSkinAnimation`**: Linear Blend Skinning via `Skeleton3D`, 4-bone
+  distance heuristic binding, heat-diffusion fallback.
+
+### Tests
+- 8 new test suites covering all Phase 7 animators (auto-discovered by runner).
+
+### Changed
+- `run_all_tests.gd` auto-discovers `test_*.gd` — no registration needed.
+- New directory `scripts/animation/` for all animation subsystems.
+
 ## 🩹 v0.2.1 — Stability & import polish (July 2026)
 
 ### Fixes
