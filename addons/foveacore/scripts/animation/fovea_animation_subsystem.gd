@@ -22,6 +22,9 @@ func _ready() -> void:
 		if child.has_method("apply_animation"):
 			_animators.append(child)
 
+func get_anim_time() -> float:
+	return anim_time
+
 func register_animator(animator: Node) -> void:
 	if not animator in _animators:
 		_animators.append(animator)
