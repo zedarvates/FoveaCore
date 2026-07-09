@@ -1,0 +1,55 @@
+{
+  "name": "FoveaEngine - Motion Field Generator",
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadImage"
+    },
+    {
+      "id": 2,
+      "type": "DepthAnythingV2"
+    },
+    {
+      "id": 3,
+      "type": "RAFT"
+    },
+    {
+      "id": 4,
+      "type": "FlowProject3D"
+    },
+    {
+      "id": 5,
+      "type": "GridSample3D"
+    },
+    {
+      "id": 6,
+      "type": "SaveNpy"
+    }
+  ],
+  "edges": [
+    {
+      "from": 1,
+      "to": 2
+    },
+    {
+      "from": 1,
+      "to": 3
+    },
+    {
+      "from": 2,
+      "to": 4
+    },
+    {
+      "from": 3,
+      "to": 4
+    },
+    {
+      "from": 4,
+      "to": 5
+    },
+    {
+      "from": 5,
+      "to": 6
+    }
+  ]
+}
