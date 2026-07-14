@@ -150,13 +150,11 @@ func _exit_tree():
 		panel.queue_free()
 		panel = null
 
-	# Unregister .fovea loader/saver
-	if format_loader:
-		ResourceLoader.remove_resource_format_loader(format_loader)
-		format_loader = null
-	if format_saver:
-		ResourceSaver.remove_resource_format_saver(format_saver)
-		format_saver = null
+	# Godot unregisters script-backed format handlers before this callback during
+	# editor shutdown. Removing them again triggers an engine error; dropping our
+	# references is sufficient and also keeps plugin reloads safe.
+	format_loader = null
+	format_saver = null
 
 	for type_def in CUSTOM_TYPES:
 		remove_custom_type(type_def[0])

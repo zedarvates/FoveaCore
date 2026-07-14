@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://c5u1e5wsjd4pf"
+path="res://.godot/imported/cloth_simulation.glsl-488a99c7e145ca67b6f1147aa68f9899.res"
+
+[deps]
+
+source_file="res://addons/foveacore/shaders/cloth_simulation.glsl"
+dest_files=["res://.godot/imported/cloth_simulation.glsl-488a99c7e145ca67b6f1147aa68f9899.res"]
+
+[params]
+

@@ -1,6 +1,8 @@
 class_name FoveaDeltaManagerPlugin
 extends FoveaDeltaManager
 
+var _instance_overrides: Dictionary = {}
+
 ## FoveaEngine — Delta Variants (items 206-217)
 ## Instance-level overrides: color tint, position offset, scale delta.
 
@@ -16,4 +18,4 @@ func set_instance_delta(instance_id: int, delta: Dictionary) -> void:
 	packed[8] = delta.get("sx", 1.0)
 	packed[9] = delta.get("sy", 1.0)
 	packed[10] = delta.get("sz", 1.0)
-	_store_instance_override(instance_id, packed)
+	_instance_overrides[instance_id] = packed

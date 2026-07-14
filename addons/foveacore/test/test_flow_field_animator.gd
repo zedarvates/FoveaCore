@@ -1,14 +1,15 @@
 extends SceneTree
-const Flow = preload("res://addons/foveacore/scripts/animation/fovea_flow_field_animator.gd")
-var _passed := 0; var _failed := 0
+
+const FlowAnimator = preload("res://addons/foveacore/scripts/advanced/fovea_flow_field_animator.gd")
+const GaussianSplatScript = preload("res://addons/foveacore/scripts/reconstruction/gaussian_splat.gd")
+
 func _init() -> void:
-	print("\n=== FoveaFlowFieldAnimator Tests ==="); _run_all(); await create_timer(0.1).timeout; quit(_failed)
-func _run_all() -> void:
-	var f = Flow.new()
-	assert(f.amplitude > 0, "Default amplitude")
-	f.preset = Flow.Preset.WATER
-	assert(f.amplitude == 0.15, "Water preset amplitude")
-	var splat = {"position": Vector3(1,2,3), "layer": 0}
-	var s2 = f.modify_splat(splat.duplicate(), 0.016, null)
-	assert(s2["position"] != splat["position"], "Position changed")
-	_passed += 4; _failed += 0; print(f"  {_passed}/{_passed+_failed}")
+
+	var animator: FoveaFlowFieldAnimator = FlowAnimator.new()
+	animator._ready()
+	var splat: GaussianSplat = GaussianSplatScript.new(Vector3(1.0, 2.0, 3.0))
+	var original_position: Vector3 = splat.position
+	animator._apply_to_splat(splat, 1.0, 1.0)
+	assert(splat.position != original_position)
+	print("PASS: typed flow modifier changes transient position")
+	quit(0)

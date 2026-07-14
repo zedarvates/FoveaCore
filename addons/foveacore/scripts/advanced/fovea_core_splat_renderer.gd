@@ -665,8 +665,8 @@ func load_and_render_splats(camera_moved: bool = true) -> void:
         return
         
     # 3. Récupération des données filtrées depuis la VRAM
-    if culler_pipeline == null or culler_pipeline.rd == null:
-        push_error("FoveaCoreSplatRenderer: culler_pipeline or rd is null, skipping data readback.")
+    if culler_pipeline == null or culler_pipeline.rd == null or not output_buffer_rid.is_valid():
+        push_error("FoveaCoreSplatRenderer: culler pipeline, RenderingDevice, or output buffer is invalid; skipping data readback.")
         return
     var culled_bytes: PackedByteArray = culler_pipeline.rd.buffer_get_data(output_buffer_rid)
     

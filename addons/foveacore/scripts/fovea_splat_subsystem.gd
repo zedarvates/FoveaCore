@@ -23,6 +23,7 @@ var temporal_reprojector: TemporalReprojector = null
 var occlusion_culler: OcclusionCuller = null
 var splat_sorter: SplatSorter = null
 var splat_renderer: Node = null
+var animation_subsystem: FoveaAnimationSubsystem = null
 
 ## Position caméra du frame précédent (pour reprojection temporelle)
 var _previous_camera_position: Vector3 = Vector3.ZERO
@@ -66,15 +67,23 @@ func _generate_and_filter(visibility_result, camera: Camera3D, camera_pos: Vecto
 						splat.scale = gtr_scale * local_splat.scale
 						splat.opacity = local_splat.opacity * node.alpha_override
 						splat.color = local_splat.color * node.color_override
+						splat.palette_index = local_splat.palette_index
 						splat.normal = (gtr.basis * local_splat.normal).normalized()
 						splat.surface_normal = (gtr.basis * local_splat.surface_normal).normalized()
 						splat.origin_offset = gtr.basis * local_splat.origin_offset
+						splat.velocity = gtr.basis * local_splat.velocity
+						splat.stiffness = local_splat.stiffness
 						splat.depth = splat.position.distance_to(camera_pos)
 						splat.radius = local_splat.radius * node.scale_override
 						splat.covariance = local_splat.covariance
 						splat.layer_type = local_splat.layer_type
 						splat.brush_type = local_splat.brush_type
 						splat.dither_seed = local_splat.dither_seed
+						splat.flipbook_frame = local_splat.flipbook_frame
+						splat.flipbook_frame_count = local_splat.flipbook_frame_count
+						splat.bone_indices = local_splat.bone_indices
+						splat.bone_weights = local_splat.bone_weights
+						splat.bind_pose_position = gtr * local_splat.bind_pose_position
 						current_splats[current_idx] = splat
 						current_idx += 1
 					else:
@@ -121,6 +130,8 @@ func _generate_and_filter(visibility_result, camera: Camera3D, camera_pos: Vecto
 				break
 
 	current_splats.resize(current_idx)
+	if animation_subsystem:
+		animation_subsystem.apply(current_splats)
 	current_splats = _sort_gpu_aware(current_splats, camera, camera_pos)
 
 ## Filtre les triangles occultés via le Hi-Z culler CPU

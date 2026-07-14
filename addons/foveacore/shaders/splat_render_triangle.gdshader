@@ -221,6 +221,11 @@ void vertex() {
                 layer_weight = is_in_focus ? 1.2 : 0.1;
             } else if (layer_type == 3u) {
                 layer_weight = is_in_focus ? 1.0 : 0.0;
+            } else if (layer_type == 7u) {
+                // LAYER_ANIM (Phase 7.3): flipbook/FX splats (flames, magic effects).
+                // Frame culling is handled CPU-side (opacity zeroed for inactive
+                // frames), so gaze focus should not additionally dim active frames.
+                layer_weight = 1.0;
             } else {
                 layer_weight = is_in_focus ? 0.8 : 0.3;
             }

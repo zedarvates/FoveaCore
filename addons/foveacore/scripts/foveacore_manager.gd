@@ -62,6 +62,12 @@ const _ProxyFaceRendererScript = preload("res://addons/foveacore/scripts/advance
 ## If [code]true[/code], enables multi-layered splatting passes (base, specular, details).
 @export var enable_layered_splatting := true
 
+@export_group("Animation Settings")
+## If [code]true[/code], enables the Dynamic Splat Animation subsystem (Phase 7).
+@export var animation_enabled := true
+## Global multiplier applied to all registered animation modifiers.
+@export var animation_global_intensity := 1.0
+
 # ─────────────────────────────────────────────────────────────
 #  Sous-systèmes (instances gérées en interne)
 # ─────────────────────────────────────────────────────────────
@@ -83,6 +89,9 @@ var _layered_foveated_controller: LayeredFoveatedController:
 
 ## Sous-système Pipeline Splat (génération → tri → rendu)
 var _splat_pipeline: FoveaSplatSubsystem = null
+
+## Sous-système Animation (Phase 7 — offsets additifs non-destructifs)
+var _animation: FoveaAnimationSubsystem = null
 
 ## Noeuds enfants hérités (Culling, Visibilité, Hybride)
 var _eye_culler: EyeCuller = null
@@ -160,7 +169,14 @@ func _init_subsystems() -> void:
 		peripheral_density_multiplier
 	)
 
-	## 3. Pipeline Splat
+	## 3. Sous-système Animation (doit exister avant le pipeline splat pour l'injection)
+	_animation = FoveaAnimationSubsystem.new()
+	_animation.name = "FoveaAnimationSubsystem"
+	_animation.enabled = animation_enabled
+	_animation.global_intensity = animation_global_intensity
+	add_child(_animation)
+
+	## 4. Pipeline Splat
 	_splat_pipeline = FoveaSplatSubsystem.new()
 	add_child(_splat_pipeline)
 	_splat_pipeline.setup(global_splat_density, max_splats_per_frame)
@@ -169,6 +185,7 @@ func _init_subsystems() -> void:
 	_splat_pipeline.occlusion_culler     = _occlusion_culler
 	_splat_pipeline.splat_sorter         = _splat_sorter
 	_splat_pipeline.splat_renderer       = _splat_renderer
+	_splat_pipeline.animation_subsystem  = _animation
 
 # ─────────────────────────────────────────────────────────────
 #  Loop principale — orchestre les sous-systèmes
@@ -333,6 +350,17 @@ func toggle_foveated(enabled: bool) -> void:
 		_foveated.mark_dirty()
 		if not enabled:
 			_foveated.disable()
+
+## Dynamically activates or deactivates the Dynamic Splat Animation subsystem at runtime.
+func toggle_animation(enabled: bool) -> void:
+	animation_enabled = enabled
+	if _animation:
+		_animation.enabled = enabled
+
+## Returns the [FoveaAnimationSubsystem] instance so animator nodes (flow fields,
+## covariance morphing, etc.) can register their modifiers.
+func get_animation_subsystem() -> FoveaAnimationSubsystem:
+	return _animation
 
 ## Toggles the hybrid rendering mode between combined mesh + splat rendering and splat-only rendering.
 func toggle_hybrid_mode() -> void:

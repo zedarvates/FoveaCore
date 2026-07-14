@@ -8,7 +8,16 @@ enum Platform { DESKTOP, QUEST_3, WEBGPU, MOBILE_ARM }
 
 @export var platform: Platform = Platform.DESKTOP
 
-func apply_preset(target_platform: Platform = platform) -> void:
+var max_splats: int = 500000
+var workgroup_divisor: int = 1
+var foveation_enabled: bool = false
+var thermal_downgrade_enabled: bool = false
+var compute_shaders_enabled: bool = true
+var fp16_enabled: bool = false
+var fallback_renderer_enabled: bool = false
+
+func apply_preset(target_platform: Platform = platform) -> Dictionary:
+	_reset_runtime_flags()
 	match target_platform:
 		Platform.QUEST_3:
 			max_splats = 200000
@@ -23,22 +32,45 @@ func apply_preset(target_platform: Platform = platform) -> void:
 			max_splats = 100000
 			reduce_workgroups(2)
 			reduce_precision_fp16(true)
-	print("FoveaMobileOptimizer: Applied %s preset" % target_platform)
+	platform = target_platform
+	var configuration: Dictionary = get_configuration()
+	print("FoveaMobileOptimizer: configured %s preset: %s" % [Platform.keys()[platform], configuration])
+	return configuration
+
+func _reset_runtime_flags() -> void:
+	max_splats = 500000
+	workgroup_divisor = 1
+	foveation_enabled = false
+	thermal_downgrade_enabled = false
+	compute_shaders_enabled = true
+	fp16_enabled = false
+	fallback_renderer_enabled = false
 
 func reduce_workgroups(factor: int) -> void:
-	pass  # Sets workgroup size multipliers
+	workgroup_divisor = maxi(factor, 1)
 
 func enable_foveation(enabled: bool) -> void:
-	pass  # Configures foveated rendering
+	foveation_enabled = enabled
 
 func enable_thermal_downgrade(enabled: bool) -> void:
-	pass  # Auto-downgrade when SoC throttles
+	thermal_downgrade_enabled = enabled
 
 func disable_compute_shaders(enabled: bool) -> void:
-	pass  # Fallback to non-compute render path
+	compute_shaders_enabled = not enabled
 
 func reduce_precision_fp16(enabled: bool) -> void:
-	pass  # Force FP16 everywhere
+	fp16_enabled = enabled
 
 func use_fallback_renderer(enabled: bool) -> void:
-	pass  # Use MultiMesh fallback
+	fallback_renderer_enabled = enabled
+
+func get_configuration() -> Dictionary:
+	return {
+		"max_splats": max_splats,
+		"workgroup_divisor": workgroup_divisor,
+		"foveation_enabled": foveation_enabled,
+		"thermal_downgrade_enabled": thermal_downgrade_enabled,
+		"compute_shaders_enabled": compute_shaders_enabled,
+		"fp16_enabled": fp16_enabled,
+		"fallback_renderer_enabled": fallback_renderer_enabled,
+	}

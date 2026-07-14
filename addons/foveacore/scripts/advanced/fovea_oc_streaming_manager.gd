@@ -20,7 +20,8 @@ func load_chunk(chunk_id: String) -> void:
 		return
 	_chunk_table[chunk_id] = {"state": ChunkState.LOADING, "fade": 0.0}
 	# Async read from disk → GPU upload
-	_start_async_load(chunk_id)
+	push_warning("FoveaOCStreamingManager does not yet implement standalone chunk loading; use FoveaStreamingManager.")
+	_chunk_table[chunk_id]["state"] = ChunkState.EVICTED
 	_lru_queue.push_back(chunk_id)
 
 func _enforce_budget() -> void:

@@ -387,6 +387,11 @@ func _auto_detect_python() -> void:
 
 func _save_user_settings() -> void:
 	"""Sauvegarde les chemins outils dans un fichier cfg utilisateur (hors projet)."""
+	var user_data_dir: String = OS.get_user_data_dir()
+	if user_data_dir.is_empty() or DirAccess.make_dir_recursive_absolute(user_data_dir) != OK:
+		push_warning("FoveaManager: User settings cannot be persisted because the user-data directory is unavailable.")
+		return
+
 	var config: ConfigFile = ConfigFile.new()
 	config.set_value("tools", "ffmpeg_path", ffmpeg_path)
 	config.set_value("tools", "colmap_path", colmap_path)
@@ -399,7 +404,7 @@ func _save_user_settings() -> void:
 
 	var err: Error = config.save(_user_config_path)
 	if err != OK:
-		push_error("Failed to save user settings to " + _user_config_path)
+		push_warning("FoveaManager: Failed to save user settings to %s (%s)." % [_user_config_path, error_string(err)])
 	else:
 		print("FoveaManager: User settings saved to ", _user_config_path)
 
@@ -412,7 +417,7 @@ func _load_user_settings() -> void:
 	var config: ConfigFile = ConfigFile.new()
 	var err: Error = config.load(_user_config_path)
 	if err != OK:
-		push_error("Failed to load user settings from " + _user_config_path)
+		push_warning("FoveaManager: Failed to load user settings from %s (%s); using defaults." % [_user_config_path, error_string(err)])
 		return
 
 	if config.has_section_key("tools", "ffmpeg_path"):
