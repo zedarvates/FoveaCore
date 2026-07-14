@@ -8,10 +8,9 @@ Usage:
 
 import sys
 import re
-import os
 from pathlib import Path
 
-UNTYPED_PATTERN = re.compile(r'^\s*(var|const)\s+(\w+)\s*(?!=|=)\s*(?![\w.]+:)')
+DECLARATION_PATTERN = re.compile(r'^\s*(?:var|const)\s+\w+\b(?P<suffix>.*)$')
 
 
 def count_untyped(directory: str) -> dict:
@@ -21,10 +20,14 @@ def count_untyped(directory: str) -> dict:
     
     for gd_file in sorted(Path(directory).rglob("*.gd")):
         untyped_lines = []
-        with open(gd_file) as f:
-            for i, line in enumerate(f, 1):
-                if UNTYPED_PATTERN.search(line):
-                    untyped_lines.append((i, line.strip()))
+        try:
+            with gd_file.open(encoding="utf-8") as file_handle:
+                for i, line in enumerate(file_handle, 1):
+                    declaration = DECLARATION_PATTERN.search(line)
+                    if declaration and not declaration.group("suffix").lstrip().startswith(":"):
+                        untyped_lines.append((i, line.strip()))
+        except (OSError, UnicodeDecodeError) as error:
+            raise RuntimeError("Cannot read %s as UTF-8: %s" % (gd_file, error)) from error
         
         if untyped_lines:
             results[str(gd_file)] = untyped_lines
@@ -38,12 +41,17 @@ def main():
     threshold = int(sys.argv[2]) if len(sys.argv) > 2 else 100
     
     print(f"Checking untyped variables in {directory}...")
-    results, total = count_untyped(directory)
+    try:
+        results, total = count_untyped(directory)
+    except RuntimeError as error:
+        print("ERROR: %s" % error, file=sys.stderr)
+        sys.exit(2)
     
     for path, lines in sorted(results.items()):
         print(f"\n  {path}:")
         for line_num, line in lines[:3]:
-            print(f"    L{line_num}: {line[:80]}")
+            safe_line = line[:80].encode("ascii", "backslashreplace").decode("ascii")
+            print(f"    L{line_num}: {safe_line}")
         if len(lines) > 3:
             print(f"    ... +{len(lines) - 3} more")
     
@@ -52,10 +60,10 @@ def main():
     print(f"Threshold: {threshold}")
     
     if total > threshold:
-        print(f"❌ FAIL: {total} > {threshold}")
+        print(f"FAIL: {total} > {threshold}")
         sys.exit(1)
     else:
-        print(f"✅ PASS: {total} <= {threshold}")
+        print(f"PASS: {total} <= {threshold}")
         sys.exit(0)
 
 

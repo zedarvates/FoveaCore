@@ -28,6 +28,46 @@ class MaterialStyleConfig:
 	var noise_octaves: int = 4
 	var noise_lacunarity: float = 2.0
 	var noise_gain: float = 0.5
+	## Phase 7.4 — Material Oscillation. osc_amplitude == 0.0 (the default) keeps
+	## compute_color_oscillated() bit-identical to compute_color(): fully backward compatible.
+	var osc_amplitude: float = 0.0
+	var osc_frequency: float = 0.0
+
+## Duplicates a config with detail/grain/noise_scale scaled by an oscillation
+## factor derived from time. Used by [method compute_color_oscillated].
+static func _oscillated_config(config: MaterialStyleConfig, time: float) -> MaterialStyleConfig:
+	var osc: float = 1.0 + config.osc_amplitude * sin(time * config.osc_frequency * TAU)
+	var animated := MaterialStyleConfig.new()
+	animated.material_type = config.material_type
+	animated.base_color = config.base_color
+	animated.detail = config.detail * osc
+	animated.grain = config.grain * osc
+	animated.light_coherence = config.light_coherence
+	animated.micro_shadow = config.micro_shadow
+	animated.specular_strength = config.specular_strength
+	animated.bump_strength = config.bump_strength
+	animated.noise_scale = config.noise_scale * osc
+	animated.noise_octaves = config.noise_octaves
+	animated.noise_lacunarity = config.noise_lacunarity
+	animated.noise_gain = config.noise_gain
+	animated.osc_amplitude = config.osc_amplitude
+	animated.osc_frequency = config.osc_frequency
+	return animated
+
+## Time-animated variant of [method compute_color]. When osc_amplitude == 0.0
+## this returns exactly the same result as compute_color (no behavior change
+## for existing non-animated callers).
+static func compute_color_oscillated(
+	position: Vector3,
+	normal: Vector3,
+	material_type: MaterialType,
+	config: MaterialStyleConfig,
+	light_direction: Vector3,
+	time: float
+) -> Color:
+	if config.osc_amplitude == 0.0:
+		return compute_color(position, normal, material_type, config, light_direction)
+	return compute_color(position, normal, material_type, _oscillated_config(config, time), light_direction)
 
 ## Cache des styles
 static var _style_cache: Dictionary = {}  ## String → Variant (style data cache)

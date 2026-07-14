@@ -1,13 +1,15 @@
 extends SceneTree
-const BoneSkin = preload("res://addons/foveacore/scripts/animation/fovea_bone_skin_animation.gd")
-var _passed := 0; var _failed := 0
+
+const SkinBinder = preload("res://addons/foveacore/scripts/advanced/fovea_splat_skin_binder.gd")
+const GaussianSplatScript = preload("res://addons/foveacore/scripts/reconstruction/gaussian_splat.gd")
+
 func _init() -> void:
-	print("\n=== FoveaBoneSkinAnimation Tests ==="); _run_all(); await create_timer(0.1).timeout; quit(_failed)
-func _run_all() -> void:
-	var b = BoneSkin.new()
-	b.bone_count = 4
-	var result = b._find_nearest_bones(Vector3.ZERO, 4)
-	assert(result.has("indices"), "indices returned")
-	assert(result.has("weights"), "weights returned")
-	assert(abs(result["weights"][0] + result["weights"][1] + result["weights"][2] + result["weights"][3] - 1.0) < 0.01, "Weights sum to 1")
-	_passed += 3; _failed += 0; print(f"  {_passed}/{_passed+_failed}")
+
+	var splat: GaussianSplat = GaussianSplatScript.new(Vector3.ZERO)
+	var bone_positions := PackedVector3Array([Vector3.ZERO, Vector3(2.0, 0.0, 0.0)])
+	SkinBinder._bind_single_splat(splat, bone_positions, 2)
+	assert(splat.bone_indices[0] == 0)
+	assert(is_equal_approx(splat.bone_weights[0] + splat.bone_weights[1], 1.0))
+	assert(splat.bind_pose_position == Vector3.ZERO)
+	print("PASS: splat skin binding stores normalized typed weights")
+	quit(0)

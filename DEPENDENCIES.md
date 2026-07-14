@@ -1,81 +1,37 @@
-# 📦 FoveaEngine Dependencies (StudioTo3D)
+# External dependencies
 
-For the reconstruction pipeline to work, you must install **FFmpeg** and **COLMAP** on your system.
+FoveaEngine does not bundle its reconstruction executables or model weights. Install only the tools needed for the workflow you intend to use.
 
----
+## Baseline tools
 
-## 📹 1. FFmpeg
-Used to extract images from your videos.
+### FFmpeg
 
-### Windows Installation:
-1. Download the latest version from **[GitHub ShareX/FFmpeg Releases](https://github.com/ShareX/FFmpeg/releases)**.
-2. Extract the archive (e.g., `C:\ffmpeg`).
-3. The important file is `bin\ffmpeg.exe`.
+FFmpeg extracts frames from video inputs.
 
----
+1. Install FFmpeg using your platform’s package manager or a trusted distribution.
+2. Ensure `ffmpeg` is available on your system `PATH`, or provide its full executable path in the StudioTo3D settings.
+3. Verify it from a terminal with `ffmpeg -version`.
 
-## 🏛️ 2. COLMAP
-Used for photogrammetry (Structure from Motion).
+### COLMAP
 
-### Windows Installation:
-1. Download the Windows version (with CUDA if you have an NVIDIA card) from **[GitHub COLMAP/COLMAP Releases](https://github.com/colmap/colmap/releases)**.
-2. Extract the archive (e.g., `C:\colmap`).
-3. The important file is `colmap.exe`.
+COLMAP provides the classical Structure-from-Motion route.
 
----
+1. Install a COLMAP build appropriate for your platform and GPU.
+2. Ensure `colmap` is available on `PATH`, or provide its full executable path in the StudioTo3D settings.
+3. Verify it with `colmap -h`.
 
-## 🧬 3. 3D Gaussian Splatting (Python)
-Used for point cloud training.
+## Configure Godot
 
-### Prerequisites:
-- Python 3.10+
-- CUDA Toolkit 11.8+
-- NVIDIA GPU with 8GB+ VRAM recommended.
+The project defaults to the command names `ffmpeg`, `colmap`, and `python`. This keeps the repository portable and lets each developer configure their own environment.
 
----
+In the StudioTo3D settings, set explicit executable paths only when the commands are not available on `PATH`. Do not commit machine-specific paths to `project.godot`.
 
-## ⚙️ Configuration in Godot
+## Optional Python reconstruction bridges
 
-Once installed, you can configure the paths in the **StudioTo3D** panel of FoveaEngine:
+Python bridges are optional and are not a substitute for their upstream model installations.
 
-1. Open the **StudioTo3D** panel in the Godot editor.
-2. Go to the **Settings** section (at the bottom).
-3. Fill in the full paths to your executables:
-   - FFmpeg Path: `C:\ffmpeg\bin\ffmpeg.exe`
-   - COLMAP Path: `C:\colmap\colmap.exe`
+- **WorldMirror 2.0:** optional bridge; install the required Python package, weights, and CUDA stack in an isolated environment. Validate it locally before relying on it.
+- **DVLT and AnyRecon:** current bridge support is dry-run only. It must not be used to produce deliverable reconstructions.
+- **Vista4D:** not implemented in this project. The bridge exits with an error for a non-dry-run invocation.
 
-4. Click **Check Tools** to validate that Godot can launch them.
-
-### Tip: Add to PATH
-If you add these folders to your Windows `PATH` environment variable, you won't need to specify full paths in Godot. The engine will automatically detect `ffmpeg` and `colmap`.
-
----
-
-## 🌍 4. WorldMirror 2.0 (Fast Reconstruction)
-
-Replaces COLMAP + 3DGS with a SOTA feed-forward model (Tencent Hunyuan). Video → 3DGS + depth + cameras in ~10 seconds.
-
-### Prerequisites:
-- Python 3.10+
-- CUDA 12.4 (recommended) or CPU fallback (slow)
-- NVIDIA GPU with 8GB+ VRAM recommended
-- ~5 GB disk space for the model
-
-### Quick Installation (Windows):
-```
-scripts\setup_worldmirror.bat
-```
-
-### Quick Installation (Linux/macOS):
-```
-bash scripts/setup_worldmirror.sh
-```
-
-### Manual Installation:
-```bash
-pip install torch==2.4.0 torchvision==0.19.0 --index-url https://download.pytorch.org/whl/cu124
-git clone https://github.com/Tencent-Hunyuan/HY-World-2.0
-cd HY-World-2.0 && pip install -r requirements.txt
-```
-
-The model (~5 GB) is automatically downloaded from HuggingFace on first use.
+Use a virtual environment for Python dependencies and keep model weights outside the repository. Hardware requirements and inference time depend on the upstream backend, model revision, input size, and GPU; benchmark them on your own target hardware.

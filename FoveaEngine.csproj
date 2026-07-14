@@ -5,4 +5,7 @@
     <TargetFramework Condition=" '$(GodotTargetPlatform)' == 'ios' ">net9.0</TargetFramework>
     <EnableDynamicLoading>true</EnableDynamicLoading>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="GodotSharpEditor" Version="4.7.0-dev.5" PrivateAssets="all" />
+  </ItemGroup>
 </Project>

@@ -1,3 +1,4 @@
+@tool
 extends ResourceFormatLoader
 class_name FoveaAssetFormatLoader
 

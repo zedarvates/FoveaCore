@@ -24,5 +24,6 @@ func classify(splat_data: Array[Dictionary], animators: Array[Node]) -> Array[in
 
 func animator_is_active(anim: Node) -> bool:
 	if anim.has_method("is_active"):
-		return anim.is_active() if anim.has_method("is_active") else anim.get("enabled", false)
+		return bool(anim.is_active())
+	return bool(anim.get("enabled"))
 	return false

@@ -41,6 +41,7 @@ jobs:
       - name: Validate Python syntax (tous les bridges)
         run: |
           python -m py_compile addons/foveacore/scripts/reconstruction/*.py
+          python addons/tools/test_validation_tools.py
           echo "Python bridges syntax OK."
 
   # ── 3. Build C# (Godot.NET.Sdk) ─────────────────────────────────────────
@@ -53,7 +54,9 @@ jobs:
         with:
           dotnet-version: "9.0.x"
       - name: Build FoveaEngine.csproj
-        run: dotnet build FoveaEngine.csproj --nologo
+        run: dotnet build FoveaEngine.csproj --configuration Release --nologo
+      - name: Run .NET test host
+        run: dotnet test FoveaEngine.csproj --configuration Release --no-build --no-restore --nologo
 
   # ── 4. Vérification de compilation Godot headless (échec dur) ──────────
   godot-compile-check:
@@ -73,7 +76,7 @@ jobs:
           chmod +x "${GODOT_BIN}"
       - name: Import project resources
         run: |
-          "./${GODOT_BIN}" --headless --path . --import || true
+          "./${GODOT_BIN}" --headless --path . --import
       - name: Compile-check all scripts
         run: |
           "./${GODOT_BIN}" --headless --path . \
@@ -99,7 +102,7 @@ jobs:
           chmod +x "${GODOT_BIN}"
       - name: Import project resources
         run: |
-          "./${GODOT_BIN}" --headless --path . --import || true
+          "./${GODOT_BIN}" --headless --path . --import
       - name: Run non-GPU tests (hard fail)
         run: |
           "./${GODOT_BIN}" --headless --path . \
@@ -128,7 +131,7 @@ jobs:
           chmod +x "${GODOT_BIN}"
       - name: Import project resources
         run: |
-          "./${GODOT_BIN}" --headless --path . --import || true
+          "./${GODOT_BIN}" --headless --path . --import
       - name: Run GPU tests (informational)
         run: |
           "./${GODOT_BIN}" --headless --path . \
@@ -160,7 +163,7 @@ jobs:
           chmod +x "${GODOT_BIN}"
       - name: Import project resources
         run: |
-          "./${GODOT_BIN}" --headless --path . --import || true
+          "./${GODOT_BIN}" --headless --path . --import
       - name: Smoke boot (${{ matrix.rendering-method }}), fail on ERROR
         run: |
           set -o pipefail
@@ -200,7 +203,7 @@ jobs:
           chmod +x "${GODOT_BIN}"
       - name: Import project resources
         run: |
-          xvfb-run -a "./${GODOT_BIN}" --headless --path . --import || true
+          xvfb-run -a "./${GODOT_BIN}" --headless --path . --import
       - name: Capture render (Vulkan / lavapipe under Xvfb)
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"
@@ -232,8 +235,8 @@ jobs:
           if-no-files-found: ignore
 
   # ── 6. Build GDExtension Rust ───────────────────────────────────────────
-  build-gdextension:
-    name: Build GDExtension (Rust)
+  build-rust-gdextension:
+    name: Build Rust GDExtension
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -263,6 +266,11 @@ jobs:
           cd addons/foveacore/rust
           cargo build --release --target ${{ matrix.target }}
 
+      - name: Test Rust crate
+        run: |
+          cd addons/foveacore/rust
+          cargo test --release --target ${{ matrix.target }}
+
       - name: Locate and upload binary artifact
         uses: actions/upload-artifact@v4
         with:
@@ -271,4 +279,44 @@ jobs:
             addons/foveacore/rust/target/${{ matrix.target }}/release/foveacore.dll
             addons/foveacore/rust/target/${{ matrix.target }}/release/libfoveacore.so
             addons/foveacore/rust/target/${{ matrix.target }}/release/libfoveacore.dylib
-          if-no-files-found: ignore
+          if-no-files-found: error
+
+  rust-quality:
+    name: Rust Unit Tests and Lints
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Test and lint both Rust crates
+        run: |
+          for crate in addons/foveacore/rust addons/foveacore/rust/splat_sorter; do
+            cargo test --manifest-path "$crate/Cargo.toml" --all-targets
+            cargo clippy --manifest-path "$crate/Cargo.toml" --all-targets -- -D warnings
+          done
+
+  build-cpp-gdextension:
+    name: Build C++ GDExtension
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install SCons
+        run: pip install scons
+      - name: Build godot-cpp bindings
+        working-directory: addons/foveacore/gdextension/godot-cpp
+        run: scons platform=windows target=template_release arch=x86_64
+      - name: Build C++ extension
+        working-directory: addons/foveacore/gdextension
+        run: scons platform=windows target=template_release arch=x86_64
+      - name: Upload C++ extension
+        uses: actions/upload-artifact@v4
+        with:
+          name: foveacore-cpp-windows-x86_64
+          path: addons/foveacore/gdextension/bin/foveacore.dll
+          if-no-files-found: error

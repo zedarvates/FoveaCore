@@ -50,8 +50,7 @@ func convert_rigged_mesh(mesh_path: String, output_path: String) -> bool:
 	# Item 163: Bind splats to skeleton
 	emit_signal("conversion_progress", "Binding splats to skeleton", 0.6)
 	if auto_bind:
-		var skin_anim = FoveaBoneSkinAnimation.new()
-		skin_anim.bind_splats(splat_data, skeleton)
+		push_warning("Automatic skin binding requires conversion to GaussianSplat objects and is not available in this wizard yet.")
 		if skin_weights_from_mesh:
 			# Item 164: Transfer weights from source mesh
 			pass

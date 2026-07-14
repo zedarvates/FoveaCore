@@ -3,7 +3,6 @@ use std::fs::File;
 use std::io::Read;
 use std::io::Write;
 use std::io::BufReader;
-use std::mem;
 
 /// En-tête du fichier .fovea natif
 #[repr(C)]
@@ -79,19 +78,6 @@ impl Color3D {
         self.b += other.b;
     }
     
-    fn scale(&mut self, factor: f32) {
-        self.r *= factor;
-        self.g *= factor;
-        self.b *= factor;
-    }
-    
-    fn lerp(&self, other: &Color3D, t: f32) -> Color3D {
-        Color3D::new(
-            self.r + (other.r - self.r) * t,
-            self.g + (other.g - self.g) * t,
-            self.b + (other.b - self.b) * t,
-        )
-    }
 }
 
 /// Classe exposée à Godot pour charger les assets de manière asynchrone et sécurisée
@@ -126,7 +112,6 @@ impl FoveaAssetLoader {
         };
         
         let mut reader = BufReader::new(file);
-        let mut header = String::new();
         let mut vertex_count = 0;
         let mut property_names = Vec::new();
         
@@ -143,14 +128,14 @@ impl FoveaAssetLoader {
             if line.is_empty() { break; }
             
             if line.starts_with("element vertex") {
-                let parts: Vec<&str> = line.trim().split_whitespace().collect();
+                let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() == 3 {
                     vertex_count = parts[2].parse().unwrap_or(0);
                 }
             }
 
             if line.starts_with("property") {
-                let parts: Vec<&str> = line.trim().split_whitespace().collect();
+                let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() >= 3 {
                     property_names.push(parts[2].to_string());
                 }
@@ -200,7 +185,6 @@ impl FoveaAssetLoader {
 
         struct RawSplat {
             pos: [f32; 3],
-            f_dc: [f32; 3],
             opacity: f32,
             scale: [f32; 3],
             rot: [f32; 4],
@@ -258,7 +242,7 @@ impl FoveaAssetLoader {
             aabb_max[0] = aabb_max[0].max(x); aabb_max[1] = aabb_max[1].max(y); aabb_max[2] = aabb_max[2].max(z);
 
             raw_splats.push(RawSplat { 
-                pos: [x, y, z], f_dc: [f_dc_0, f_dc_1, f_dc_2], opacity,
+                pos: [x, y, z], opacity,
                 scale: [scale_0, scale_1, scale_2], rot: [rot_0, rot_1, rot_2, rot_3] 
             });
         }
@@ -302,13 +286,17 @@ impl FoveaAssetLoader {
                 }
                 
                 assignments[i] = best_c as u16;
-                for j in 0..7 { sums[best_c][j] += v[j]; }
+                for (sum, value) in sums[best_c].iter_mut().zip(v) {
+                    *sum += value;
+                }
                 counts[best_c] += 1;
             }
             
             for c_idx in 0..actual_k {
                 if counts[c_idx] > 0 {
-                    for j in 0..7 { centroids[c_idx][j] = sums[c_idx][j] / (counts[c_idx] as f32); }
+                    for (centroid, sum) in centroids[c_idx].iter_mut().zip(sums[c_idx]) {
+                        *centroid = sum / (counts[c_idx] as f32);
+                    }
                 }
             }
         }
@@ -345,7 +333,7 @@ impl FoveaAssetLoader {
         let mut color_centroids: Vec<Color3D> = Vec::with_capacity(color_k);
         color_centroids.push(raw_colors[0]);
         
-        for i in 1..color_k {
+        for _ in 1..color_k {
             let mut max_dist = 0.0f32;
             let mut next_centroid = raw_colors[0];
             
@@ -430,7 +418,7 @@ impl FoveaAssetLoader {
             
             // Ajuster l'index de couleur avec dithering (bruit sur l'index)
             let current_idx = color_assignments[i] as i16;
-            let dither_offset = ((seed as i16 - 128) / 512) as i16; // -0.25 à +0.25
+            let dither_offset = (seed as i16 - 128) / 512; // -0.25 à +0.25
             let dithered_idx = (current_idx + dither_offset).clamp(0, color_k as i16 - 1) as u8;
             color_assignments[i] = dithered_idx;
         }
@@ -725,7 +713,7 @@ impl FoveaAssetLoader {
         unsafe impl Send for SendGd {}
         unsafe impl Sync for SendGd {}
         
-        let mut rd_send = SendGd(rd);
+        let rd_send = SendGd(rd);
         let rid_send = buffer_rid;
         
         std::thread::spawn(move || {

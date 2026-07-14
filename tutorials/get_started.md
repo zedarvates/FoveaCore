@@ -1,55 +1,44 @@
-# Tutoriel : Premiers Pas avec FoveaEngine 🚀
+# Tutorial: Load your first Gaussian splat
 
-Ce guide vous explique comment configurer votre première scène VR, rendre vos objets "splattables" et utiliser le pipeline de reconstruction.
+This tutorial is for Godot developers who are new to FoveaEngine. You will open the project, run its test scene, and add a splat asset to a simple 3D scene.
 
----
+## Before you begin
 
-## 1. Configuration de la Scène VR
+- Install Godot 4.7 (C# / Mono build).
+- Clone this repository.
+- Have a supported `.ply` splat asset available in your project, for example at `res://assets/example.ply`.
 
-Pour commencer, vous avez besoin du rig VR configuré pour FoveaCore.
+This tutorial does not require FFmpeg, COLMAP, VR hardware, or a reconstruction backend.
 
-1.  Créez une nouvelle scène 3D (`Node3D`).
-2.  Instanciez le rig VR : `res://addons/foveacore/scenes/fovea_vr_rig.tscn`.
-3.  Assurez-vous que le **FoveaXRInitializer** est présent sous le rig. Il gère l'initialisation d'OpenXR et le Foveated Rendering.
+## 1. Open and validate the project
 
-## 2. Rendre un objet "Splattable"
+1. Import `project.godot` in Godot.
+2. Let Godot import project resources.
+3. Open `res://test_foveacore.tscn`.
+4. Run the scene and inspect the Godot Output panel for errors.
 
-Le "splatting" transforme vos meshes 3D en une nuée de points (Gaussians) optimisée pour la VR.
+If the scene does not run, resolve the reported Godot or graphics-driver issue before continuing. RenderingDevice features require a compatible renderer; a headless or Compatibility setup may not exercise them.
 
-1.  Ajoutez un `MeshInstance3D` à votre scène (par exemple, un Cube ou une Sphère).
-2.  Attachez-lui le script : `res://addons/foveacore/scripts/fovea_splattable.gd`.
-3.  Dans l'inspecteur, vous pouvez régler :
-    *   **Splat Density** : Plus il y a de splats, plus c'est beau, mais plus c'est lourd.
-    *   **Style** : Choisissez un style (Procedural ou Neural) via le StyleEngine.
+## 2. Create a minimal scene
 
-## 3. Utiliser le StudioTo3D (Reconstruction)
+1. Create a new **3D Scene** with a `Node3D` root.
+2. Save it as `res://scenes/first_splat.tscn`.
+3. Add a `FoveaSplattable` node, or add the Fovea splattable script to a suitable scene node.
+4. In the Inspector, set the splat asset path to `res://assets/example.ply`.
+5. Enable splat rendering for that node.
 
-Si vous voulez transformer une vidéo réelle en objet 3D utilisable dans le moteur :
+Use the inspector for properties exposed by the version of the addon in your checkout. The project is under active development, so exported property names can evolve.
 
-1.  Ouvrez le panneau **StudioTo3D** dans l'éditeur (ou instanciez `res://addons/foveacore/scenes/reconstruction/studio_to_3d_panel.tscn`).
-2.  **Video Input** : Sélectionnez votre fichier vidéo.
-3.  **Pipeline Actions** :
-    *   Cliquez sur **1. Extract & Mask** pour préparer les images.
-    *   Cliquez sur **2. Run COLMAP** pour calculer la position de la caméra (SfM).
-    *   Cliquez sur **3. Train 3DGS** pour générer les Gaussian Splats.
-4.  Une fois terminé, l'objet apparaîtra dans votre dossier `res://reconstructions/`.
+## 3. Run the scene
 
-## 4. Optimisation : Le ProxyFaceRenderer
+1. Add a camera and a directional light if your scene does not already contain them.
+2. Position the camera so that it faces the splat asset.
+3. Run `first_splat.tscn`.
 
-Pour les environnements complexes (forêts, villes), utilisez les Proxies pour maintenir 90+ FPS.
+You should see the asset render without unresolved-resource errors. If it does not appear, check that the asset path starts with `res://`, that the file exists, and that the Output panel contains no parsing or graphics errors.
 
-1.  Pour un objet éloigné, ajoutez un nœud **ProxyFaceRenderer**.
-2.  Réglez le **switch_to_proxy_below** (distance à laquelle l'objet devient un simple plan/proxy).
-3.  Cela permet de n'afficher que "ce qui est vu" par l'œil, réduisant drastiquement l'overdraw.
+## Next steps
 
-## 5. Tester les Performances
-
-Utilisez le script de benchmark pour valider vos gains de FPS :
-
-1.  Ajoutez le script `res://addons/foveacore/test/performance_benchmark.gd` à un nœud dans votre scène.
-2.  Lancez la scène.
-3.  Le benchmark testera différentes distances et niveaux de fovéation, puis sauvegardera les résultats dans `user://proxy_performance_results.csv`.
-
----
-
-**Astuce** : Surveillez la console Godot pour voir le nombre de splats rendus par frame en temps réel !
+- Configure video reconstruction with [Reconstruction setup](reconstruction_setup.md).
+- Read [Feature status](../docs/feature-status.md) before enabling experimental GPU, XR, or animation paths.
+- Use the repository test scenes as integration examples while the public API stabilizes.

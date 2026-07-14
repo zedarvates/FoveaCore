@@ -11,7 +11,7 @@ path = "src/lib.rs"
 godot = { git = "https://github.com/godot-rust/gdext", tag = "v0.2.1" }
 
 [workspace]
-members = []
+members = ["splat_sorter"]
 
 [profile.release]
 opt-level = "z"

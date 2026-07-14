@@ -1,1 +1,14 @@
-[resource]
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://c80e7eohkxnlc"
+path="res://.godot/imported/splat_animate.glsl-a7b4b8c367c99c0a1a408b9d5baeaa3b.res"
+
+[deps]
+
+source_file="res://addons/foveacore/shaders/splat_animate.glsl"
+dest_files=["res://.godot/imported/splat_animate.glsl-a7b4b8c367c99c0a1a408b9d5baeaa3b.res"]
+
+[params]
+

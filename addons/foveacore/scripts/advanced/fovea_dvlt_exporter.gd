@@ -22,7 +22,8 @@ func export_colmap(poses: Array[Transform3D], intrinsics: Dictionary, output_dir
 	# images.txt
 	var img_file = FileAccess.open(output_dir.path_join("images.txt"), FileAccess.WRITE)
 	img_file.store_line("# Image list with two lines of data per image:")
-	for i, pose in enumerate(poses):
+	for i: int in range(poses.size()):
+		var pose: Transform3D = poses[i]
 		var q = pose.basis.get_rotation_quaternion()
 		var t = pose.origin
 		img_file.store_line("%d %s %s %s %f %f %f %d %s %s" % [i+1, "QW", "QX", "QY", q.w, q.x, q.y, q.z, t.x, t.y, t.z, 1, "image_%04d.png" % i])

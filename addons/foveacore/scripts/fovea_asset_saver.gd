@@ -1,3 +1,4 @@
+@tool
 extends ResourceFormatSaver
 class_name FoveaAssetFormatSaver
 

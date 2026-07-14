@@ -11,7 +11,11 @@ enum LayerType {
 	SHADOW = 3,
 	LIQUID = 4,
 	LEAVES = 5,
-	TRUNK = 6
+	TRUNK = 6,
+	## Phase 7.3 — flipbook / temporal-sequence splats. Rendered with full weight
+	## regardless of gaze focus in splat_render_triangle.gdshader (FX like flames
+	## or magic effects should not dim when the user looks away).
+	LAYER_ANIM = 7
 }
 
 enum BrushType {
@@ -42,6 +46,18 @@ var surface_normal: Vector3 = Vector3.UP
 # Données de quantification (pour rendu optimisé)
 var palette_index: int = 0  # Index dans la palette 8-bit (0-255)
 var dither_seed: int = 0    # Seed pour dithering stochastique
+
+# Phase 7.3 — Flipbook temporel (LAYER_ANIM). -1 = ce splat n'appartient à
+# aucune séquence flipbook (comportement par défaut, rétrocompatible).
+var flipbook_frame: int = -1
+var flipbook_frame_count: int = 0
+
+# Phase 7.6 — Bone-Driven Skinning. bone_indices[i] == -1 (défaut) signifie
+# "pas de bone à cet emplacement d'influence" ; un splat avec bone_weights
+# entièrement à zéro n'est pas riggé (comportement par défaut, rétrocompatible).
+var bone_indices: PackedInt32Array = PackedInt32Array([-1, -1, -1, -1])
+var bone_weights: PackedFloat32Array = PackedFloat32Array([0.0, 0.0, 0.0, 0.0])
+var bind_pose_position: Vector3 = Vector3.ZERO
 
 # Derived render properties (computed on demand)
 var radius: float = 1.0
@@ -117,7 +133,12 @@ func to_dict() -> Dictionary:
 		"surface_normal": surface_normal,
 		"origin_offset": origin_offset,
 		"stiffness": stiffness,
-		"velocity": velocity
+		"velocity": velocity,
+		"flipbook_frame": flipbook_frame,
+		"flipbook_frame_count": flipbook_frame_count,
+		"bone_indices": bone_indices,
+		"bone_weights": bone_weights,
+		"bind_pose_position": bind_pose_position
 	}
 
 func from_dict(data: Dictionary) -> void:
@@ -137,6 +158,11 @@ func from_dict(data: Dictionary) -> void:
 	origin_offset = data.get("origin_offset", Vector3.ZERO)
 	stiffness = data.get("stiffness", 4.0)
 	velocity = data.get("velocity", Vector3.ZERO)
+	flipbook_frame = data.get("flipbook_frame", -1)
+	flipbook_frame_count = data.get("flipbook_frame_count", 0)
+	bone_indices = data.get("bone_indices", PackedInt32Array([-1, -1, -1, -1]))
+	bone_weights = data.get("bone_weights", PackedFloat32Array([0.0, 0.0, 0.0, 0.0]))
+	bind_pose_position = data.get("bind_pose_position", Vector3.ZERO)
 
 static func create_from_triangle(
 	pos: Vector3, 

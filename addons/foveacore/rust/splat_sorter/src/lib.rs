@@ -1,4 +1,3 @@
-use glam::{Quat, Vec3A};
 use godot::prelude::*;
 use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
@@ -21,15 +20,15 @@ pub struct GaussianSplat {
     // Color not needed for sorting
 }
 
-#[godot_methods]
+#[godot_api]
 impl SplatSorterRust {
     #[func]
-    fn sort_back_to_front(&self, camera_pos: Vec3) -> Array<i32> {
+    fn sort_back_to_front(&self, camera_pos: Vector3) -> PackedInt32Array {
         let splats = self.splats.lock().unwrap();
         let n = splats.len();
 
         if n == 0 {
-            return Array::new();
+            return PackedInt32Array::new();
         }
 
         // Compute squared distances (avoid sqrt for performance)
@@ -51,38 +50,38 @@ impl SplatSorterRust {
         });
 
         // Extract indices
-        let sorted: Array<i32> = indexed.iter().map(|(idx, _)| *idx as i32).collect();
+        let sorted = PackedInt32Array::from(
+            indexed.iter().map(|(idx, _)| *idx as i32).collect::<Vec<i32>>().as_slice(),
+        );
 
         sorted
     }
 
     #[func]
-    fn set_splats(&mut self, splats: VariantArray) {
+    fn set_splats(&mut self, splats: Array<Dictionary>) {
         let mut guard = self.splats.lock().unwrap();
         guard.clear();
 
-        for variant in splats.iter_shared() {
-            if let Ok(dict) = variant.try_to::<Dictionary>() {
-                let pos = dict.get("position")
-                    .and_then(|v| v.try_to::<Vector3>().ok())
-                    .unwrap_or_default();
-                let rot = dict.get("rotation")
-                    .and_then(|v| v.try_to::<Quaternion>().ok())
-                    .unwrap_or_default();
-                let scale = dict.get("scale")
-                    .and_then(|v| v.try_to::<Vector3>().ok())
-                    .unwrap_or_default();
-                let opacity = dict.get("opacity")
-                    .and_then(|v| v.try_to::<f32>().ok())
-                    .unwrap_or(0.0);
+        for dict in splats.iter_shared() {
+            let pos = dict.get("position")
+                .and_then(|value| value.try_to::<Vector3>().ok())
+                .unwrap_or_default();
+            let rot = dict.get("rotation")
+                .and_then(|value| value.try_to::<Quaternion>().ok())
+                .unwrap_or_default();
+            let scale = dict.get("scale")
+                .and_then(|value| value.try_to::<Vector3>().ok())
+                .unwrap_or_default();
+            let opacity = dict.get("opacity")
+                .and_then(|value| value.try_to::<f32>().ok())
+                .unwrap_or(0.0);
 
-                guard.push(GaussianSplat {
-                    position: [pos.x, pos.y, pos.z],
-                    rotation: [rot.x, rot.y, rot.z, rot.w],
-                    scale: [scale.x, scale.y, scale.z],
-                    opacity,
-                });
-            }
+            guard.push(GaussianSplat {
+                position: [pos.x, pos.y, pos.z],
+                rotation: [rot.x, rot.y, rot.z, rot.w],
+                scale: [scale.x, scale.y, scale.z],
+                opacity,
+            });
         }
     }
 }

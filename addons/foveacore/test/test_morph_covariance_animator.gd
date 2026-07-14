@@ -1,12 +1,14 @@
 extends SceneTree
-const Morph = preload("res://addons/foveacore/scripts/animation/fovea_morph_covariance_animator.gd")
-var _passed := 0; var _failed := 0
+
+const MorphAnimator = preload("res://addons/foveacore/scripts/advanced/fovea_morph_covariance_animator.gd")
+const GaussianSplatScript = preload("res://addons/foveacore/scripts/reconstruction/gaussian_splat.gd")
+
 func _init() -> void:
-	print("\n=== FoveaMorphCovarianceAnimator Tests ==="); _run_all(); await create_timer(0.1).timeout; quit(_failed)
-func _run_all() -> void:
-	var m = Morph.new()
-	var splat = {"scale": Vector3(1,1,1), "rotation": Quaternion.IDENTITY, "instance_id": 42}
-	var s = m.modify_splat(splat.duplicate(), 0.016, null)
-	assert(s["scale"].x != 1.0 or s["rotation"] != Quaternion.IDENTITY, "Morph applied")
-	var s2 = m.modify_splat(splat.duplicate(), 0.016, null)
-	_passed += 2; _failed += 0; print(f"  {_passed}/{_passed+_failed}")
+
+	var animator: FoveaMorphCovarianceAnimator = MorphAnimator.new()
+	animator.amplitude = 0.5
+	var splat: GaussianSplat = GaussianSplatScript.new(Vector3(2.0, 1.0, 0.0))
+	animator._apply_to_splat(splat, 0.25, 1.0)
+	assert(splat.scale.x > 0.0 and splat.covariance.x > 0.0)
+	print("PASS: covariance morph keeps valid derived data")
+	quit(0)
