@@ -55,6 +55,11 @@ func _init() -> void:
 
 		# Route by GPU requirement vs the selected group.
 		var requires_gpu: bool = bool(script.get_script_constant_map().get("REQUIRES_GPU", false))
+		var requires_integration: bool = bool(script.get_script_constant_map().get("REQUIRES_INTEGRATION", false))
+		if _group == "nogpu" and requires_integration:
+			_skipped_scripts += 1
+			print("\n  ⏭  SKIP (nogpu): %s [integration]" % test_path.get_file())
+			continue
 		if not _should_run(requires_gpu):
 			_skipped_scripts += 1
 			print("\n  ⏭  SKIP (%s): %s [%s]" % [
