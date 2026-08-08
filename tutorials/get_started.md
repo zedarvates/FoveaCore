@@ -23,9 +23,9 @@ If the scene does not run, resolve the reported Godot or graphics-driver issue b
 
 1. Create a new **3D Scene** with a `Node3D` root.
 2. Save it as `res://scenes/first_splat.tscn`.
-3. Add a `FoveaSplattable` node, or add the Fovea splattable script to a suitable scene node.
-4. In the Inspector, set the splat asset path to `res://assets/example.ply`.
-5. Enable splat rendering for that node.
+3. Add a `FoveaSplat3D` node.
+4. In the Inspector, set its `source_path` to `res://assets/example.ply`.
+5. Save the scene. The node loads the asset when the scene runs.
 
 Use the inspector for properties exposed by the version of the addon in your checkout. The project is under active development, so exported property names can evolve.
 
