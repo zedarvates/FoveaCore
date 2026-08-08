@@ -103,6 +103,7 @@ jobs:
 
           # Populate the native binaries the .gdextension expects.
           BIN="$ROOT/foveacore/gdextension/bin"
+          rm -rf "$BIN"
           mkdir -p "$BIN"
           cp artifacts/native-x86_64-unknown-linux-gnu/libfoveacore.so "$BIN/libfoveacore.so"
           cp artifacts/native-x86_64-pc-windows-msvc/foveacore.dll      "$BIN/foveacore.dll"
