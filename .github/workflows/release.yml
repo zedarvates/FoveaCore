@@ -98,12 +98,11 @@ jobs:
 
           # Ship only the foveacore addon (see docs/ARCHITECTURE.md).
           cp -r addons/foveacore "$ROOT/foveacore"
-          # Drop the Rust sources + bundled godot-cpp from the shipped addon.
-          rm -rf "$ROOT/foveacore/rust" "$ROOT/foveacore/gdextension/godot-cpp"
+          # Drop native build inputs and local build artifacts from the shipped addon.
+          rm -rf "$ROOT/foveacore/rust" "$ROOT/foveacore/gdextension"
 
           # Populate the native binaries the .gdextension expects.
           BIN="$ROOT/foveacore/gdextension/bin"
-          rm -rf "$BIN"
           mkdir -p "$BIN"
           cp artifacts/native-x86_64-unknown-linux-gnu/libfoveacore.so "$BIN/libfoveacore.so"
           cp artifacts/native-x86_64-pc-windows-msvc/foveacore.dll      "$BIN/foveacore.dll"
