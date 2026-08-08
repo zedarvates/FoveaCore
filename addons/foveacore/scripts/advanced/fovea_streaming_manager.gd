@@ -30,7 +30,7 @@ var _current_ram_splats: int = 0
 var loader: RefCounted
 
 func _init() -> void:
-	if ClassDB.can_instantiate("FoveaAssetLoader"):
+	if ClassDB.class_exists("FoveaAssetLoader") and ClassDB.can_instantiate("FoveaAssetLoader"):
 		loader = ClassDB.instantiate("FoveaAssetLoader")
 
 # Enregistre un asset sans charger tous les octets bruts

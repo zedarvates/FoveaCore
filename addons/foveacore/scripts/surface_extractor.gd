@@ -64,7 +64,7 @@ static func extract_visible_triangles(
 	var mesh: Mesh = splattable.original_mesh
 	var world_transform: Transform3D = splattable.global_transform
 
-	var use_native = ClassDB.can_instantiate("FoveaAssetLoader")
+	var use_native: bool = ClassDB.class_exists("FoveaAssetLoader") and ClassDB.can_instantiate("FoveaAssetLoader")
 	var loader = null
 	if use_native:
 		loader = ClassDB.instantiate("FoveaAssetLoader")

@@ -58,7 +58,7 @@ static func generate_voxel_mesh(fovea_path: String, voxel_size_meters: float = 0
 	var loader = null
 	var raw_bytes = PackedByteArray()
 	
-	if ClassDB.can_instantiate("FoveaAssetLoader"):
+	if ClassDB.class_exists("FoveaAssetLoader") and ClassDB.can_instantiate("FoveaAssetLoader"):
 		loader = ClassDB.instantiate("FoveaAssetLoader")
 		if loader:
 			var aabb_val = loader.get_asset_aabb(fovea_path)

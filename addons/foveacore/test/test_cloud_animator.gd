@@ -21,18 +21,14 @@ func _run_all() -> void:
 	var mm = MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_custom_data = true
+	mm.mesh = QuadMesh.new()
 	mm.instance_count = 1
 	
-	var stride := FoveaMultiMeshBulk.stride_of(mm)
-	var buf := PackedFloat32Array()
-	buf.resize(stride)
-	FoveaMultiMeshBulk.write_transform(buf, 0, Transform3D(Basis(), Vector3(0.5, 0.5, 0.5)))
-	# custom data
-	buf[12] = 1.0
-	buf[13] = 1.0
-	buf[14] = 1.0
-	buf[15] = 1.0
-	mm.buffer = buf
+	var initial_buffer := PackedFloat32Array()
+	initial_buffer.resize(FoveaMultiMeshBulk.stride_of(mm))
+	FoveaMultiMeshBulk.write_transform(initial_buffer, 0, Transform3D(Basis(), Vector3(0.5, 0.5, 0.5)))
+	FoveaMultiMeshBulk.write_color(initial_buffer, 12, Color.WHITE)
+	mm.buffer = initial_buffer
 	
 	# 2. Setup Splat Renderer and Cloud Animator
 	var renderer := FoveaCoreSplatRenderer.new()
@@ -53,19 +49,19 @@ func _run_all() -> void:
 	# Phase 1: Creation (e.g. t = 1.0s, phase = 0.1)
 	animator._time = 1.0
 	animator._process(0.0)
-	var custom_data := mm.get_instance_custom_data(0)
+	var custom_data := FoveaMultiMeshBulk.read_color(mm.buffer, 12)
 	_assert("Opacity faded in partially during Creation", custom_data.a > 0.0 and custom_data.a < 1.0, "Expected alpha between 0 and 1, got %f" % custom_data.a)
 	
 	# Phase 2: Drift (e.g. t = 5.0s, phase = 0.5)
 	animator._time = 5.0
 	animator._process(0.0)
-	var pos := mm.get_instance_transform(0).origin
+	var pos := FoveaMultiMeshBulk.read_transform(mm.buffer, 0).origin
 	_assert("Splat drifted along wind direction (X axis)", pos.x > 0.5, "Expected drift in X direction, got position %s" % pos)
 	
 	# Phase 3: Dissipation (e.g. t = 9.0s, phase = 0.9)
 	animator._time = 9.0
 	animator._process(0.0)
-	custom_data = mm.get_instance_custom_data(0)
+	custom_data = FoveaMultiMeshBulk.read_color(mm.buffer, 12)
 	_assert("Opacity faded out during Dissipation", custom_data.a < 0.8, "Expected alpha faded out, got %f" % custom_data.a)
 	
 	print("\n=== All Tests Passed: %d / Failed: %d ===" % [_passed, _failed])

@@ -662,7 +662,7 @@ func _create_dummy_depth_texture() -> RID:
 
 func _load_fovea_bytes(fovea_path: String) -> PackedByteArray:
 	## Charge les octets d'un fichier .fovea (GDExtension Rust ou fallback GDScript)
-	if ClassDB.can_instantiate("FoveaAssetLoader"):
+	if ClassDB.class_exists("FoveaAssetLoader") and ClassDB.can_instantiate("FoveaAssetLoader"):
 		var loader := ClassDB.instantiate("FoveaAssetLoader")
 		if loader:
 			var bytes: PackedByteArray = loader.load_fast_path(fovea_path)

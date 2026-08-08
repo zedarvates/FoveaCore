@@ -33,6 +33,7 @@ func _ready() -> void:
 		print("FoveaLatticeDeformer: Connected to FoveaCoreSplatRenderer '%s'" % parent.name)
 
 func _process(_delta: float) -> void:
+	_resolve_renderer()
 	if not enabled or _renderer == null or _renderer.multimesh == null:
 		return
 	var mm: MultiMesh = _renderer.multimesh
@@ -48,12 +49,21 @@ func _process(_delta: float) -> void:
 		
 	_apply_lattice_deformation(mm)
 
+func _resolve_renderer() -> void:
+	if _renderer != null:
+		return
+	var parent: Node = get_parent()
+	if parent is FoveaCoreSplatRenderer:
+		_renderer = parent as FoveaCoreSplatRenderer
+
 func _sync_transforms(mm: MultiMesh) -> void:
 	_last_instance_id = mm.get_instance_id()
 	_original_transforms_cache.clear()
 	_original_transforms_cache.resize(mm.instance_count)
+	var stride: int = FoveaMultiMeshBulk.stride_of(mm)
+	var buf: PackedFloat32Array = FoveaMultiMeshBulk.ensure_buffer(mm)
 	for i in mm.instance_count:
-		_original_transforms_cache[i] = mm.get_instance_transform(i)
+		_original_transforms_cache[i] = FoveaMultiMeshBulk.read_transform(buf, i * stride)
 	print("FoveaLatticeDeformer: Synced %d original transforms." % mm.instance_count)
 
 func _apply_lattice_deformation(mm: MultiMesh) -> void:
@@ -78,7 +88,7 @@ func _apply_lattice_deformation(mm: MultiMesh) -> void:
 	var deformer_xf := global_transform
 	
 	var stride := FoveaMultiMeshBulk.stride_of(mm)
-	var buf := mm.buffer
+	var buf: PackedFloat32Array = FoveaMultiMeshBulk.ensure_buffer(mm)
 	
 	for i in limit:
 		if i >= _original_transforms_cache.size():

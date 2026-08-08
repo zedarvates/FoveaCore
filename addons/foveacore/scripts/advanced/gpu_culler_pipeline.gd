@@ -325,7 +325,7 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
             var bytes := _load_fovea_bytes(fovea_path)
             var loader: Object = streaming_manager.get("loader")
             if loader == null:
-                if ClassDB.can_instantiate("FoveaAssetLoader"):
+                if ClassDB.class_exists("FoveaAssetLoader") and ClassDB.can_instantiate("FoveaAssetLoader"):
                     loader = ClassDB.instantiate("FoveaAssetLoader")
             var result = FoveaOctreeBakerClass.bake_octree_from_bytes(bytes, aabb_min, aabb_max, loader)
             _baked_octrees[fovea_path] = result["root"]
@@ -1002,7 +1002,7 @@ func _load_fovea_bytes(fovea_path: String) -> PackedByteArray:
         return _cached_bytes[fovea_path]
 
     var bytes: PackedByteArray = PackedByteArray()
-    if ClassDB.can_instantiate("FoveaAssetLoader"):
+    if ClassDB.class_exists("FoveaAssetLoader") and ClassDB.can_instantiate("FoveaAssetLoader"):
         var loader: Object = ClassDB.instantiate("FoveaAssetLoader")
         if loader:
             bytes = loader.load_fast_path(fovea_path)

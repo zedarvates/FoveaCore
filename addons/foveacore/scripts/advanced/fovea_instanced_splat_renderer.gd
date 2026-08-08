@@ -251,7 +251,7 @@ func load_and_render_splats() -> void:
 
 	# 1. Charger les octets bruts du fichier .fovea
 	var raw_bytes := PackedByteArray()
-	if ClassDB.can_instantiate("FoveaAssetLoader"):
+	if ClassDB.class_exists("FoveaAssetLoader") and ClassDB.can_instantiate("FoveaAssetLoader"):
 		var loader: Object = ClassDB.instantiate("FoveaAssetLoader")
 		if loader and loader.has_method("load_raw_splat_bytes"):
 			raw_bytes = loader.load_raw_splat_bytes(asset_path)
@@ -286,7 +286,7 @@ func load_and_render_splats() -> void:
 	# 2. Récupérer l'AABB
 	var aabb_min := Vector3(-5, -5, -5)
 	var aabb_max := Vector3(5, 5, 5)
-	if ClassDB.can_instantiate("FoveaAssetLoader"):
+	if ClassDB.class_exists("FoveaAssetLoader") and ClassDB.can_instantiate("FoveaAssetLoader"):
 		var loader: Object = ClassDB.instantiate("FoveaAssetLoader")
 		if loader and loader.has_method("get_asset_aabb"):
 			var aabb_val: Variant = loader.get_asset_aabb(asset_path)
@@ -467,7 +467,7 @@ func _upload_covar_codebook() -> void:
 		return
 
 	var codebook_bytes := PackedByteArray()
-	if ClassDB.can_instantiate("FoveaAssetLoader"):
+	if ClassDB.class_exists("FoveaAssetLoader") and ClassDB.can_instantiate("FoveaAssetLoader"):
 		var loader: Object = ClassDB.instantiate("FoveaAssetLoader")
 		if loader and loader.has_method("load_covariance_codebook"):
 			codebook_bytes = loader.load_covariance_codebook(asset_path)
@@ -500,7 +500,7 @@ func _upload_covar_codebook() -> void:
 	mat.set_shader_parameter("covar_texture", tex)
 
 func load_palette_from_fovea() -> void:
-	if not ClassDB.can_instantiate("FoveaAssetLoader"):
+	if not ClassDB.class_exists("FoveaAssetLoader") or not ClassDB.can_instantiate("FoveaAssetLoader"):
 		return
 	var loader: Object = ClassDB.instantiate("FoveaAssetLoader")
 	if not loader or not loader.has_method("load_color_palette"):
@@ -546,7 +546,7 @@ func update_material_shader() -> void:
 		return
 		
 	var has_palette := false
-	if enable_palette and ClassDB.can_instantiate("FoveaAssetLoader") and asset_path != "":
+	if enable_palette and ClassDB.class_exists("FoveaAssetLoader") and ClassDB.can_instantiate("FoveaAssetLoader") and asset_path != "":
 		var loader: Object = ClassDB.instantiate("FoveaAssetLoader")
 		if loader and loader.has_method("load_color_palette"):
 			var palette_bytes: PackedByteArray = loader.load_color_palette(asset_path)
