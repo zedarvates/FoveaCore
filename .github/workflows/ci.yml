@@ -92,6 +92,7 @@ jobs:
           # any import cache before starting the editor.
           mv addons/foveacore/foveacore.gdextension \
             addons/foveacore/foveacore.gdextension.ci-disabled
+          sed -i 's/^enabled=PackedStringArray.*/enabled=PackedStringArray()/' project.godot
           rm -rf .godot
           "./${GODOT_BIN}" --headless --path . --import
       - name: Compile-check all scripts
@@ -132,6 +133,7 @@ jobs:
         run: |
           mv addons/foveacore/foveacore.gdextension \
             addons/foveacore/foveacore.gdextension.ci-disabled
+          sed -i 's/^enabled=PackedStringArray.*/enabled=PackedStringArray()/' project.godot
           rm -rf .godot
           "./${GODOT_BIN}" --headless --path . --import
       - name: Run non-GPU tests (hard fail)
@@ -170,6 +172,7 @@ jobs:
         run: |
           mv addons/foveacore/foveacore.gdextension \
             addons/foveacore/foveacore.gdextension.ci-disabled
+          sed -i 's/^enabled=PackedStringArray.*/enabled=PackedStringArray()/' project.godot
           rm -rf .godot
           "./${GODOT_BIN}" --headless --path . --import
       - name: Run GPU tests (informational)
@@ -206,6 +209,7 @@ jobs:
         run: |
           mv addons/foveacore/foveacore.gdextension \
             addons/foveacore/foveacore.gdextension.ci-disabled
+          sed -i 's/^enabled=PackedStringArray.*/enabled=PackedStringArray()/' project.godot
           rm -rf .godot
           "./${GODOT_BIN}" --headless --path . --import
       - name: Smoke boot (${{ matrix.rendering-method }}), fail on ERROR
@@ -249,6 +253,7 @@ jobs:
         run: |
           mv addons/foveacore/foveacore.gdextension \
             addons/foveacore/foveacore.gdextension.ci-disabled
+          sed -i 's/^enabled=PackedStringArray.*/enabled=PackedStringArray()/' project.godot
           rm -rf .godot
           xvfb-run -a "./${GODOT_BIN}" --headless --path . --import
       - name: Capture render (Vulkan / lavapipe under Xvfb)
