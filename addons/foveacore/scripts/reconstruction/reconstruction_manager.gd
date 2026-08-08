@@ -520,6 +520,7 @@ func _delete_dir_recursive(path: String) -> void:
 				entries.append(file_name)
 			file_name = dir.get_next()
 		dir.list_dir_end()
+		dir = null
 		for entry: String in entries:
 			var full_path: String = path.path_join(entry)
 			if DirAccess.dir_exists_absolute(full_path):

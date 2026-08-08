@@ -118,7 +118,10 @@ jobs:
         with:
           dotnet-version: "9.0.x"
       - name: Install non-GPU test dependencies
-        run: python3 -m pip install --user pillow
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip
+          python3 -m pip install --user pillow
       - name: Download Godot ${{ env.GODOT_VERSION }} (mono)
         run: |
           curl -sSL -o godot.zip \

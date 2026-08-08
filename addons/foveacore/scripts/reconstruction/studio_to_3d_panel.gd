@@ -1508,7 +1508,7 @@ func _check_tools_and_popup(at_startup: bool = false) -> void:
 	# Show AcceptDialog popup
 	var dialog = AcceptDialog.new()
 	dialog.title = "Warning: Missing External Tools"
-	dialog.custom_minimum_size = Vector2i(550, 200)
+	dialog.custom_minimum_size = Vector2(550.0, 200.0)
 	
 	var vbox = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 10)

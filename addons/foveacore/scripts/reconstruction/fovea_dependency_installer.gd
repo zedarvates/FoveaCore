@@ -100,7 +100,11 @@ func _async_extract(temp_file_path: String, tool_name: String) -> void:
 	var output: Array = []
 	var is_zip: bool = temp_file_path.to_lower().ends_with(".zip")
 	var extractor: String = "unzip" if is_zip else "tar"
-	var args: Array[String] = ["-q", global_archive, "-d", global_dest] if is_zip else ["-xf", global_archive, "-C", global_dest]
+	var args: Array[String] = []
+	if is_zip:
+		args.assign(["-q", global_archive, "-d", global_dest])
+	else:
+		args.assign(["-xf", global_archive, "-C", global_dest])
 	print("FoveaDependencyInstaller: Extracting '%s' using %s..." % [tool_name, extractor])
 	var code: int = OS.execute(extractor, args, output, true, false)
 	
@@ -108,7 +112,7 @@ func _async_extract(temp_file_path: String, tool_name: String) -> void:
 
 	if code != 0:
 		_delete_dir_recursive(temp_extract_dir)
-		install_failed.emit.call_deferred(tool_name, "Extraction failed (tar exited with code %d)." % code)
+		install_failed.emit.call_deferred(tool_name, "Extraction failed (%s exited with code %d)." % [extractor, code])
 		_reset.call_deferred()
 		return
 
@@ -116,8 +120,9 @@ func _async_extract(temp_file_path: String, tool_name: String) -> void:
 	var final_dest_dir: String = TOOLS_DIR.path_join(tool_name)
 	_delete_dir_recursive(final_dest_dir) # Ensure clean slate
 	DirAccess.make_dir_recursive_absolute(final_dest_dir)
+	var global_final_dest: String = ProjectSettings.globalize_path(final_dest_dir)
 
-	var dir: DirAccess = DirAccess.open(temp_extract_dir)
+	var dir: DirAccess = DirAccess.open(global_dest)
 	if dir:
 		dir.list_dir_begin()
 		var items: Array[String] = []
@@ -129,11 +134,11 @@ func _async_extract(temp_file_path: String, tool_name: String) -> void:
 		dir.list_dir_end()
 
 		# If there is exactly one folder inside, use its contents instead
-		var source_dir: String = temp_extract_dir
+		var source_dir: String = global_dest
 		if items.size() == 1 and dir.change_dir(items[0]) == OK:
-			source_dir = temp_extract_dir.path_join(items[0])
+			source_dir = global_dest.path_join(items[0])
 
-		_move_dir_contents(source_dir, final_dest_dir)
+		_move_dir_contents(source_dir, global_final_dest)
 		_delete_dir_recursive(temp_extract_dir)
 
 	# Post-installation phase
@@ -243,7 +248,12 @@ func _move_dir_contents(src_dir: String, dest_dir: String) -> void:
 					DirAccess.make_dir_recursive_absolute(dest_path)
 					_move_dir_contents(src_path, dest_path)
 				else:
-					dir.copy(src_path, dest_path)
+					var copy_error: Error = DirAccess.copy_absolute(
+						ProjectSettings.globalize_path(src_path),
+						ProjectSettings.globalize_path(dest_path)
+					)
+					if copy_error != OK:
+						push_error("FoveaDependencyInstaller: Failed to copy '%s' to '%s' (%d)." % [src_path, dest_path, copy_error])
 			file_name = dir.get_next()
 		dir.list_dir_end()
 
