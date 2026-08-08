@@ -78,7 +78,7 @@ func _run_tests() -> void:
 	# 2. Create a session with dry_run enabled
 	var test_name = "dry_run_test_session"
 	_session = _manager.create_new_session("", test_name)
-	_session.output_directory = "res://addons/foveacore/test/test_dry_run_session_dir"
+	_session.output_directory = "user://test_dry_run_session_dir"
 	_session.dry_run = true
 	_session.use_worldmirror = false # Test the SfM + 3DGS pipeline path
 	_session.use_artifixer = true # Test the ArtiFixer refinement path

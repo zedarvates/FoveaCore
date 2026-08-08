@@ -97,16 +97,17 @@ func _async_extract(temp_file_path: String, tool_name: String) -> void:
 	var global_archive: String = ProjectSettings.globalize_path(temp_file_path)
 	var global_dest: String = ProjectSettings.globalize_path(temp_extract_dir)
 
-	var output: Array = []
 	var is_zip: bool = temp_file_path.to_lower().ends_with(".zip")
-	var extractor: String = "unzip" if is_zip else "tar"
-	var args: Array[String] = []
+	var code: int
+	var extractor: String
 	if is_zip:
-		args.assign(["-q", global_archive, "-d", global_dest])
+		extractor = "ZIPReader"
+		code = _extract_zip_archive(global_archive, global_dest)
 	else:
-		args.assign(["-xf", global_archive, "-C", global_dest])
-	print("FoveaDependencyInstaller: Extracting '%s' using %s..." % [tool_name, extractor])
-	var code: int = OS.execute(extractor, args, output, true, false)
+		extractor = "tar"
+		var output: Array = []
+		code = OS.execute("tar", ["-xf", global_archive, "-C", global_dest], output, true, false)
+	print("FoveaDependencyInstaller: Extracted '%s' using %s." % [tool_name, extractor])
 	
 	_delete_file(temp_file_path)
 
@@ -234,6 +235,28 @@ func _format_bytes(bytes: int) -> String:
 func _delete_file(path: String) -> void:
 	if FileAccess.file_exists(path):
 		DirAccess.remove_absolute(path)
+
+func _extract_zip_archive(archive_path: String, destination: String) -> Error:
+	var reader: ZIPReader = ZIPReader.new()
+	var open_error: Error = reader.open(archive_path)
+	if open_error != OK:
+		return open_error
+	for entry: String in reader.get_files():
+		if entry.ends_with("/"):
+			continue
+		var target_path: String = destination.path_join(entry)
+		var mkdir_error: Error = DirAccess.make_dir_recursive_absolute(target_path.get_base_dir())
+		if mkdir_error != OK:
+			reader.close()
+			return mkdir_error
+		var output_file: FileAccess = FileAccess.open(target_path, FileAccess.WRITE)
+		if output_file == null:
+			reader.close()
+			return ERR_CANT_OPEN
+		output_file.store_buffer(reader.read_file(entry))
+		output_file.close()
+	reader.close()
+	return OK
 
 func _move_dir_contents(src_dir: String, dest_dir: String) -> void:
 	var dir: DirAccess = DirAccess.open(src_dir)
