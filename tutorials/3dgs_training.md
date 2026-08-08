@@ -35,25 +35,29 @@ When feed-forward neural reconstruction (WorldMirror 2.0 / DVLT) is not used, yo
 
 ## 2. Baking & Optimizing to `.fovea` Format
 
-To run the assets at 90+ FPS in VR, convert your `.ply` file into a compressed binary `.fovea` asset:
+For native serialization and experimental runtime testing, convert your `.ply` file into a compressed binary `.fovea` asset. Validate performance on your target renderer and hardware; this conversion is not a frame-rate guarantee.
 
 ### Using the Godot Editor UI
-1. Select the `FoveaSplattable` node in the Scene tree.
-2. In the inspector, locate the **Export Options**.
-3. Under **Target Path**, specify `res://reconstructions/my_model.fovea`.
-4. Click the **Export to .fovea** button.
-5. FoveaEngine will run the fast-path optimizer (Rust GDExtension) in the background to perform:
-   - NaN/Inf removal.
-   - 1024-cluster covariance Vector Quantization.
-   - 8-bit index color quantization.
-   - Spatial grid relative quantization (16-bit).
-   - Coplanar splat merging (reducing overlapping overdraw).
+1. Select the public `FoveaSplat3D` node in the Scene tree.
+2. Set `source_path` to the `.ply` asset you want to convert and wait for it to load.
+3. In the **Fovea Actions** inspector section, click **Convert to .fovea**.
+4. The editor writes a `.fovea` file next to the source file, using the same base name.
+5. FoveaEngine writes the native asset with:
+   - a color palette of up to 256 entries;
+   - a covariance codebook of up to 1024 entries;
+   - Morton spatial ordering and quantized positions within the asset bounds.
+
+Coplanar merging is a separate experimental runtime option; it is not part of this export step.
 
 ### Using GDScript Programmatically
 ```gdscript
-var asset_loader = FoveaAssetLoader.new()
-# Converts and quantizes in a background thread
-asset_loader.convert_ply_to_fovea("res://reconstructions/input.ply", "res://reconstructions/output.fovea")
+var splat := FoveaSplat3D.new()
+add_child(splat)
+splat.source_path = "res://reconstructions/input.ply"
+await get_tree().process_frame
+
+if not splat.export_to_fovea("res://reconstructions/output.fovea"):
+	push_error("Fovea export failed")
 ```
 
 ---
@@ -65,7 +69,7 @@ FoveaEngine includes an interactive real-time editor to clean floaters, shape vo
 ### Editor Setup
 1. Open the scene `res://addons/foveacore/scenes/splat_brush_playground.tscn`.
 2. Ensure you have your VR headset connected via OpenXR (e.g., Quest, Vive) or use the Desktop fallback camera.
-3. Select the `FoveaSplattable` node you wish to edit.
+3. Select the public `FoveaSplat3D` node you wish to edit.
 
 ### Brush Modes
 Using the VR controllers (or mouse on desktop):
@@ -80,4 +84,4 @@ Using the VR controllers (or mouse on desktop):
    - Paints directional vectors onto the splats. These vectors are read by `water_splat_particle.gdshader` to direct real-time fluid advection, simulating localized water currents flowing over objects.
 
 ### Saving Edits
-All deformations done via `FoveaClayDeformer` or the brush engine are non-destructive and can be saved back to the `.fovea` resource by clicking **Save Splat Modifications** in the inspector.
+Treat brush and clay-deformer output as experimental. Keep a copy of the source asset, verify the result visually, then export a new `.fovea` asset through the Fovea inspector action when the target renderer supports the path.
