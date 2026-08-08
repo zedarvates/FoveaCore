@@ -76,11 +76,24 @@ jobs:
           chmod +x "${GODOT_BIN}"
       - name: Import project resources
         run: |
+          # This job validates the documented GDScript-only fallback. A clean
+          # checkout must not try to load a native library that this job does
+          # not build. Move the manifest out of Godot's scan path and clear
+          # any import cache before starting the editor.
+          mv addons/foveacore/foveacore.gdextension \
+            addons/foveacore/foveacore.gdextension.ci-disabled
+          rm -rf .godot
           "./${GODOT_BIN}" --headless --path . --import
       - name: Compile-check all scripts
         run: |
+          set -o pipefail
           "./${GODOT_BIN}" --headless --path . \
-            -s res://addons/foveacore/test/test_compile_all_scripts.gd
+            -s res://addons/foveacore/test/test_compile_all_scripts.gd 2>&1 \
+            | tee compile-check.log
+          if grep -E "SCRIPT ERROR|Parse Error|Failed to load script" compile-check.log; then
+            echo "::error::Godot emitted compile/load errors that the in-process loader could not count."
+            exit 1
+          fi
 
   # ── 5a. Tests unitaires non-GPU (échec dur) ────────────────────────────
   # Valident la logique pure (parsing, .fovea, math, cleaner...) sans
@@ -105,8 +118,14 @@ jobs:
           "./${GODOT_BIN}" --headless --path . --import
       - name: Run non-GPU tests (hard fail)
         run: |
+          set -o pipefail
           "./${GODOT_BIN}" --headless --path . \
-            -s res://addons/foveacore/test/run_all_tests.gd --group=nogpu
+            -s res://addons/foveacore/test/run_all_tests.gd --group=nogpu 2>&1 \
+            | tee nogpu-tests.log
+          if grep -E "SCRIPT ERROR|Parse Error|Failed to load script" nogpu-tests.log; then
+            echo "::error::Godot emitted semantic script errors during the non-GPU suite."
+            exit 1
+          fi
 
   # ── 5b. Tests unitaires GPU (informatif sur runner sans GPU) ───────────
   # Les suites marquées `const REQUIRES_GPU := true` ne valident vraiment

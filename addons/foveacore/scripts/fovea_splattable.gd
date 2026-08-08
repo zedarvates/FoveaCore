@@ -513,7 +513,7 @@ func get_aabb() -> AABB:
 	if original_mesh != null:
 		return original_mesh.get_aabb()
 	
-	if splat_file_path != "" and ClassDB.can_instantiate("FoveaAssetLoader"):
+	if splat_file_path != "" and ClassDB.class_exists("FoveaAssetLoader") and ClassDB.can_instantiate("FoveaAssetLoader"):
 		var loader: Object = ClassDB.instantiate("FoveaAssetLoader")
 		if loader and loader.has_method("get_asset_aabb"):
 			var aabb_val: Variant = loader.get_asset_aabb(splat_file_path)

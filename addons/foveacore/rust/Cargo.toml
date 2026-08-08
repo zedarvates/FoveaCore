@@ -1,6 +1,6 @@
 [package]
 name = "foveacore"
-version = "0.2.1"
+version = "0.3.1"
 edition = "2021"
 
 [lib]

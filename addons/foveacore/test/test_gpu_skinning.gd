@@ -3,6 +3,7 @@ extends SceneTree
 # Unit test for GPU Skinning Compute Shader (Task 265)
 
 const DispatcherClass := preload("res://addons/foveacore/scripts/advanced/fovea_splat_dispatcher.gd")
+const REQUIRES_GPU := true
 
 var _passed := 0
 var _failed := 0

@@ -24,6 +24,7 @@ func _init() -> void:
 func _run_all() -> void:
 	# 1. Create a mock FoveaSplattable
 	var splattable = FoveaSplattable.new()
+	splattable.is_static = false
 	root.add_child(splattable)
 	
 	# Instantiate mock splats
@@ -38,6 +39,7 @@ func _run_all() -> void:
 	var mm_inst = MultiMeshInstance3D.new()
 	var mm = MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = QuadMesh.new()
 	mm.instance_count = 3
 	
 	# Set initial identities for MultiMesh transforms

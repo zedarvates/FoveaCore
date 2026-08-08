@@ -5,6 +5,23 @@
 
 ---
 
+## 🩹 v0.3.1 — Release pipeline and headless stability (proposed)
+
+### Fixes
+- Restore the tracked `godot-cpp` submodule declaration so clean checkouts and release builds can initialize it.
+- Make GDScript-only CI disable the native manifest before importing the project.
+- Fail CI on semantic `SCRIPT ERROR` output that Godot can emit while returning success.
+- Fix DVLT export typing and COLMAP image metadata serialization.
+- Make cloud and lattice animation use a consistent bulk `MultiMesh` buffer in headless and Compatibility modes.
+- Mark GPU skinning as GPU-only and repair cloth, cloud, lattice, and animation stress fixtures.
+
+### Validation
+- Godot compile check: 229 scripts loaded, 0 failed.
+- Non-GPU test gate: 52 suites passed, 0 failed, 3 GPU suites skipped.
+- Rust release check and .NET build pass locally.
+
+> Do not reuse tag `v0.3.0`: it was created without a valid submodule declaration and still packaged `0.2.1` metadata.
+
 ## ✨ v0.3.0-dev — Phase 7: Dynamic Splat Animation (CPU foundation)
 
 ### New — Animation Subsystem

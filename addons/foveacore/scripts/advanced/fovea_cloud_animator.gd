@@ -28,6 +28,7 @@ func _ready() -> void:
 		print("FoveaCloudAnimator: Connected to FoveaCoreSplatRenderer '%s'" % parent.name)
 
 func _process(delta: float) -> void:
+	_resolve_renderer()
 	if not enabled or _renderer == null or _renderer.multimesh == null:
 		return
 	var mm: MultiMesh = _renderer.multimesh
@@ -44,6 +45,13 @@ func _process(delta: float) -> void:
 		
 	_apply_cloud_animation(mm)
 
+func _resolve_renderer() -> void:
+	if _renderer != null:
+		return
+	var parent: Node = get_parent()
+	if parent is FoveaCoreSplatRenderer:
+		_renderer = parent as FoveaCoreSplatRenderer
+
 func _sync_transforms(mm: MultiMesh) -> void:
 	_last_instance_id = mm.get_instance_id()
 	_original_transforms_cache.clear()
@@ -51,15 +59,16 @@ func _sync_transforms(mm: MultiMesh) -> void:
 	_original_custom_data_cache.clear()
 	_original_custom_data_cache.resize(mm.instance_count)
 	
-	var stride := FoveaMultiMeshBulk.stride_of(mm)
-	var buf := mm.buffer
-	var use_colors := mm.use_colors
+	var stride: int = FoveaMultiMeshBulk.stride_of(mm)
+	var buf: PackedFloat32Array = FoveaMultiMeshBulk.ensure_buffer(mm)
 	var use_custom := mm.use_custom_data
 	
 	for i in mm.instance_count:
-		_original_transforms_cache[i] = mm.get_instance_transform(i)
+		var base: int = i * stride
+		_original_transforms_cache[i] = FoveaMultiMeshBulk.read_transform(buf, base)
 		if use_custom:
-			_original_custom_data_cache[i] = mm.get_instance_custom_data(i)
+			var custom_offset: int = base + 12 + (4 if mm.use_colors else 0)
+			_original_custom_data_cache[i] = FoveaMultiMeshBulk.read_color(buf, custom_offset)
 		else:
 			_original_custom_data_cache[i] = Color(1, 1, 1, 1)
 	
@@ -93,7 +102,7 @@ func _apply_cloud_animation(mm: MultiMesh) -> void:
 		dissipation_offset = t * dissipation_spread
 	
 	var stride := FoveaMultiMeshBulk.stride_of(mm)
-	var buf := mm.buffer
+	var buf: PackedFloat32Array = FoveaMultiMeshBulk.ensure_buffer(mm)
 	var use_colors := mm.use_colors
 	var use_custom := mm.use_custom_data
 	

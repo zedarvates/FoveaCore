@@ -63,7 +63,8 @@ func _check_file(file_path: String) -> void:
 		_failed += 1
 		_failed_files.append(file_path)
 	else:
-		# Check if the script can be instantiated (if it's not a tool/EditorPlugin that requires editor context)
-		# Just loading is enough to check for syntax/parse errors, but we can do a sanity check on source code.
+		# Loading compiles the source, but some semantic errors are only reported
+		# on Godot's stderr. CI captures the process output and fails on those
+		# diagnostics instead of relying only on this in-process counter.
 		print("  ✓ PASS: %s" % file_path)
 		_passed += 1
