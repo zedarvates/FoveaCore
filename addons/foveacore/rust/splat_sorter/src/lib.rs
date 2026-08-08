@@ -1,3 +1,5 @@
+#![allow(clippy::result_large_err)] // Generated Godot bindings expose large error variants.
+
 use godot::prelude::*;
 use rayon::prelude::*;
 use std::sync::{Arc, Mutex};
