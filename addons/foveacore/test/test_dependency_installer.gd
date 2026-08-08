@@ -4,6 +4,7 @@ extends SceneTree
 
 const DepMgr := preload("res://addons/foveacore/scripts/reconstruction/fovea_dependency_manager.gd")
 const DepInstaller := preload("res://addons/foveacore/scripts/reconstruction/fovea_dependency_installer.gd")
+const REQUIRES_INTEGRATION := true
 
 var _passed := 0
 var _failed := 0

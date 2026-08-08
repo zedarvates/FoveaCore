@@ -1,5 +1,7 @@
 extends SceneTree
 
+const REQUIRES_INTEGRATION := true
+
 ## Unit tests for StudioTo3D Pipeline (Dry Run mode)
 ## Validates: Workspace setup, Dry Run mode, JSON save/load, phase progress transitions
 
