@@ -513,16 +513,19 @@ func _delete_dir_recursive(path: String) -> void:
 	var dir: DirAccess = DirAccess.open(path)
 	if dir:
 		dir.list_dir_begin()
+		var entries: Array[String] = []
 		var file_name: String = dir.get_next()
 		while file_name != "":
 			if file_name != "." and file_name != "..":
-				var full_path: String = path.path_join(file_name)
-				if dir.current_is_dir():
-					_delete_dir_recursive(full_path)
-				else:
-					DirAccess.remove_absolute(full_path)
+				entries.append(file_name)
 			file_name = dir.get_next()
 		dir.list_dir_end()
+		for entry: String in entries:
+			var full_path: String = path.path_join(entry)
+			if DirAccess.dir_exists_absolute(full_path):
+				_delete_dir_recursive(full_path)
+			else:
+				DirAccess.remove_absolute(full_path)
 		DirAccess.remove_absolute(path)
 
 
