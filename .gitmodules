@@ -1,3 +1,6 @@
 [submodule "addons/foveacore/gdextension/godot-cpp"]
 	path = addons/foveacore/gdextension/godot-cpp
 	url = https://github.com/godotengine/godot-cpp.git
+[submodule "botte-secrete"]
+	path = botte-secrete
+	url = https://github.com/zedarvates/botte-secrete.git

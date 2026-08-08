@@ -115,6 +115,9 @@ jobs:
           chmod +x "${GODOT_BIN}"
       - name: Import project resources
         run: |
+          mv addons/foveacore/foveacore.gdextension \
+            addons/foveacore/foveacore.gdextension.ci-disabled
+          rm -rf .godot
           "./${GODOT_BIN}" --headless --path . --import
       - name: Run non-GPU tests (hard fail)
         run: |
@@ -150,6 +153,9 @@ jobs:
           chmod +x "${GODOT_BIN}"
       - name: Import project resources
         run: |
+          mv addons/foveacore/foveacore.gdextension \
+            addons/foveacore/foveacore.gdextension.ci-disabled
+          rm -rf .godot
           "./${GODOT_BIN}" --headless --path . --import
       - name: Run GPU tests (informational)
         run: |
@@ -182,6 +188,9 @@ jobs:
           chmod +x "${GODOT_BIN}"
       - name: Import project resources
         run: |
+          mv addons/foveacore/foveacore.gdextension \
+            addons/foveacore/foveacore.gdextension.ci-disabled
+          rm -rf .godot
           "./${GODOT_BIN}" --headless --path . --import
       - name: Smoke boot (${{ matrix.rendering-method }}), fail on ERROR
         run: |
@@ -222,6 +231,9 @@ jobs:
           chmod +x "${GODOT_BIN}"
       - name: Import project resources
         run: |
+          mv addons/foveacore/foveacore.gdextension \
+            addons/foveacore/foveacore.gdextension.ci-disabled
+          rm -rf .godot
           xvfb-run -a "./${GODOT_BIN}" --headless --path . --import
       - name: Capture render (Vulkan / lavapipe under Xvfb)
         env:
