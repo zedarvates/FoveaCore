@@ -78,12 +78,13 @@ func _run_tests() -> void:
 					var rw: int = int(data["width"])
 					var rh: int = int(data["height"])
 					
-					# Bounding box should surround the red square (50, 50, 100, 100)
-					# Allow margin (script adds 15px margin -> x should be approx 35, y approx 35, size approx 130)
-					_assert("Detected X is near expected x=35", abs(rx - 35) <= 5, "Got %d" % rx)
-					_assert("Detected Y is near expected y=35", abs(ry - 35) <= 5, "Got %d" % ry)
-					_assert("Detected width is near expected w=130", abs(rw - 130) <= 10, "Got %d" % rw)
-					_assert("Detected height is near expected h=130", abs(rh - 130) <= 10, "Got %d" % rh)
+					var expected_padding: int = 10 if str(data.get("method", "")).begins_with("pil") else 15
+					var expected_origin: int = 50 - expected_padding
+					var expected_size: int = 99 + expected_padding * 2
+					_assert("Detected X includes method padding", abs(rx - expected_origin) <= 5, "Got %d" % rx)
+					_assert("Detected Y includes method padding", abs(ry - expected_origin) <= 5, "Got %d" % ry)
+					_assert("Detected width includes method padding", abs(rw - expected_size) <= 4, "Got %d" % rw)
+					_assert("Detected height includes method padding", abs(rh - expected_size) <= 4, "Got %d" % rh)
 	
 	# Cleanup
 	if FileAccess.file_exists(temp_img_path):
