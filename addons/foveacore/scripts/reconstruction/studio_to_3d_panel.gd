@@ -1504,6 +1504,10 @@ func _check_tools_and_popup(at_startup: bool = false) -> void:
 		if not at_startup:
 			_log("✅ All tools found and verified.")
 		return
+	# Headless imports have no window host for modal dialogs. Attempting to
+	# popup the missing-tools warning there can crash the editor process.
+	if DisplayServer.get_name() == "headless":
+		return
 	
 	# Show AcceptDialog popup
 	var dialog = AcceptDialog.new()
