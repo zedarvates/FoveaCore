@@ -17,4 +17,4 @@ func _run_all() -> void:
 	print("  ✅ 100 load/unload cycles completed")
 	print("  (VRAM check would go here in real CI)")
 	_passed += 1
-	print(f"  {_passed}/{_passed+_failed}")
+	print("  %d/%d" % [_passed, _passed + _failed])

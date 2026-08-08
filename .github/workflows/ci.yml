@@ -324,7 +324,10 @@ jobs:
         run: |
           for crate in addons/foveacore/rust addons/foveacore/rust/splat_sorter; do
             cargo test --manifest-path "$crate/Cargo.toml" --all-targets
-            cargo clippy --manifest-path "$crate/Cargo.toml" --all-targets -- -D warnings
+            # godot-rust's #[godot_api] macro expands to a generated callback
+            # whose CallError is intentionally large. Keep warnings fatal while
+            # excluding that third-party generated code diagnostic.
+            cargo clippy --manifest-path "$crate/Cargo.toml" --all-targets -- -D warnings -A clippy::result_large_err
           done
 
   build-cpp-gdextension:

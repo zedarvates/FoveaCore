@@ -12,4 +12,4 @@ func _run_all() -> void:
 	print("  Round-trip: would test all optional sections")
 	print("    - flipbook, morph, flow, deltas")
 	_passed += 1
-	print(f"  {_passed}/{_passed+_failed}")
+	print("  %d/%d" % [_passed, _passed + _failed])
