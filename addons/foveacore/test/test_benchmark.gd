@@ -14,4 +14,4 @@ func _run_all() -> void:
 		results[mode] = (Time.get_ticks_usec() - start) / 100.0
 	print("\nSplats  | Anim Time"); print("--------+----------")
 	for m in modes: print("  %6s | %.1f us" % [m, results[m]])
-	_passed += 1; print(f"  {_passed}/{_passed+_failed}")
+	_passed += 1; print("  %d/%d" % [_passed, _passed + _failed])

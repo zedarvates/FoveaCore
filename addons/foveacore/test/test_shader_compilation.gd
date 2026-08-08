@@ -24,4 +24,4 @@ func _run_all() -> void:
 	print("  Found %d GLSL shaders" % count)
 	# In real CI: load each shader via RenderingDevice and check compile errors
 	_passed += 1
-	print(f"  {_passed}/{_passed+_failed}")
+	print("  %d/%d" % [_passed, _passed + _failed])

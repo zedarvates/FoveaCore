@@ -14,4 +14,4 @@ func _run_all() -> void:
 	# Verify the pipeline has animation-related members
 	assert("animate_shader_rid" in cp, "animate_shader_rid exists")
 	assert("animate_pipeline_rid" in cp, "animate_pipeline_rid exists")
-	_passed += 2; _failed += 0; print(f"  {_passed}/{_passed+_failed}")
+	_passed += 2; _failed += 0; print("  %d/%d" % [_passed, _passed + _failed])
