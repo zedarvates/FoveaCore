@@ -98,8 +98,11 @@ func _async_extract(temp_file_path: String, tool_name: String) -> void:
 	var global_dest: String = ProjectSettings.globalize_path(temp_extract_dir)
 
 	var output: Array = []
-	print("FoveaDependencyInstaller: Extracting '%s' using tar..." % tool_name)
-	var code: int = OS.execute("tar", ["-xf", global_archive, "-C", global_dest], output, true, false)
+	var is_zip: bool = temp_file_path.to_lower().ends_with(".zip")
+	var extractor: String = "unzip" if is_zip else "tar"
+	var args: Array[String] = ["-q", global_archive, "-d", global_dest] if is_zip else ["-xf", global_archive, "-C", global_dest]
+	print("FoveaDependencyInstaller: Extracting '%s' using %s..." % [tool_name, extractor])
+	var code: int = OS.execute(extractor, args, output, true, false)
 	
 	_delete_file(temp_file_path)
 
@@ -248,14 +251,17 @@ func _delete_dir_recursive(dir_path: String) -> void:
 	var dir: DirAccess = DirAccess.open(dir_path)
 	if dir:
 		dir.list_dir_begin()
+		var entries: Array[String] = []
 		var file_name: String = dir.get_next()
 		while file_name != "":
 			if file_name != "." and file_name != "..":
-				var path: String = dir_path.path_join(file_name)
-				if dir.current_is_dir():
-					_delete_dir_recursive(path)
-				else:
-					dir.remove(path)
+				entries.append(file_name)
 			file_name = dir.get_next()
 		dir.list_dir_end()
-		dir.remove(dir_path)
+		for entry: String in entries:
+			var path: String = dir_path.path_join(entry)
+			if DirAccess.dir_exists_absolute(path):
+				_delete_dir_recursive(path)
+			else:
+				DirAccess.remove_absolute(path)
+		DirAccess.remove_absolute(dir_path)

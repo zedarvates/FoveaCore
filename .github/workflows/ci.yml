@@ -50,9 +50,14 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "9.0.x"
+      - name: Install deterministic image test dependency
+        run: python -m pip install --disable-pip-version-check Pillow
       - name: Build FoveaEngine.csproj
         run: dotnet build FoveaEngine.csproj --configuration Release --nologo
       - name: Run .NET test host
@@ -65,9 +70,14 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "9.0.x"
+      - name: Install deterministic image test dependency
+        run: python -m pip install --disable-pip-version-check Pillow
       - name: Download Godot ${{ env.GODOT_VERSION }} (mono)
         run: |
           curl -sSL -o godot.zip \
