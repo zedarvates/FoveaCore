@@ -121,6 +121,7 @@ jobs:
           cp -r addons/foveacore "$ROOT/foveacore"
           # Drop native build inputs and local build artifacts from the shipped addon.
           rm -rf "$ROOT/foveacore/rust" "$ROOT/foveacore/gdextension"
+          find "$ROOT/foveacore" -name '*.import' -delete
 
           # Populate the native binaries the .gdextension expects.
           BIN="$ROOT/foveacore/gdextension/bin"
