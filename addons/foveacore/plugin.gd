@@ -69,7 +69,13 @@ func _enter_tree():
 		add_custom_type(type_def[0], type_def[1], load(type_def[2]), icon)
 
 	# GDExtension - charger seulement si disponible
-	var gdextension_path = "res://addons/foveacore/gdextension/bin/foveacore.dll"
+	var native_library_names: Dictionary[String, String] = {
+		"Windows": "foveacore.dll",
+		"Linux": "libfoveacore.so",
+		"macOS": "libfoveacore.dylib",
+	}
+	var native_library_name: String = str(native_library_names.get(OS.get_name(), ""))
+	var gdextension_path: String = "res://addons/foveacore/gdextension/bin/%s" % native_library_name
 	if FileAccess.file_exists(gdextension_path):
 		print("FoveaCore GDExtension loaded (native renderer)")
 	else:
@@ -129,7 +135,7 @@ func _enter_tree():
 	add_splat_button = Button.new()
 	add_splat_button.text = "＋ FoveaSplat3D"
 	add_splat_button.flat = true
-	add_splat_button.tooltip_text = "Create a FoveaSplat3D in the current scene from a .ply / .fovea / .spz file"
+	add_splat_button.tooltip_text = "Create a FoveaSplat3D in the current scene from a .ply / .fovea / .splat file"
 	add_splat_button.pressed.connect(_on_add_splat_pressed)
 	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, add_splat_button)
 
@@ -139,7 +145,7 @@ func _enter_tree():
 	add_splat_dialog.clear_filters()
 	add_splat_dialog.add_filter("*.fovea", "Fovea asset")
 	add_splat_dialog.add_filter("*.ply", "Gaussian Splatting PLY")
-	add_splat_dialog.add_filter("*.spz", "SPZ splat")
+	add_splat_dialog.add_filter("*.splat", "Binary Gaussian splat")
 	add_splat_dialog.title = "Select a splat file"
 	add_splat_dialog.file_selected.connect(_on_splat_file_selected)
 	EditorInterface.get_base_control().add_child(add_splat_dialog)
