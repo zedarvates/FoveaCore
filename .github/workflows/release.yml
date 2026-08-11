@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Compare tag to plugin.cfg (and warn on Cargo.toml drift)
+      - name: Compare tag to plugin.cfg and Cargo.toml
         run: |
           TAG="${GITHUB_REF_NAME#v}"
           CFG="$(grep -E '^version=' addons/foveacore/plugin.cfg | head -1 | cut -d'"' -f2)"
@@ -33,7 +33,8 @@ jobs:
             exit 1
           fi
           if [ "$TAG" != "$CARGO" ]; then
-            echo "::warning::Cargo.toml version $CARGO differs from tag v$TAG (informational)."
+            echo "::error::Tag v$TAG does not match Cargo.toml version $CARGO — bump Cargo.toml before tagging."
+            exit 1
           fi
 
   # ── 2. Build native GDExtension per platform ───────────────────────────
