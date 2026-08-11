@@ -93,6 +93,7 @@ jobs:
           lipo -create -output staged/libfoveacore.dylib \
             artifacts/native-x86_64-apple-darwin/libfoveacore.dylib \
             artifacts/native-aarch64-apple-darwin/libfoveacore.dylib
+          lipo -verify_arch x86_64 arm64 staged/libfoveacore.dylib
       - uses: actions/upload-artifact@v4
         with:
           name: native-macos-universal
@@ -145,6 +146,21 @@ jobs:
           cd ..
           sha256sum "${ROOT}.zip" > "${ROOT}.zip.sha256"
           echo "ROOT=$ROOT" >> "$GITHUB_ENV"
+
+      - name: Validate release archive
+        run: |
+          set -euo pipefail
+          test -s "${ROOT}.zip"
+          test -s "${ROOT}.zip.sha256"
+          unzip -l "${ROOT}.zip" > package-files.txt
+          grep -q "${ROOT}/addons/foveacore/plugin.cfg" package-files.txt
+          grep -q "${ROOT}/addons/foveacore/gdextension/bin/foveacore.dll" package-files.txt
+          grep -q "${ROOT}/addons/foveacore/gdextension/bin/libfoveacore.so" package-files.txt
+          grep -q "${ROOT}/addons/foveacore/gdextension/bin/libfoveacore.dylib" package-files.txt
+          if grep -Eq '/rust/|/gdextension/src/|/gdextension/godot-cpp/|\.import$' package-files.txt; then
+            echo "::error::Release archive contains native build inputs or generated import caches."
+            exit 1
+          fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
