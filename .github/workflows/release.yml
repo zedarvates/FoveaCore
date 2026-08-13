@@ -67,7 +67,7 @@ jobs:
       - name: Build (release)
         run: |
           cd addons/foveacore/rust
-          cargo build --release --target ${{ matrix.target }}
+          cargo build --locked --release --target ${{ matrix.target }}
       - name: Stage binary
         shell: bash
         run: |
