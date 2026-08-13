@@ -154,6 +154,7 @@ jobs:
           set -euo pipefail
           test -s "${ROOT}.zip"
           test -s "${ROOT}.zip.sha256"
+          sha256sum --check "${ROOT}.zip.sha256"
           unzip -l "${ROOT}.zip" > package-files.txt
           grep -q "${ROOT}/addons/foveacore/plugin.cfg" package-files.txt
           grep -q "${ROOT}/addons/foveacore/gdextension/bin/foveacore.dll" package-files.txt
@@ -161,6 +162,12 @@ jobs:
           grep -q "${ROOT}/addons/foveacore/gdextension/bin/libfoveacore.dylib" package-files.txt
           if grep -Eq '/rust/|/gdextension/src/|/gdextension/godot-cpp/|\.import$' package-files.txt; then
             echo "::error::Release archive contains native build inputs or generated import caches."
+            exit 1
+          fi
+          ARCHIVE_VERSION="$(unzip -p "${ROOT}.zip" "${ROOT}/addons/foveacore/plugin.cfg" \
+            | grep -E '^version=' | head -1 | cut -d'"' -f2)"
+          if [ "$ARCHIVE_VERSION" != "${GITHUB_REF_NAME#v}" ]; then
+            echo "::error::Packaged plugin version $ARCHIVE_VERSION differs from tag ${GITHUB_REF_NAME}."
             exit 1
           fi
 
