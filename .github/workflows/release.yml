@@ -22,6 +22,15 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require tagged commit on main
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not point to a commit merged into main."
+            exit 1
+          fi
       - name: Compare tag to plugin.cfg and Cargo.toml
         run: |
           TAG="${GITHUB_REF_NAME#v}"
