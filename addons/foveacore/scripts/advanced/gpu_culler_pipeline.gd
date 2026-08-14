@@ -1139,6 +1139,13 @@ func cleanup() -> void:
             rd.free_rid(raster_shader_rid)
             raster_shader_rid = RID()
 
+        if publish_pipeline_rid.is_valid():
+            rd.free_rid(publish_pipeline_rid)
+            publish_pipeline_rid = RID()
+        if publish_shader_rid.is_valid():
+            rd.free_rid(publish_shader_rid)
+            publish_shader_rid = RID()
+
         if delta_pipeline_rid.is_valid():
             rd.free_rid(delta_pipeline_rid)
             delta_pipeline_rid = RID()
@@ -1159,6 +1166,21 @@ func cleanup() -> void:
         if indirect_shader_rid.is_valid():
             rd.free_rid(indirect_shader_rid)
             indirect_shader_rid = RID()
+
+        if _vram_pool_buffer.is_valid():
+            rd.free_rid(_vram_pool_buffer)
+            _vram_pool_buffer = RID()
+        if _vram_metadata_buffer.is_valid():
+            rd.free_rid(_vram_metadata_buffer)
+            _vram_metadata_buffer = RID()
+        for buffer: RID in _vram_global_lod_buffers.values():
+            if buffer.is_valid():
+                rd.free_rid(buffer)
+        _vram_global_lod_buffers.clear()
+        for buffer: RID in _static_input_buffers.values():
+            if buffer.is_valid():
+                rd.free_rid(buffer)
+        _static_input_buffers.clear()
         
         # Libérer les buffers GPU persistants en cache
         for path in _gpu_buffers:
@@ -1342,8 +1364,9 @@ func _generate_hiz_pyramid(depth_texture_rid: RID) -> RID:
     if not rd or not depth_texture_rid.is_valid():
         return RID()
         
-    var src_w: int = rd.texture_get_width(depth_texture_rid)
-    var src_h: int = rd.texture_get_height(depth_texture_rid)
+    var source_format: RDTextureFormat = rd.texture_get_format(depth_texture_rid)
+    var src_w: int = source_format.width
+    var src_h: int = source_format.height
     if src_w <= 0 or src_h <= 0:
         return RID()
         
@@ -1456,16 +1479,17 @@ func dispatch_tile_based_rasterization(
         covar_texture_rid: RID,
         palette_texture_rid: RID,
         model_transform: Transform3D = Transform3D.IDENTITY
-) -> void:
+    ) -> bool:
     if not rd or not output_buffer_rid.is_valid() or not color_texture_rid.is_valid() or not covar_texture_rid.is_valid():
-        return
+        return false
     if not raster_pipeline_rid.is_valid():
-        return
+        return false
         
-    var viewport_w: int = rd.texture_get_width(color_texture_rid)
-    var viewport_h: int = rd.texture_get_height(color_texture_rid)
+    var color_format: RDTextureFormat = rd.texture_get_format(color_texture_rid)
+    var viewport_w: int = color_format.width
+    var viewport_h: int = color_format.height
     if viewport_w <= 0 or viewport_h <= 0:
-        return
+        return false
         
     var sampler_state := RDSamplerState.new()
     sampler_state.min_filter = RenderingDevice.SAMPLER_FILTER_NEAREST
@@ -1500,14 +1524,12 @@ func dispatch_tile_based_rasterization(
     u_counter.binding = 4
     u_counter.add_id(last_counter_buffer_rid)
     
-    var uniform_set := rd.uniform_set_create([u_splats, u_covar, u_palette, u_dest, u_counter], raster_shader_rid, 0)
-    
     var view_matrix := camera.global_transform.affine_inverse()
-    var model_view_matrix := view_matrix * model_transform
-    var projection_matrix := camera.get_camera_projection()
+    var model_view_matrix: Projection = Projection(view_matrix * model_transform)
+    var projection_matrix: Projection = camera.get_camera_projection()
     
     var push_bytes := PackedByteArray()
-    push_bytes.resize(184)
+    push_bytes.resize(192)
     
     for col_idx in 4:
         for row_idx in 4:
@@ -1535,6 +1557,25 @@ func dispatch_tile_based_rasterization(
     
     push_bytes.encode_u32(176, 1 if use_palette else 0)
     push_bytes.encode_u32(180, palette_size)
+
+    var params_buffer: RID = rd.uniform_buffer_create(push_bytes.size(), push_bytes)
+    if not params_buffer.is_valid():
+        rd.free_rid(sampler_rid)
+        return false
+    var u_params := RDUniform.new()
+    u_params.uniform_type = RenderingDevice.UNIFORM_TYPE_UNIFORM_BUFFER
+    u_params.binding = 5
+    u_params.add_id(params_buffer)
+
+    var uniform_set := rd.uniform_set_create(
+        [u_splats, u_covar, u_palette, u_dest, u_counter, u_params],
+        raster_shader_rid,
+        0
+    )
+    if not uniform_set.is_valid():
+        rd.free_rid(params_buffer)
+        rd.free_rid(sampler_rid)
+        return false
     
     var workgroups_x := int(ceil(float(viewport_w) / 16.0))
     var workgroups_y := int(ceil(float(viewport_h) / 16.0))
@@ -1542,7 +1583,6 @@ func dispatch_tile_based_rasterization(
     var compute_list := rd.compute_list_begin()
     rd.compute_list_bind_compute_pipeline(compute_list, raster_pipeline_rid)
     rd.compute_list_bind_uniform_set(compute_list, uniform_set, 0)
-    rd.compute_list_set_push_constant(compute_list, push_bytes, push_bytes.size())
     rd.compute_list_dispatch(compute_list, workgroups_x, workgroups_y, 1)
     rd.compute_list_end()
     
@@ -1550,13 +1590,16 @@ func dispatch_tile_based_rasterization(
     if not skip_sync:
         rd.sync()
         
+    rd.free_rid(uniform_set)
+    rd.free_rid(params_buffer)
     rd.free_rid(sampler_rid)
+    return true
 
 func dispatch_tile_based_rasterization_cached(
         camera: Camera3D,
         color_texture_rid: RID
-) -> void:
-    dispatch_tile_based_rasterization(
+) -> bool:
+    return dispatch_tile_based_rasterization(
         last_output_buffer_rid,
         camera,
         color_texture_rid,

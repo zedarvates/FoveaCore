@@ -20,6 +20,7 @@ var _uniform_set: RID = RID()
 
 var _max_splats: int = 65536
 var _initialized: bool = false
+var _gpu_sort_healthy: bool = true
 var _debug_verbose: bool = false
 
 func _init():
@@ -104,9 +105,17 @@ func sort_splats_back_to_front(splats: Array[GaussianSplat], camera: Camera3D) -
 
 	# 5. Filtrer les indices >= n (padding) et inverser pour far-to-near
 	var sorted_indices: Array[int] = []
-	for idx in sorted_indices_all:
-		if idx < n:
+	var seen_indices: PackedByteArray = PackedByteArray()
+	seen_indices.resize(n)
+	for idx: int in sorted_indices_all:
+		if idx >= 0 and idx < n and seen_indices[idx] == 0:
+			seen_indices[idx] = 1
 			sorted_indices.append(idx)
+	if sorted_indices.size() != n:
+		push_warning("SplatSorter: GPU sort returned an incomplete permutation; falling back to CPU sort.")
+		_gpu_sort_healthy = false
+		_free_buffers()
+		return _cpu_sort_fallback(splats, camera)
 
 	# Inverser : le GPU a trié en near-to-far (ascendant), on veut far-to-near
 	sorted_indices.reverse()
@@ -231,7 +240,7 @@ func sort_indices_by_depth(splats: Array[GaussianSplat], depths: Array[float]) -
 	return sorted
 
 func is_gpu_available() -> bool:
-	return _initialized and _rd != null
+	return _initialized and _rd != null and _gpu_sort_healthy
 
 func get_max_supported_splats() -> int:
 	return _max_splats

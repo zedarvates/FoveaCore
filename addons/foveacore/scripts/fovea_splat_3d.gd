@@ -3,7 +3,7 @@ extends Node3D
 ## The main scene node of FoveaEngine — drop it in a scene, assign a splat file, done.
 ##
 ## [b]FoveaSplat3D[/b] is the public, stable entry point for rendering Gaussian
-## Splatting assets ([code].fovea[/code], [code].ply[/code], [code].spz[/code]) in Godot.
+## Splatting assets ([code].fovea[/code], [code].ply[/code], [code].splat[/code]) in Godot.
 ## It exposes only the essential properties; everything advanced (styles, overrides,
 ## instancing, morphs) lives on the internal [FoveaSplattable] delegate, reachable
 ## through [method get_advanced].
@@ -29,8 +29,8 @@ enum QualityPreset {
 }
 
 ## Path to the Gaussian Splatting asset to render ([code].fovea[/code] native,
-## [code].ply[/code] 3DGS training output, [code].splat[/code] binary, or [code].spz[/code]).
-@export_file("*.fovea", "*.ply", "*.splat", "*.spz") var source_path: String = "":
+## [code].ply[/code] 3DGS training output, or [code].splat[/code] binary).
+@export_file("*.fovea", "*.ply", "*.splat") var source_path: String = "":
 	set(val):
 		source_path = val
 		_apply_source_path()

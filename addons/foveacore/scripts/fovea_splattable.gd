@@ -39,17 +39,22 @@ signal generation_completed(splat_count: int)
 
 ## Static reference to the PLYLoader script.
 const _PlyLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/ply_loader.gd")
-## Unified point-cloud loader (routes .ply/.splat/.spz/.sog by extension).
+## Unified point-cloud loader (currently decodes .ply/.splat by extension).
 const _SplatFormatLoaderScript = preload("res://addons/foveacore/scripts/reconstruction/splat_format_loader.gd")
 
 ## Local multiplier for splat density (e.g. 1.0 matches the global density).
 @export var splat_density := 1.0
 
-## Path to a Gaussian Splatting file (.ply, .fovea, .spz, .splat).
-@export_file("*.ply", "*.fovea", "*.spz", "*.splat") var splat_file_path: String = "":
+## Path to a Gaussian Splatting file (.ply, .fovea, .splat).
+@export_file("*.ply", "*.fovea", "*.splat") var splat_file_path: String = "":
 	set(val):
+		var previous_path: String = splat_file_path
 		splat_file_path = val
 		if is_node_ready():
+			if previous_path != splat_file_path:
+				var manager: Node = get_node_or_null("/root/FoveaCoreManager")
+				if manager and manager.has_method("refresh_splattable_asset"):
+					manager.refresh_splattable_asset(self)
 			if splat_file_path.ends_with(".ply") or splat_file_path.ends_with(".splat"):
 				_load_splats_from_ply()
 			elif splat_file_path.ends_with(".fovea"):

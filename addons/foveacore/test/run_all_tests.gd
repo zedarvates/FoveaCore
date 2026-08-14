@@ -94,17 +94,23 @@ func _init() -> void:
 				
 		var exit_code = OS.execute(godot_bin, args, output, true)
 		
-		# Print output of the test
+		# Print output and reject semantic failure markers even when a generic
+		# Node wrapper returns exit code 0.
+		var output_text := ""
 		if not output.is_empty():
-			print(output[0])
+			output_text = str(output[0])
+			print(output_text)
+		var semantic_failure := output_text.contains("[FAIL]") \
+			or output_text.contains("\n  FAIL:")
 			
-		if exit_code == 0:
+		if exit_code == 0 and not semantic_failure:
 			_passed_scripts += 1
 			print("  ✓ SUCCESS: %s" % test_path.get_file())
 		else:
 			_failed_scripts += 1
 			_failed_files.append(test_path)
-			print("  ✗ FAILED: %s (Exit code: %d)" % [test_path.get_file(), exit_code])
+			print("  ✗ FAILED: %s (Exit code: %d, semantic marker: %s)" % [
+				test_path.get_file(), exit_code, str(semantic_failure)])
 			
 	print("\n" + "======================================================================")
 	print("FOVEACORE TEST RUNNER SUMMARY  (group=%s):" % _group)
@@ -123,7 +129,11 @@ func _init() -> void:
 
 ## Reads the --group=<value> command-line argument. Defaults to "all".
 func _parse_group() -> String:
-	for arg in OS.get_cmdline_args():
+	# Accept both the canonical user-argument form (`-- --group=nogpu`) and the
+	# legacy direct form so older local scripts cannot silently run every suite.
+	var arguments: PackedStringArray = OS.get_cmdline_user_args()
+	arguments.append_array(OS.get_cmdline_args())
+	for arg: String in arguments:
 		if arg.begins_with("--group="):
 			var val := arg.substr("--group=".length()).strip_edges().to_lower()
 			if val in ["all", "nogpu", "gpu"]:

@@ -22,6 +22,8 @@ struct OutputSplat {
     uint data2;
     uint data3;
     uint local_idx;
+    // Runtime-only metadata. Keep the canonical 16-byte .fovea record intact.
+    uint instance_id;
 };
 
 struct DeltaEntry {
@@ -93,14 +95,13 @@ layout(set = 1, binding = 1, std140) uniform CameraData {
 } camera;
 
 layout(push_constant, std430) uniform Params {
-    vec3 camera_position;
     uint asset_splat_count;
     uint active_instances;
-    float backface_threshold;
-    vec3 aabb_min;
     uint use_gpu_instance_culling;
-    vec3 aabb_max;
-    float pad1;
+    uint enable_screen_space_culling;
+    vec4 camera_position;
+    vec4 aabb_min;
+    vec4 aabb_max;
 } params;
 
 float decode_half(uint half_bits) {
@@ -133,17 +134,38 @@ void main() {
     PackedSplat splat = input_data[local_idx];
     mat4 transform = transforms[actual_instance_id];
 
+    // The synchronous renderer performs transform, morph, tint, alpha, and
+    // sparse-delta decoding on CPU after readback. When screen-space rejection
+    // is not proven, publish the canonical record directly instead of running
+    // calculations whose only purpose is culling.
+    if (params.enable_screen_space_culling == 0u) {
+        uint passthrough_index = atomicAdd(valid_splat_count, 1);
+        OutputSplat passthrough_splat;
+        passthrough_splat.data0 = splat.data0;
+        passthrough_splat.data1 = splat.data1;
+        passthrough_splat.data2 = splat.data2;
+        passthrough_splat.data3 = splat.data3;
+        passthrough_splat.local_idx = local_idx;
+        passthrough_splat.instance_id = actual_instance_id;
+        output_data[passthrough_index] = passthrough_splat;
+        return;
+    }
+
     // --- 1. DEQUANTIZE LOCAL POSITION ---
     uint qx = splat.data0 & 0xFFFFu;
     uint qy = (splat.data0 >> 16u) & 0xFFFFu;
     uint qz = splat.data1 & 0xFFFFu;
     
     vec3 q_pos = vec3(float(qx), float(qy), float(qz)) / 65535.0;
-    vec3 local_pos = params.aabb_min + q_pos * (params.aabb_max - params.aabb_min);
+    vec3 local_pos = params.aabb_min.xyz + q_pos * (params.aabb_max.xyz - params.aabb_min.xyz);
 
     // --- 2. DEQUANTIZE & DECODE NORMAL ---
     uint norm_u_bits = (splat.data1 >> 16u) & 0xFFu;
     uint norm_v_bits = (splat.data1 >> 24u) & 0xFFu;
+    // Converted 3DGS assets may not carry surface normals. The canonical
+    // all-zero pair is their missing-normal sentinel, not a trustworthy -Z
+    // direction for backface rejection.
+    bool has_encoded_normal = norm_u_bits != 0u || norm_v_bits != 0u;
     float u = float(norm_u_bits) / 255.0 * 2.0 - 1.0;
     float v = float(norm_v_bits) / 255.0 * 2.0 - 1.0;
     float z_coord = 1.0 - abs(u) - abs(v);
@@ -234,9 +256,9 @@ void main() {
     vec3 world_normal = normalize(mat3(transform) * local_normal);
 
     // --- 6. BACKFACE CULLING ---
-    vec3 view_dir = normalize(world_pos - params.camera_position);
+    vec3 view_dir = normalize(world_pos - params.camera_position.xyz);
     float NdotV = dot(world_normal, view_dir);
-    if (NdotV > params.backface_threshold) return;
+    if (has_encoded_normal && NdotV > params.camera_position.w) return;
 
     // --- 7. STEREOSCOPIC FRUSTUM CULLING ---
     vec4 clip_left = camera.view_proj_left * vec4(world_pos, 1.0);
@@ -248,13 +270,18 @@ void main() {
     bool visible_left = (abs(ndc_left.x) < 1.0 && abs(ndc_left.y) < 1.0 && ndc_left.z > 0.0 && ndc_left.z < 1.0);
     bool visible_right = (abs(ndc_right.x) < 1.0 && abs(ndc_right.y) < 1.0 && ndc_right.z > 0.0 && ndc_right.z < 1.0);
 
-    if (!visible_left && !visible_right) return;
+    // A local RenderingDevice cannot consume the main viewport depth RID.
+    // Keep instance-AABB culling active on the CPU, but gate per-splat screen
+    // culling until matrix/depth parity has a dedicated runtime proof.
+    if (params.enable_screen_space_culling == 1u) {
+        if (!visible_left && !visible_right) return;
 
-    // --- 8. HI-Z OCCLUSION CULLING ---
-    if (visible_left) {
-        vec2 screen_uv = ndc_left.xy * 0.5 + 0.5;
-        float scene_depth = textureLod(depth_map, vec2(screen_uv.x * 0.5, screen_uv.y), 0.0).r;
-        if (ndc_left.z > scene_depth + 0.001) return;
+        // --- 8. HI-Z OCCLUSION CULLING ---
+        if (visible_left) {
+            vec2 screen_uv = ndc_left.xy * 0.5 + 0.5;
+            float scene_depth = textureLod(depth_map, vec2(screen_uv.x * 0.5, screen_uv.y), 0.0).r;
+            if (ndc_left.z > scene_depth + 0.001) return;
+        }
     }
 
     // --- 9. WRITE TO OUTPUT WITH INSTANCE ID TAGGED ---
@@ -285,8 +312,9 @@ void main() {
         out_splat.data2 = (splat.data2 & 0xFFFF0000u) | new_rgb565;
     }
     
-    out_splat.data3 = (splat.data3 & 0x0000FFFFu) | (actual_instance_id << 16u);
+    out_splat.data3 = splat.data3;
     out_splat.local_idx = local_idx;
+    out_splat.instance_id = actual_instance_id;
     
     output_data[out_index] = out_splat;
 }

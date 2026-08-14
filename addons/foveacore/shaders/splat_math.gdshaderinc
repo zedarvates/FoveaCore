@@ -32,6 +32,24 @@ mat3 compute_cov3d(vec3 scale, vec4 rot) {
     return M * transpose(M);
 }
 
+// Native .fovea v2 covariance codebooks store already-decoded linear scale.
+// Keep this separate from compute_cov3d(), which consumes log-space PLY scale.
+mat3 compute_cov3d_linear(vec3 scale, vec4 rot) {
+    mat3 S = mat3(1.0);
+    S[0][0] = max(scale.x, 0.000001);
+    S[1][1] = max(scale.y, 0.000001);
+    S[2][2] = max(scale.z, 0.000001);
+
+    float r = rot.x, x = rot.y, y = rot.z, z = rot.w;
+    mat3 R;
+    R[0] = vec3(1.0 - 2.0 * (y*y + z*z), 2.0 * (x*y - r*z),       2.0 * (x*z + r*y));
+    R[1] = vec3(2.0 * (x*y + r*z),       1.0 - 2.0 * (x*x + z*z), 2.0 * (y*z - r*x));
+    R[2] = vec3(2.0 * (x*z - r*y),       2.0 * (y*z + r*x),       1.0 - 2.0 * (x*x + y*y));
+
+    mat3 M = R * S;
+    return M * transpose(M);
+}
+
 // 3. PROJECTION DE LA COVARIANCE 3D EN 2D (ANISOTROPIE)
 // Projette la matrice 3D sur l'écran pour obtenir les axes majeur/mineur de l'ellipse (Splat anisotropique).
 vec3 compute_cov2d(vec3 center_cam, mat3 cov3d, mat4 proj_matrix, vec2 viewport_size) {

@@ -18,9 +18,10 @@ uniform vec3 aabb_max;
 
 // Codebook Texture (2xK, FORMAT_RGBAF) pour la Vector Quantization
 uniform sampler2D covar_texture;
+uniform bool covar_scale_is_linear = false;
 
 // Palette Texture (1D verticale, FORMAT_RGBA8) pour quantification couleur
-uniform sampler2D palette_texture;
+uniform sampler2D palette_texture : filter_nearest, repeat_disable;
 uniform bool use_palette = false;
 uniform int palette_size = 16;
 
@@ -148,7 +149,9 @@ void vertex() {
         vec3 scale = tex0.xyz;
         vec4 rot = vec4(tex0.w, tex1.x, tex1.y, tex1.z);
         
-        mat3 cov3d = compute_cov3d(scale, rot);
+        mat3 cov3d = covar_scale_is_linear
+            ? compute_cov3d_linear(scale, rot)
+            : compute_cov3d(scale, rot);
         
         // Transformer la covariance de l'espace local à l'espace vue (inclut rotation/échelle d'instance)
         mat3 MV = mat3(MODELVIEW_MATRIX);

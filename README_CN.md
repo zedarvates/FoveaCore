@@ -1,291 +1,139 @@
+<div align="center">
+  <img src="icon.svg" alt="FoveaEngine 标志" width="104" />
+
+  <h1>FoveaEngine</h1>
+
+  <p><strong>直接在 Godot 中渲染、编辑和重建 3D Gaussian Splatting 场景。</strong></p>
+  <p>面向实时高斯泼溅渲染、StudioTo3D 重建和实验性注视点 VR 的 Godot 4 插件。</p>
+
+  <p>
+    <a href="https://github.com/zedarvates/FoveaCore/actions/workflows/ci.yml"><img src="https://github.com/zedarvates/FoveaCore/actions/workflows/ci.yml/badge.svg" alt="FoveaEngine CI" /></a>
+    <a href="https://godotengine.org/"><img src="https://img.shields.io/badge/Godot-4.7.dev5-478CBF?logo=godot-engine&amp;logoColor=white" alt="Godot 4.7.dev5" /></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2ea44f" alt="MIT 许可证" /></a>
+    <img src="https://img.shields.io/badge/status-pre--release-f59e0b" alt="预发布状态" />
+  </p>
+
+  <p>
+    <a href="README.md">English</a> ·
+    <a href="#快速开始">快速开始</a> ·
+    <a href="docs/feature-status.md">功能状态</a> ·
+    <a href="docs/developer_reference.md">开发者参考</a>
+  </p>
+</div>
+
+![Godot 编辑器中的 FoveaEngine StudioTo3D 重建面板](docs/images/studio-to-3d-editor.png)
+
+<p align="center"><sub>Godot 内的 StudioTo3D：依赖配置、区域控制、重建阶段和渲染选项。界面仍在持续开发。</sub></p>
+
+> [!WARNING]
+> FoveaEngine 仍是预发布软件。核心插件和 PLY 工作流已有本地验证；GPU、XR 和研究型重建路径仍需在目标硬件上进行代表性测试。采用子系统前请先查看[功能状态矩阵](docs/feature-status.md)。
+
+## 为什么选择 FoveaEngine？
+
+- **Godot 原生工作流** — 添加稳定的 `FoveaSplat3D` 节点、指定资产，并让高斯泼溅留在常规场景树中。
+- **从采集到运行时** — 使用 FFmpeg 与 COLMAP 驱动 StudioTo3D，或直接加载已有的 `.ply` 资产；原生 `.fovea` 已可通过确定性回退进入桌面视口，但视觉保真度仍处于实验阶段。
+- **面向性能的架构** — GPU 排序、分层 LOD、裁剪和注视点渲染由解耦子系统负责。
+- **桌面与沉浸式目标** — 先在标准 Forward+ 视口中开发，再在受支持硬件上验证实验性 OpenXR 和眼动追踪。
+
+## 运行时截图
+
 <p align="center">
-  <h1 align="center">Funplay MCP for Godot</h1>
-  <p align="center">
-    <strong>The Most Advanced MCP Server for Godot Editor</strong>
-  </p>
-  <p align="center">
-    <a href="#"><img src="https://img.shields.io/badge/Godot-4.2%2B-blue?logo=godotengine" alt="Godot 4.2+"></a>
-    <a href="#"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
-    <a href="#"><img src="https://img.shields.io/badge/MCP-Compatible-green" alt="MCP Compatible"></a>
-    <a href="#"><img src="https://img.shields.io/badge/Platform-Editor%20Only-orange" alt="Editor Only"></a>
-  </p>
-  <p align="center">
-    中文 | <a href="./README.md">English</a>
-  </p>
-  <p align="center">
-    <img src="./icon.svg" alt="Funplay MCP for Godot" width="128">
-  </p>
+  <img src="docs/images/foveaengine-bonsai-runtime.png" alt="FoveaEngine 在 Godot 中渲染盆景高斯泼溅测试资产" width="720" />
 </p>
 
-> 💖 如果这个项目对你有帮助，欢迎顺手点一个 Star。它能帮助更多 Godot 开发者发现这个项目，也能支持后续持续维护。
+<p align="center"><sub>仓库内的 <code>demo_bonsai.ply</code> 通过 <code>FoveaSplat3D</code> 加载，并在 Godot 4.7.dev5、Forward+、D3D12 桌面模式中完成真实捕获。此截图用于证明当前 PLY 运行时路径，不是性能基准。</sub></p>
 
----
+## 工作流程
 
-Funplay MCP for Godot 是一个采用 MIT 协议的 Godot 编辑器 MCP 服务器，让 Claude Code、Cursor、Windsurf、Codex、VS Code Copilot 等 AI 助手直接操作正在运行的 Godot 项目。
-
-这个插件既可用于标准 Godot `4.2+` 项目，也可以运行在 **Godot .NET** 项目中。当前实现主体仍然是 GDScript，脚本类工具会按项目语言自动暴露：GDScript 项目显示 GDScript 工作流，.NET 项目显示 C#/.NET 工作流，混合项目按需同时开放。
-
-一句话描述你的游戏或工具 —— AI 助手就能通过 Funplay MCP for Godot 的内置工具完成场景创建、脚本生成、UI 搭建、运行态验证、输入模拟、动画设置、相机控制、性能检查和编辑器自动化。
-
-> *"做一个带血条、弹药显示、暂停菜单和受击闪屏的俯视角射击游戏 HUD"*
->
-> AI 助手通过 Funplay MCP for Godot 全程处理：创建场景结构、生成脚本、搭建 Control 树、连接信号、配置动画并验证流程 —— 只需一句话。
+```mermaid
+flowchart LR
+    capture["视频或图像采集"] --> studio["StudioTo3D"]
+    tools["FFmpeg + COLMAP"] --> studio
+    studio --> asset["Gaussian Splat 资产"]
+    existing[".ply / .fovea（实验性）"] --> node["FoveaSplat3D"]
+    asset --> node
+    node --> desktop["Godot 桌面场景"]
+    node --> xr["OpenXR + 注视点渲染（实验性）"]
+```
 
 ## 快速开始
 
-如果你只想尽快跑起来，先做这三步：
+### 1. 运行演示
 
-- 打开本项目，或者把 `addons/funplay_mcp` 拷贝到你自己的 Godot 项目里
-- 启用插件并启动 MCP Server
-- 使用内置的一键客户端配置
-
-### 1. 安装插件
-
-你可以：
-
-- 从最新 GitHub Release 下载 `Funplay.GodotMcp.vX.Y.Z.zip`，并解压到你的 Godot 项目根目录
-- 直接 clone 本仓库并作为 Godot 项目打开，或者
-- 把 `addons/funplay_mcp` 拷贝到你自己的 Godot `res://addons/` 目录
-
-> 💡 在 clone 或安装之前，如果你愿意顺手点一个 ⭐，会非常感谢。
-
-### 2. 启用并启动 MCP Server
-
-在 Godot 中：
-
-- 打开 **Project → Project Settings → Plugins**
-- 启用 **Funplay MCP for Godot**
-- 使用右侧的 **Funplay MCP** Dock
-
-默认从 `http://127.0.0.1:8765/` 启动。
-如果该端口已被占用，插件会自动选择另一个可用本地端口，并写回 `user://funplay_mcp_settings.cfg`。
-本地 MCP POST 请求默认需要 `user://funplay_mcp_settings.cfg` 中保存的项目 auth token；Dock 生成客户端配置时会自动写入这个 token。
-Dock 里也会显示当前插件版本，并提供 **Check Updates** 按钮；当 GitHub Release 有新版本时，可以直接打开发布页。
-
-### 3. 配置 AI 客户端
-
-优先使用 `Funplay MCP` Dock 里的 **一键 MCP 配置**。
-
-选择目标客户端后点击 **Configure**，插件会直接帮你写入推荐的 MCP 配置项。
-如果还想同时生成项目级 AI 使用说明，点击 **Configure + Skills**，插件会在 `res://.funplay/skills/` 下生成项目 Skill 文件，并维护一个 `AGENTS.md` 桥接说明。
-
-如果 Godot 自动切到了其他端口，请以 Dock 里显示的 endpoint 为准。
-如果你更想手动编辑配置文件，再参考下面这些示例：
-
-<details>
-<summary>Claude Code / Claude Desktop</summary>
-
-```json
-{
-  "mcpServers": {
-    "funplay": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "funplay-godot-mcp@0.9.1"],
-      "env": {
-        "FUNPLAY_GODOT_MCP_URL": "http://127.0.0.1:8765/",
-        "FUNPLAY_GODOT_MCP_TOKEN": "<Funplay MCP Dock 中显示/写入的 token>"
-      }
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary>Cursor</summary>
-
-```json
-{
-  "mcpServers": {
-    "funplay": {
-      "command": "npx",
-      "args": ["-y", "funplay-godot-mcp@0.9.1"],
-      "env": {
-        "FUNPLAY_GODOT_MCP_URL": "http://127.0.0.1:8765/",
-        "FUNPLAY_GODOT_MCP_TOKEN": "<Funplay MCP Dock 中显示/写入的 token>"
-      }
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary>VS Code</summary>
-
-```json
-{
-  "servers": {
-    "funplay": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "funplay-godot-mcp@0.9.1"],
-      "env": {
-        "FUNPLAY_GODOT_MCP_URL": "http://127.0.0.1:8765/",
-        "FUNPLAY_GODOT_MCP_TOKEN": "<Funplay MCP Dock 中显示/写入的 token>"
-      }
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary>Codex</summary>
-
-```toml
-[mcp_servers.funplay]
-url = "http://127.0.0.1:8765/"
-```
-
-</details>
-
-### 可选 stdio wrapper
-
-大多数客户端可以直接通过 HTTP 连接 Godot 插件。如果你使用的客户端或发布渠道更偏好 stdio 包，本仓库也提供了 `stdio-wrapper/` 下的 npm wrapper。
+需要 **Godot 4.7.dev5 Mono**（或兼容的后续 4.7 版本）以及支持 Forward+ 的 GPU。
 
 ```bash
-cd stdio-wrapper
-npm link
-FUNPLAY_GODOT_MCP_URL=http://127.0.0.1:8765/ funplay-godot-mcp
+git clone --recurse-submodules https://github.com/zedarvates/FoveaCore.git
+cd FoveaCore
 ```
 
-等 wrapper 发布到 npm 后，可以把 `npm link` 换成 `npm install -g funplay-godot-mcp`。
+打开 `project.godot`，然后运行 [`demo/drop_a_ply.tscn`](demo/drop_a_ply.tscn)。该演示会加载仓库内的参考资产并显示 FPS；查看已有高斯泼溅资产不需要 FFmpeg、COLMAP 或 VR 硬件。
 
-MCP 客户端配置示例：
+### 2. 在场景中添加高斯泼溅
 
-```json
-{
-  "mcpServers": {
-    "funplay": {
-      "command": "funplay-godot-mcp",
-      "env": {
-        "FUNPLAY_GODOT_MCP_URL": "http://127.0.0.1:8765/"
-      }
-    }
-  }
-}
+在编辑器中添加 `FoveaSplat3D` 节点并设置 `source_path`，或使用 GDScript：
+
+```gdscript
+var splat := FoveaSplat3D.new()
+splat.source_path = "res://assets/garden.ply"
+add_child(splat)
 ```
 
-### 4. 验证连接
+常用运行时选项包括 `quality_preset`、`opacity` 和 `generate_collisions`。高级样式与动画功能可通过 `get_advanced()` 访问，其公共 API 仍在稳定中。
 
-先在 AI 客户端里试几个安全请求：
+### 3. 从视频重建
 
-- “调用 `get_scene_info`，告诉我当前打开的是哪个场景。”
-- “读取 `godot://project/context`，总结当前编辑器状态。”
-- “调用 `execute_code`，返回当前激活场景名。”
+安装并配置 FFmpeg 与 COLMAP，然后按照[重建配置指南](tutorials/reconstruction_setup.md)操作。可选研究桥接器拥有独立的依赖和成熟度等级。
 
-如果这些都正常返回，说明 MCP server、resources 和主执行工具都已经连通。
+## 功能成熟度
 
-### 5. 开始构建
+| 模块 | 状态 | 含义 |
+| --- | --- | --- |
+| Godot 插件与 `FoveaSplat3D` | 可用但需验证 | 请在目标渲染器和真实资产上运行随附场景。 |
+| PLY 运行时工作流 | 可用但需验证 | 仓库测试资产已成功加载和渲染；仍需验证你的资产与目标 GPU。 |
+| 原生 `.fovea` v2 结构 | 可用但需验证 | Godot 4.7.dev5 已通过 28 项结构和损坏输入断言；确定性 Rust 测试资产可逐字节重现。 |
+| 原生 `.fovea` 运行时工作流 | 实验性 | Godot 4.7.dev5/D3D12 通过默认 CPU passthrough 读取 12,473 条记录，清理后保留 11,808 个 splat，并写出 800×600 截图；两个实例的合成 GPU 布局与回读测试已通过，但代表性原生图像一致性和加速验证仍未完成。 |
+| FFmpeg + COLMAP StudioTo3D | 可用但需验证 | 需要正常工作的本地安装和适合的源素材。 |
+| GPU 排序与体素 HLOD | 实验性 | 准备发布的索引会拒绝不完整的 GPU 排列，并回退到精确的 12,473 splat CPU 排序；GPU 排序正确性、过渡效果与图像质量仍需跨资产和设备验证。 |
+| 分块计算光栅器 | 实验性 | 16×16 路径在 RTX 5060 Ti 上通过 10/10 D3D12 调度与回读检查；仍需与标准渲染器比较并测量真实性能。 |
+| OpenXR、眼动追踪与注视点渲染 | 实验性 | 需要受支持的运行时、头显和代表性冒烟测试。 |
+| 多人 VR 同步 | 实验性 | 本机双进程 ENet 测试已覆盖加入、姿态、经权限控制的笔刷复制和断线清理；仍需双头显 OpenXR 硬件验证。 |
+| ComfyUI 图像转泼溅桥接器 | 实验性 | API 工作流可以上传图像，并把生成的 `.fovea`、`.ply` 或 `.splat` 产物导入 `FoveaSplat3D`；本机回环协议已有测试，真实 3DGS/Blender 工作流仍是发布门槛。 |
+| WorldMirror 2.0 桥接器 | 实验性 | 需要可选的本地安装；仓库不捆绑生产推理环境。 |
+| DVLT 与 AnyRecon 桥接器 | 仅 dry-run | 已有集成脚手架，但尚未连接真实推理。 |
+| Vista4D 与 4D 采集 | 不可用 | 非 dry-run 路径会明确失败，不会伪造输出。 |
 
-打开你的 AI 客户端，试试：*"创建一个带血条、分数文本和暂停按钮的 2D HUD"*
+完整的发布状态请查看 [`docs/feature-status.md`](docs/feature-status.md)。
 
-## 开始前说明
+## 文档
 
-- 这是一个 **仅限 Editor** 的插件，不会向最终导出游戏添加运行时代码。
-- MCP Server 默认从 `http://127.0.0.1:8765/` 启动；如果同一项目已经占用该端口，Dock 会直接附着到现有服务，否则会自动切换到其他可用本地端口。
-- 本地 MCP Server 配置保存在 `user://funplay_mcp_settings.cfg`。
-- 插件默认使用 `core` MCP 工具暴露配置，减少 AI 客户端的工具噪音；如果你需要完整工具面，可在 Dock 中切换到 `full`。
-- Dock 里提供 Tool Exposure 面板，可以在当前 profile 内逐个开关工具，也可以打开 MCP 调试日志输出和 `execute_code` 安全检查。
-- `execute_code` 默认会拦截常见的进程、文件系统和项目设置写入风险；确认过的调用可以传入 `safety_checks=false` 覆盖。
-- Dock 可以检查 GitHub Releases 中是否有新版本。
-- 聚焦型 MCP 工具会直接执行，不再提供额外 approval 开关。
-- Dock 内置 Codex、Claude Code、Cursor、VS Code 的配置复制和直接写入能力。
+- [加载第一个 Gaussian Splat](tutorials/get_started.md)
+- [配置重建依赖](tutorials/reconstruction_setup.md)
+- [了解 3DGS 训练与编辑](tutorials/3dgs_training.md)
+- [阅读子系统架构](docs/developer_reference.md)
+- [查看实验性 C++ GDExtension 构建契约](addons/foveacore/gdextension/README_BUILD.md)
+- [浏览基于证据的 Autowiki](docs/autowiki/README.md)
+- [检查依赖和本地配置](DEPENDENCIES.md)
+- [查看基准测试工具与目标](docs/benchmark.md)
+- [连接 ComfyUI 图像转泼溅工作流](docs/comfyui-splat-bridge.md)
 
-## 为什么做这个项目
+## 开发验证
 
-- **`execute_code` 主工具优先** — 核心体验围绕一个高灵活度 GDScript 执行工具构建，适合复杂编辑器/运行态编排，并默认开启高风险片段安全检查
-- **工具暴露可控** — 可以直接在 Godot Dock 中开关单个工具，不需要改插件代码
-- **Project Skills** — 可生成项目级 AI 使用说明，记录当前 endpoint、工具 profile、项目上下文和推荐工作流
-- **工具目录与帮助** — 可通过 MCP 查询分组工具目录、能力门禁、工作流覆盖矩阵和任务指引
-- **项目地图与模板** — 检查场景、脚本、函数、信号、引用关系、可搜索浏览器图谱和脚本重构 dry-run 计划
-- **Runtime Bridge** — 可选安装轻量 autoload，在 Play Mode 中持续写入运行态 heartbeat 和场景树快照，方便 AI 验证
-- **Play Mode 自动化闭环** — 进入运行模式、模拟输入、查看日志、截图、验证行为都能在同一 MCP 会话里完成
-- **内建项目上下文** — 直接提供项目状态、当前场景、选择对象、运行状态、脚本错误、日志和 MCP 交互记录资源
-- **默认聚焦，必要时全量** — 默认 `core` 工具集更利于 AI 选工具，需要时可切到 `full`
-- **单 Godot Addon 落地** — 不需要额外 approval UI，也不依赖单独的 Python 守护进程
-- **可扩展** — 后续可以继续扩展更多 Godot 专用工具、资源和工作流 prompt
+请运行与改动模块相关的检查：
 
-## 核心特性
+```bash
+dotnet build FoveaEngine.csproj --configuration Release --nologo
+cargo test --manifest-path addons/foveacore/rust/Cargo.toml
+python addons/tools/test_validation_tools.py
+python tools/check_public_docs.py
+```
 
-- **124 个内置工具** — 覆盖场景编辑、PackedScene、语言感知脚本工具、项目地图、脚本重构规划、项目设置、资产导入计划、InputMap、autoload、Runtime Bridge、Undo/Redo、工作流指引、文件、Project Skills、运行态控制、UI 控件、动画、相机、性能、Resources、Prompts 与编辑器自动化
-- **Resources 与 Prompts** — 暴露实时项目上下文、JSON/HTML 项目地图、发布 readiness、运行态场景树快照、场景/选择/错误资源、语言感知脚本诊断、适用时的 `.NET` 项目资源、模板资源，以及常见 Godot 工作流的可复用 MCP Prompt
-- **结构化返回** — JSON 工具输出和工具错误都会同步到 MCP `structuredContent`，节点和资源摘要也包含当前会话可用的 `instance_id`
-- **输入模拟 + 视图截图验证** — 在 Play Mode 中模拟 action / 键盘 / 鼠标 / 拖拽，再用编辑器视图截图验证结果
-- **一键客户端配置** — 直接在 Godot Dock 中为 Codex、Claude Code、Cursor、VS Code 生成并写入 MCP 配置
-- **发布与 Registry 就绪** — GitHub Release 产物会生成 manifest 和 SHA256 校验，已补 Godot Asset Library 打包说明，npm stdio wrapper 也通过 `server.json` 描述，并通过 MCP 暴露 release readiness
-- **UI/Control 工具链** — 可直接构建 CanvasLayer / Control 树、设置布局、覆盖 Theme、连接信号并搭建 HUD
-- **厂商无关** — 兼容任意支持 MCP 的 AI 客户端：Claude Code、Cursor、Windsurf、Codex、VS Code Copilot 等
+可选的代理集成仅保存在本机。需要时，可将仓库中的
+`.mcp.json.example`、`.claude/settings.json.example` 和
+`.botte/config.json.example` 复制为不带 `.example` 的文件，然后运行
+`python tools/botte_entrypoint.py check`。该入口会使用固定版本的
+`botte-secrete` 子模块或 `BOTTE_SOURCE_ROOT`；生成报告和代理对话历史不会进入版本控制。
 
-## 与 Unity MCP 的对比
+可通过 `python tools/botte_entrypoint.py checkup` 运行项目策略检查。
 
-下表基于 `FunplayAI/funplay-unity-mcp` 的公开定位与结构做对比。
-
-| 维度 | Funplay MCP for Godot | Funplay MCP for Unity |
-|------|------------------------|-----------------------|
-| 引擎侧架构 | Godot Addon 内置 HTTP MCP server | Unity 包内置 HTTP MCP server |
-| 额外本地依赖 | `core` 工作流下只需要 Godot Addon 本身 | `core` 工作流下只需要 Unity 包本身 |
-| 主要交互模型 | 以 `execute_code` 为主，再配合少量高频辅助工具 | 以 `execute_code` 为主，再配合少量高频辅助工具 |
-| 默认工具暴露 | 默认 `core` 精简工具集，可切 `full` | 默认 `core` 精简工具集，可切 `full` |
-| 上下文能力 | 项目资源、脚本错误、运行状态、运行态场景树、日志、Prompts、交互历史 | 项目资源、编译错误、运行状态、日志、Prompts、交互历史 |
-| UI 自动化 | 深度支持 Godot `Control` / `CanvasLayer` 工作流 | 深度支持 Unity Canvas / UI 工作流 |
-| 定位 | 轻量、直接、MIT 协议的 Godot MCP 服务器 | 轻量、直接、MIT 协议的 Unity MCP 服务器 |
-
-## MCP 能力结构
-
-当前开源包有四层高价值能力：
-
-- **Tools** — 共 124 个注册工具，覆盖场景、脚本、项目地图、项目配置、资产导入规划、输入映射、autoload、Runtime Bridge、Undo/Redo、工作流指引、文件、Project Skills、UI、动画、相机、诊断与自动化。脚本相关工具会按检测到的项目语言和 Dock 中的 Tool Exposure 设置过滤。
-- **Primary execution** — `execute_code` 用于复杂编辑器/运行态编排，默认带安全检查，并可返回上下文辅助 API、日志和变更追踪 metadata
-- **Prompts** — 包括 `scene_review`、`feature_plan`、`runtime_debug`、`script_patch`、`ui_layout_plan`、`architecture_advice`、`performance_advice`、`network_template`、`template_generate` 等工作流 Prompt
-- **Resources** — 项目上下文、JSON/HTML 项目地图、场景摘要、选择状态、日志、脚本错误、运行状态、运行态场景树、发布 readiness、项目特性、MCP 交互记录、模板目录，以及文件模板资源
-
-## 内置工具
-
-Funplay MCP for Godot 当前提供 **124 个注册工具函数**，覆盖这些工作流分组。实际暴露给 AI 客户端的脚本工具会按检测到的项目语言和逐工具暴露设置过滤：
-
-| 分类 | 工具 |
-|------|------|
-| **场景** | `get_scene_info`, `get_scene_tree`, `list_scenes`, `open_scene`, `save_scene`, `save_scene_as`, `create_new_scene`, `instantiate_scene`, `create_packed_scene_from_node`, `get_packed_scene_info` |
-| **节点** | `get_node_info`, `find_nodes`, `select_node`, `create_node`, `duplicate_node`, `rename_node`, `reparent_node`, `remove_node`, `set_node_property`, `set_node_properties`, `set_transform_2d`, `set_transform_3d`, `set_node_script` |
-| **节点反射** | `list_node_properties`, `list_node_signals`, `list_node_methods` |
-| **脚本** | `create_script`, `list_scripts`, `edit_script`, `patch_script`, `open_script`, `validate_script`, `get_script_errors`, `request_script_reload`；`.NET` 项目额外暴露 `get_dotnet_project_info` |
-| **项目地图** | `map_project`, `find_usages`, `plan_script_refactor`, `apply_script_refactor` |
-| **项目设置 / 输入 / Autoload** | `list_project_settings`, `get_project_setting`, `set_project_setting`, `list_input_actions`, `get_input_action`, `add_input_action`, `remove_input_action`, `add_input_event_to_action`, `clear_input_events`, `list_autoloads`, `set_autoload`, `remove_autoload` |
-| **指引 / 能力** | `funplay_help`, `list_tool_catalog`, `get_capability_status`, `get_editor_protocol_status`, `get_release_readiness`, `list_workflow_coverage` |
-| **Runtime Bridge / Undo** | `install_runtime_bridge`, `remove_runtime_bridge`, `get_runtime_bridge_status`, `get_undo_redo_status`, `editor_undo`, `editor_redo` |
-| **文件** | `read_file`, `write_file`, `search_files`, `list_files`, `file_exists`, `delete_file`, `move_file`, `copy_file` |
-| **运行 / 输入** | `get_play_state`, `enter_play_mode`, `play_main_scene`, `exit_play_mode`, `simulate_action`, `simulate_key_event`, `simulate_mouse_button`, `simulate_mouse_drag`, `simulate_input_sequence`, `get_time_scale`, `set_time_scale` |
-| **断言 / 诊断** | `assert_node_exists`, `assert_node_property`, `assert_signal_connected`, `wait_msec`, `get_performance_snapshot`, `analyze_scene_complexity`, `get_console_logs`, `log_message` |
-| **动画** | `create_animation_player`, `create_animation_clip`, `add_animation_track`, `list_animations`, `play_animation` |
-| **相机** | `get_camera_info`, `set_camera_2d`, `set_camera_3d` |
-| **材质** | `create_material`, `assign_material` |
-| **UI / Control** | `create_ui_root`, `create_control`, `create_label`, `create_button`, `create_panel`, `create_texture_rect`, `create_container`, `set_control_layout`, `set_control_size_flags`, `set_control_text`, `set_control_theme_override`, `set_control_texture`, `connect_node_signal` |
-| **项目 / Addons** | `get_project_info`, `list_project_features`, `plan_asset_import`, `get_project_skills_status`, `generate_project_skills`, `select_file`, `list_addons`, `set_addon_enabled` |
-| **截图 / 执行** | `capture_editor_view`, `execute_code` |
-
-## 仓库结构
-
-- `addons/funplay_mcp/plugin.gd` — Godot 编辑器插件入口
-- `addons/funplay_mcp/core/` — MCP server、tools、resources、prompts、settings、config writer
-- `addons/funplay_mcp/ui/` — Godot Dock UI
-- `stdio-wrapper/` — 给无法直接连接 HTTP MCP 的客户端使用的 npm stdio bridge
-- `server.json` — stdio wrapper 的 MCP Registry 元数据
-- `scripts/package_release.py` — release 产物构建与包校验脚本
-- `ASSET_LIBRARY.md` — Godot Asset Library 打包、提交和更新安全说明
-- `CHANGELOG.md` — 面向用户的变更记录
-- `CONTRIBUTING.md` — 贡献说明
-- `RELEASE_CHECKLIST.md` — 发布清单
-
-## 参与贡献
-
-见 [CONTRIBUTING.md](./CONTRIBUTING.md)。
-
-## License
-
-本仓库采用 [MIT](./LICENSE) 协议。
+GPU、OpenXR、重建和视觉检查还必须在代表性硬件上运行；无头模式成功并不等同于运行时认证。

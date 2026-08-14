@@ -54,6 +54,12 @@ class_name FoveaAsset
 ## compression ratios, session name, timestamps...).
 @export var metadata: Dictionary = {}
 
+## Optional flipbook frame index for dynamic 4D splat sequences.
+@export var flipbook_frame: int = 0
+
+## Total frame count in the flipbook sequence (0 if static).
+@export var flipbook_frame_count: int = 0
+
 
 ## Returns the asset's local-space bounding box built from [member aabb_min]
 ## and [member aabb_max].

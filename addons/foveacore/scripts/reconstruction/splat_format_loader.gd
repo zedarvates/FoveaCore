@@ -6,6 +6,7 @@ class_name SplatFormatLoader
 ## [code]Array[GaussianSplat][/code]:
 ##   .ply  → [PLYLoader] (3DGS training output)
 ##   .splat→ binary 32-bytes/splat (antimatter15 / Luma / Polycam exports)   [J1]
+## Planned formats are rejected until their decoders exist:
 ##   .spz  → gzip-compressed quantized (Niantic)                              [J2 — TODO]
 ##   .sog  → WebP self-describing compressed (SOGS)                           [J3 — TODO]
 ##
@@ -16,6 +17,7 @@ const _PlyLoaderScript: GDScript = preload("res://addons/foveacore/scripts/recon
 
 ## Number of bytes per splat in the binary .splat format.
 const SPLAT_STRIDE: int = 32
+const SUPPORTED_EXTENSIONS := ["ply", "splat"]
 
 
 ## Loads a splat cloud from [param path], routing by extension. Returns an empty
@@ -37,9 +39,9 @@ static func load_gaussians(path: String) -> Array[GaussianSplat]:
 			return []
 
 
-## True if [param path] has an extension this loader (eventually) handles.
+## True only when [param path] has an extension this loader can decode now.
 static func is_supported(path: String) -> bool:
-	return path.get_extension().to_lower() in ["ply", "splat", "spz", "sog"]
+	return path.get_extension().to_lower() in SUPPORTED_EXTENSIONS
 
 
 ## Parses the binary [code].splat[/code] format: 32 bytes per splat —

@@ -16,9 +16,13 @@ static func generate_hlod_levels(original_splats: Array[GaussianSplat], voxel_si
 	
 	# Le niveau 0 est toujours l'original
 	levels[0] = original_splats
+	if original_splats.is_empty():
+		for i: int in range(voxel_sizes.size()):
+			levels[i + 1] = [] as Array[GaussianSplat]
+		return levels
 	
 	# Générer chaque niveau HLOD spécifié par les tailles de voxel
-	for i in range(voxel_sizes.size()):
+	for i: int in range(voxel_sizes.size()):
 		var cell_size: float = voxel_sizes[i]
 		var level_id: int = i + 1
 		
@@ -43,7 +47,7 @@ static func generate_hlod_levels(original_splats: Array[GaussianSplat], voxel_si
 		
 		# Fusionner chaque cellule de la grille
 		for key: Vector3i in cells.keys():
-			var cell_splats: Array = cells[key]
+			var cell_splats: Array[GaussianSplat] = cells[key]
 			var count: int = cell_splats.size()
 			
 			var pos_sum := Vector3.ZERO

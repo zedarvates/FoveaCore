@@ -1,6 +1,8 @@
 class_name FoveaInstancedSplatRenderer
 extends MultiMeshInstance3D
 
+const FoveaInstancedSplatLayout := preload("res://addons/foveacore/scripts/advanced/fovea_instanced_splat_layout.gd")
+
 ## FoveaEngine : Rendu d'instances multiples pour les Gaussian Splats (Global Splat Instancing)
 ## Phase 3 : Rendu de milliers de copies du même asset avec une seule copie en VRAM.
 
@@ -265,6 +267,7 @@ func load_and_render_splats() -> void:
 
 			if all_bytes.size() >= 8 and all_bytes.slice(0, 8).get_string_from_ascii() == "FOVEA_3D":
 				var version: int = all_bytes.decode_u32(8)
+				var splat_count: int = all_bytes.decode_u32(12)
 				var header_size: int = 72 if version >= 2 else 48
 				if all_bytes.size() >= header_size:
 					var color_k: int = all_bytes.decode_u32(16)
@@ -272,8 +275,9 @@ func load_and_render_splats() -> void:
 					var palette_size: int = color_k * 12
 					var covar_size: int = covar_k * 32
 					var splats_start: int = header_size + palette_size + covar_size
-					if all_bytes.size() >= splats_start:
-						raw_bytes = all_bytes.slice(splats_start)
+					var splats_end: int = splats_start + splat_count * FoveaInstancedSplatLayout.CANONICAL_SPLAT_BYTE_SIZE
+					if splat_count > 0 and all_bytes.size() >= splats_end:
+						raw_bytes = all_bytes.slice(splats_start, splats_end)
 			elif all_bytes.size() >= 16:
 				raw_bytes = all_bytes.slice(16)
 			else:
@@ -372,17 +376,17 @@ func load_and_render_splats() -> void:
 	# 5. Nettoyage GPU optionnel
 	if enable_cleaning and surviving_splats_count > 0:
 		var before_clean: int = surviving_splats_count
-		culled_bytes = FoveaSplatCleaner.filter_nan_inf(culled_bytes, 20)
+		culled_bytes = FoveaSplatCleaner.filter_nan_inf(culled_bytes, FoveaInstancedSplatLayout.OUTPUT_SPLAT_BYTE_SIZE)
 		culled_bytes = FoveaSplatCleaner.filter_floaters(
-			culled_bytes, floater_neighbor_radius, floater_min_neighbors, 20)
+			culled_bytes, floater_neighbor_radius, floater_min_neighbors, FoveaInstancedSplatLayout.OUTPUT_SPLAT_BYTE_SIZE)
 		if enable_decimation and decimation_target > 0:
-			culled_bytes = FoveaSplatCleaner.decimate(culled_bytes, decimation_target, 20)
-		surviving_splats_count = culled_bytes.size() / 20
+			culled_bytes = FoveaSplatCleaner.decimate(culled_bytes, decimation_target, FoveaInstancedSplatLayout.OUTPUT_SPLAT_BYTE_SIZE)
+		surviving_splats_count = culled_bytes.size() / FoveaInstancedSplatLayout.OUTPUT_SPLAT_BYTE_SIZE
 		
 	if enable_coplanar_merge and surviving_splats_count > 0:
 		culled_bytes = FoveaSplatCleaner.merge_coplanar(
-			culled_bytes, coplanar_z_bucket, 24, 1024, coplanar_min_group, 20)
-		surviving_splats_count = culled_bytes.size() / 20
+			culled_bytes, coplanar_z_bucket, 24, 1024, coplanar_min_group, FoveaInstancedSplatLayout.OUTPUT_SPLAT_BYTE_SIZE)
+		surviving_splats_count = culled_bytes.size() / FoveaInstancedSplatLayout.OUTPUT_SPLAT_BYTE_SIZE
 
 	multimesh.instance_count = surviving_splats_count
 
@@ -429,7 +433,7 @@ func load_and_render_splats() -> void:
 		active_delta_colors,
 		active_delta_positions,
 		active_delta_weights,
-		20
+		FoveaInstancedSplatLayout.OUTPUT_SPLAT_BYTE_SIZE
 	)
 
 	multimesh.transform_array = decode_result.xf_array

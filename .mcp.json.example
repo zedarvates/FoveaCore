@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "botte-llm": {
+      "command": "python",
+      "args": [
+        "tools/botte_entrypoint.py",
+        "mcp"
+      ],
+      "cwd": "."
+    }
+  }
+}

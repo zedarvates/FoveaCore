@@ -2,6 +2,7 @@ class_name FoveaInstancedCuller
 extends RefCounted
 
 const FoveaDeltaManager := preload("res://addons/foveacore/scripts/advanced/fovea_delta_manager.gd")
+const FoveaInstancedSplatLayout := preload("res://addons/foveacore/scripts/advanced/fovea_instanced_splat_layout.gd")
 
 # FoveaEngine : Pipeline de Compute Shader pour le Culling d'Instances de Splats
 # Phase 3 : Global Splat Instancing
@@ -22,8 +23,11 @@ var cached_output_texture: RID
 var cached_counter_texture: RID
 var cached_max_splat_count: int = 0
 
-const SPLAT_BYTE_SIZE: int = 16
-const OUTPUT_SPLAT_BYTE_SIZE: int = 20
+const SPLAT_BYTE_SIZE: int = FoveaInstancedSplatLayout.CANONICAL_SPLAT_BYTE_SIZE
+# 16-byte canonical .fovea record + local index + runtime instance id.
+const OUTPUT_SPLAT_BYTE_SIZE: int = FoveaInstancedSplatLayout.OUTPUT_SPLAT_BYTE_SIZE
+const DELTA_ENTRY_BYTE_SIZE: int = 16
+const PUSH_CONSTANT_BYTE_SIZE: int = 64
 
 func _init() -> void:
     rd = RenderingServer.create_local_rendering_device()
@@ -236,6 +240,10 @@ func process_instanced_splats_ext(
     var packed_deltas := FoveaDeltaManager.pack_gpu_deltas(filtered_delta_positions, filtered_delta_colors)
     var offsets_bytes: PackedByteArray = packed_deltas.offsets_bytes
     var deltas_bytes: PackedByteArray = packed_deltas.deltas_bytes
+    # RenderingDevice rejects zero-byte storage buffers. Offsets remain zero, so
+    # this sentinel entry is bound but never read when no sparse delta exists.
+    if deltas_bytes.is_empty():
+        deltas_bytes.resize(DELTA_ENTRY_BYTE_SIZE)
 
     # Create Buffers for the primary compute pass
     var input_buffer := rd.storage_buffer_create(raw_bytes.size(), raw_bytes)
@@ -323,11 +331,11 @@ func process_instanced_splats_ext(
     sampler_state.mag_filter = RenderingDevice.SAMPLER_FILTER_NEAREST
     var sampler_rid := rd.sampler_create(sampler_state)
 
-    var actual_depth_tex := depth_texture
-    var dummy_tex: RID
-    if not actual_depth_tex.is_valid():
-        dummy_tex = _create_dummy_depth_texture()
-        actual_depth_tex = dummy_tex
+    # This culler owns a local RenderingDevice. A viewport depth RID belongs to
+    # the main device and cannot be bound here, even when RID.is_valid() is true.
+    # Use a local far-depth texture until an explicit cross-device import exists.
+    var dummy_tex: RID = _create_dummy_depth_texture()
+    var actual_depth_tex: RID = dummy_tex
 
     var uniform_depth := RDUniform.new()
     uniform_depth.uniform_type = RenderingDevice.UNIFORM_TYPE_SAMPLER_WITH_TEXTURE
@@ -347,31 +355,37 @@ func process_instanced_splats_ext(
             camera_data_bytes.encode_float((col_idx * 16) + (row_idx * 4), view_proj[col_idx][row_idx])
             camera_data_bytes.encode_float(64 + (col_idx * 16) + (row_idx * 4), view_proj[col_idx][row_idx])
 
-    var camera_ubo := rd.storage_buffer_create(128, camera_data_bytes)
+    var camera_ubo := rd.uniform_buffer_create(128, camera_data_bytes)
     var uniform_camera := RDUniform.new()
-    uniform_camera.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+    uniform_camera.uniform_type = RenderingDevice.UNIFORM_TYPE_UNIFORM_BUFFER
     uniform_camera.binding = 1
     uniform_camera.add_id(camera_ubo)
 
     var uniform_set_depth := rd.uniform_set_create([uniform_depth, uniform_camera], shader_rid, 1)
 
-    # Push constants: 56 bytes
+    # Deterministic 64-byte std430 contract: four uints followed by three vec4s.
+    # Avoid vec3/scalar packing here because backend layout rules have produced
+    # zero count fields on D3D12 despite an apparently correct total size.
     var push_bytes := PackedByteArray()
-    push_bytes.resize(56)
-    push_bytes.encode_float(0, cam_pos.x)
-    push_bytes.encode_float(4, cam_pos.y)
-    push_bytes.encode_float(8, cam_pos.z)
-    push_bytes.encode_u32(12, asset_splat_count)
-    push_bytes.encode_u32(16, active_instances_count)
-    push_bytes.encode_float(20, cull_threshold)
-    push_bytes.encode_float(24, aabb_min.x)
-    push_bytes.encode_float(28, aabb_min.y)
-    push_bytes.encode_float(32, aabb_min.z)
-    push_bytes.encode_u32(36, 1 if use_gpu_instance_culling else 0)
-    push_bytes.encode_float(40, aabb_max.x)
-    push_bytes.encode_float(44, aabb_max.y)
-    push_bytes.encode_float(48, aabb_max.z)
-    push_bytes.encode_float(52, 0.0)
+    push_bytes.resize(PUSH_CONSTANT_BYTE_SIZE)
+    push_bytes.encode_u32(0, asset_splat_count)
+    push_bytes.encode_u32(4, active_instances_count)
+    push_bytes.encode_u32(8, 1 if use_gpu_instance_culling else 0)
+    # Screen-space culling is disabled until a main-device depth import and
+    # projection parity test exist. CPU instance-AABB culling remains active.
+    push_bytes.encode_u32(12, 0)
+    push_bytes.encode_float(16, cam_pos.x)
+    push_bytes.encode_float(20, cam_pos.y)
+    push_bytes.encode_float(24, cam_pos.z)
+    push_bytes.encode_float(28, cull_threshold)
+    push_bytes.encode_float(32, aabb_min.x)
+    push_bytes.encode_float(36, aabb_min.y)
+    push_bytes.encode_float(40, aabb_min.z)
+    push_bytes.encode_float(44, 0.0)
+    push_bytes.encode_float(48, aabb_max.x)
+    push_bytes.encode_float(52, aabb_max.y)
+    push_bytes.encode_float(56, aabb_max.z)
+    push_bytes.encode_float(60, 0.0)
 
     var total_threads := asset_splat_count * active_instances_count
     var workgroups := ceili(float(total_threads) / 256.0)
@@ -444,6 +458,13 @@ func process_instanced_splats_ext(
         var result_counter_bytes := rd.buffer_get_data(counter_buffer)
         valid_splat_count = result_counter_bytes.decode_u32(0)
 
+    # Uniform sets reference the resources below. Free them first so releasing a
+    # bound buffer or texture cannot invalidate the set before we release it.
+    if uniform_set.is_valid():
+        rd.free_rid(uniform_set)
+    if uniform_set_depth.is_valid():
+        rd.free_rid(uniform_set_depth)
+
     # Clean intermediate resources
     rd.free_rid(input_buffer)
     rd.free_rid(transforms_buffer)
@@ -453,10 +474,6 @@ func process_instanced_splats_ext(
     rd.free_rid(counter_buffer)
     rd.free_rid(camera_ubo)
     rd.free_rid(sampler_rid)
-    if uniform_set.is_valid():
-        rd.free_rid(uniform_set)
-    if uniform_set_depth.is_valid():
-        rd.free_rid(uniform_set_depth)
     if dummy_tex.is_valid():
         rd.free_rid(dummy_tex)
     if not use_gpu_instance_culling:

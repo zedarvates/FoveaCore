@@ -43,7 +43,7 @@ This document outlines the roadmap to transform FoveaCore into a world-class hyb
 - [x] **Spherical Harmonics (SH) Baking**: Voir l'item ci-dessous — approach simplifiée via palette couleur 8-bit (réduction 80% des données couleur) et texture covariance codebook.
 - [x] **Splat Backface Culling**: Compute Shader implemented (`gpu_culling_compute.glsl`) to instantly eliminate back-facing splats.
 - [x] **Temporal & Interleaved Sorting**: GPU sort distribued over N frames via `frame_mask/frame_id` + single compute-list submit (eliminates O(log²N) CPU-GPU stalls). Configurable via `sort_interleave_factor` export (1/2/4).
-- [ ] **Tile-Based Rasterization**: Divide screen into tiles (16x16) in compute shader to limit sorting and blending to purely local splats (standard 3DGS approach).
+- [x] **Tile-Based Rasterization (experimental)**: 16×16 compute dispatch, local sorting, and blending are integrated. Visual equivalence and measured speedup remain release gates on representative GPUs.
 - [x] **FP16 Compute Pipeline (Depth Keys)**: Pré-calcul des clés de profondeur (`depth_precompute.glsl`) en O(N) avant le tri bitonique. `sort_bitonic_keyed.glsl` lit 1 float/comparaison au lieu de décoder 3×uint16+10 ALU → ~4-6× réduction de bande passante sur les comparaisons non-swap (majorité dans les étapes finales du bitonic).
 - [x] **Global Splat Instancing**: Render thousands of copies of same asset (e.g., forests, crowds) with single VRAM copy, via GPU-driven frustum culler (`FoveaInstancedCuller`).
 - [ ] **Delta-Splat Variants (Morphs & Overrides)**: Create lightweight variants of instanced objects (color tints, local deformations) by storing and computing only the "difference" (Delta).
@@ -52,7 +52,7 @@ This document outlines the roadmap to transform FoveaCore into a world-class hyb
 - [x] **Motion-Adaptive Splatting (Kinematic LOD)**: Suivi de la vélocité caméra par frame dans `FoveaSplatRenderer._process()`. Au-delà du seuil `motion_speed_threshold` : (a) réduction linéaire de `lod_ratio` vers `motion_lod_minimum`, (b) étirement des splats dans la direction de vélocité vue (`motion_stretch_factor`, GLSL). Récupération progressive (decay 15%/frame) au retour à l'arrêt.
 - [x] **Artistic Shaders**: Shader `splat_render_artistic.gdshader` avec 3 modes : Oil Painting (postérisation + bords pinceau + bruit de peinture), Watercolor (falloff doux + boost saturation central + granulation aquarelle), Crosshatch (hachures doubles orientées avec densité tonale). Compatible motion-stretch + fovea LOD.
 - [x] **GPU Water Splat Particles**: Shader-based simulation of volatile and recycled water splats with advection, obstacle collision/bounce, and decay. Supports local flow direction painting via `FLOW` brush mode.
-- [x] **MIP-Splatting & HLOD**: Dynamic LOD system (Mesh at distance, Macro-splats at mid-distance, Micro-splats up close).
+- [x] **Voxel HLOD (experimental)**: Dynamic macro-splat levels and camera-distance selection are integrated. Full Mip-Splatting 3D/2D anti-alias filtering remains future fidelity work.
 - [x] **Fast-Path Binary Asset Format (`.fovea`)**: Native container ready for GPU (Direct Memory Upload) without CPU parsing, implemented in Rust.
 - [x] **Dynamic Lighting**: Dynamic shadows adapting to Godot light sources.
 - [ ] **Static vs Dynamic Splat Separation**: Differential processing (Baking/Octree for static decor, Compute Skinning & Deformation for mobile entities).
@@ -67,7 +67,9 @@ This document outlines the roadmap to transform FoveaCore into a world-class hyb
 ## 🟣 Phase 4: Artificial Intelligence & Cloud
 *Objective: Automate asset creation.*
 
-- [x] **ComfyUI Bridge**: Direct API connection for generating sources from Godot.
+- [x] **ComfyUI image and splat bridge (experimental)**: Godot can upload an image, submit a configurable API graph, poll history, and download generated output.
+  - [x] Discover, validate, and import `.fovea`, `.ply`, or `.splat` workflow artifacts directly into `FoveaSplat3D`; the full HTTP contract is covered by a loopback test.
+  - [ ] Run and document a reviewed reference ComfyUI → 3DGS/Blender workflow against a clean real installation.
 - [ ] **Auto-ROI**: Automatic main object detection by AI.
 - [ ] **Gaussian Compression**: Ultra-light file format for VR streaming.
 - [ ] **Pont Agents Autonomes (Hermes) & Blender** : Création d'une passerelle entre des agents autonomes (tels que Hermes) et Blender/Godot pour la génération et l'orchestration automatique d'assets 3D. *(Réflexion et conception sérieuses planifiées d'ici 2 mois)*
@@ -82,6 +84,14 @@ This document outlines the roadmap to transform FoveaCore into a world-class hyb
 - [ ] **GPU Morph Target Blendshapes**: GPU-based deformation framework for driving facial expressions of 3DGS assets via blendshapes.
 - [ ] **Mocap Capture & Retargeting UI**: Editor interface to calibrate neutral pose, record mocap feeds, and bake animations directly to Godot `AnimationPlayer` tracks.
 - [ ] **Automatic Weights Painting**: Tool to automatically assign skinning weights to splats based on mesh/skeleton distance, with support for manual touch-ups.
+
+## 🟤 Phase 6: Multiplayer VR
+*Objective: Share a splat scene safely across networked VR peers.*
+
+- [x] **Pose and brush replication (experimental)**: Head/hands use interpolated unreliable RPC snapshots; brush strokes use reliable replication.
+- [x] **Two-peer ENet integration gate**: A loopback server and client process assert join, pose convergence, authority brush convergence, and disconnect cleanup.
+- [x] **Network safety gate**: Edit RPCs use server authority, bounded payloads and editable roots, with per-peer pose and brush rate limits.
+- [ ] **OpenXR hardware gate**: Validate two headsets under representative packet loss and latency.
 
 ---
 

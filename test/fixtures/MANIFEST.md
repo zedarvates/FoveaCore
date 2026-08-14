@@ -16,3 +16,17 @@ Layout of the PLY vertices (17 × float32, little-endian):
 
 Values are 3DGS-native: opacity is a logit (sigmoid on load), scales are in log
 space (exp on load), colour is SH degree-0 (`0.5 + 0.28209 * f_dc`). Seed = 1234567.
+
+## Rust → Godot conformance fixture
+
+Generate a deterministic one-splat v2 fixture with:
+
+```powershell
+cd addons/foveacore/rust
+cargo run --bin generate_fovea_v2_fixture -- ../../../test/fixtures/rust_v2_fixture.fovea
+```
+
+The generated asset uses `FOVEA_3D`, version 2, a 72-byte header, one palette
+entry, one covariance entry, one 16-byte splat record, and a metadata JSON
+section. Run the non-GPU Godot suite after generation to verify the Godot loader
+accepts it.

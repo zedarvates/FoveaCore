@@ -8,7 +8,10 @@ class_name NeuralStyleBridge
 @export var comfyui_url: String = "http://127.0.0.1:8188"
 @export var model_path: String = ""
 @export var intensity: float = 0.55 # Denoise factor pour Img2Img
-@export var output_resolution := Vector2i(512, 512)
+@export var output_resolution: Vector2i = Vector2i(512, 512)
+@export var checkpoint_name: String = "v1-5-pruned-emaonly.safetensors"
+@export var positive_prompt_suffix: String = "high quality, hyperrealistic water texture, ripple flow"
+@export_multiline var negative_prompt: String = "blurry, low quality, bad details, text, watermark, signature"
 
 # Instance to an external ONNX runtime (via Plugin or GDExtension)
 var _inference_engine: Object = null
@@ -44,8 +47,9 @@ func stylize_texture_comfy(input_image: Image, positive_prompt: String, callback
 		return
 
 	# Étape 1 : Sauvegarder l'image au format PNG en mémoire
-	input_image.resize(output_resolution.x, output_resolution.y)
-	var png_bytes: PackedByteArray = input_image.save_png_to_buffer()
+	var prepared_image: Image = input_image.duplicate()
+	prepared_image.resize(output_resolution.x, output_resolution.y)
+	var png_bytes: PackedByteArray = prepared_image.save_png_to_buffer()
 	if png_bytes.is_empty():
 		push_error("NeuralStyleBridge: Échec de l'encodage de l'image en PNG.")
 		callback.call(null)
@@ -90,13 +94,13 @@ func stylize_texture_comfy(input_image: Image, positive_prompt: String, callback
 				push_error("NeuralStyleBridge: Échec de l'upload d'image vers ComfyUI (Code: %d)." % response_code)
 				callback.call(null)
 				return
-				
+
 			var json_parser := JSON.new()
 			if json_parser.parse(response_body.get_string_from_utf8()) != OK:
 				push_error("NeuralStyleBridge: Erreur lors de l'analyse de la réponse d'upload.")
 				callback.call(null)
 				return
-				
+
 			var response_dict: Dictionary = json_parser.data
 			var uploaded_name: String = response_dict.get("name", "")
 			if uploaded_name.is_empty():
@@ -108,7 +112,7 @@ func stylize_texture_comfy(input_image: Image, positive_prompt: String, callback
 			_submit_comfy_workflow(uploaded_name, positive_prompt, callback, tree)
 	)
 
-	var upload_url := comfyui_url + "/upload/image"
+	var upload_url: String = _endpoint("/upload/image")
 	var err := http_uploader.request_raw(upload_url, headers, HTTPClient.METHOD_POST, body)
 	if err != OK:
 		push_error("NeuralStyleBridge: Échec de la requête d'upload (Err: %d)." % err)
@@ -122,13 +126,65 @@ func _submit_comfy_workflow(image_name: String, positive_prompt: String, callbac
 	tree.root.add_child(http_prompter)
 	_active_http_requests.append(http_prompter)
 
-	# Workflow par défaut format API JSON de ComfyUI (Img2Img minimaliste)
-	var workflow: Dictionary = {
+	var workflow: Dictionary = _build_img2img_workflow(image_name, positive_prompt)
+
+	var headers: Array[String] = ["Content-Type: application/json"]
+	var body_str: String = JSON.stringify(workflow)
+
+	http_prompter.request_completed.connect(
+		func(result: int, response_code: int, response_headers: PackedStringArray, response_body: PackedByteArray):
+			_cleanup_request(http_prompter)
+			if response_code != 200:
+				push_error("NeuralStyleBridge: Échec de la soumission du prompt à ComfyUI (Code: %d)." % response_code)
+				callback.call(null)
+				return
+
+			var json_parser := JSON.new()
+			if json_parser.parse(response_body.get_string_from_utf8()) != OK:
+				push_error("NeuralStyleBridge: Erreur lors de l'analyse du prompt_id.")
+				callback.call(null)
+				return
+
+			var response_dict: Dictionary = json_parser.data
+			var prompt_id: String = response_dict.get("prompt_id", "")
+			if prompt_id.is_empty():
+				push_error("NeuralStyleBridge: Aucun prompt_id renvoyé par le serveur.")
+				callback.call(null)
+				return
+
+			# Étape 4 : Lancer le polling de l'historique de rendu
+			_poll_comfy_status(prompt_id, callback, tree)
+	)
+
+	var prompt_url: String = _endpoint("/prompt")
+	var err: Error = http_prompter.request(prompt_url, headers, HTTPClient.METHOD_POST, body_str)
+	if err != OK:
+		push_error("NeuralStyleBridge: Échec de la requête prompt (Err: %d)." % err)
+		_cleanup_request(http_prompter)
+		callback.call(null)
+
+
+## Construit le workflow Img2Img livré par défaut. Cette fonction pure est
+## publique afin que les intégrations Godot puissent inspecter, adapter ou
+## sérialiser le workflow avant de l'envoyer à une instance ComfyUI locale.
+func build_img2img_workflow(image_name: String, positive_prompt: String, seed: int = -1) -> Dictionary:
+	return _build_img2img_workflow(image_name, positive_prompt, seed)
+
+
+func _build_img2img_workflow(image_name: String, prompt_text: String, seed: int = -1) -> Dictionary:
+	var resolved_seed: int = seed if seed >= 0 else randi()
+	var complete_prompt: String = prompt_text.strip_edges()
+	if not positive_prompt_suffix.is_empty():
+		if not complete_prompt.is_empty():
+			complete_prompt += ", "
+		complete_prompt += positive_prompt_suffix
+
+	return {
 		"prompt": {
 			"3": {
 				"class_type": "KSampler",
 				"inputs": {
-					"seed": randi(),
+					"seed": resolved_seed,
 					"steps": 20,
 					"cfg": 7.0,
 					"sampler_name": "euler",
@@ -143,20 +199,20 @@ func _submit_comfy_workflow(image_name: String, positive_prompt: String, callbac
 			"4": {
 				"class_type": "CheckpointLoaderSimple",
 				"inputs": {
-					"ckpt_name": "v1-5-pruned-emaonly.safetensors"
+					"ckpt_name": checkpoint_name
 				}
 			},
 			"5": {
 				"class_type": "CLIPTextEncode",
 				"inputs": {
-					"text": positive_prompt + ", high quality, hyperrealistic water texture, ripple flow",
+					"text": complete_prompt,
 					"clip": ["4", 1]
 				}
 			},
 			"6": {
 				"class_type": "CLIPTextEncode",
 				"inputs": {
-					"text": "blurry, low quality, bad details, text, watermark, signature",
+					"text": negative_prompt,
 					"clip": ["4", 1]
 				}
 			},
@@ -190,41 +246,6 @@ func _submit_comfy_workflow(image_name: String, positive_prompt: String, callbac
 			}
 		}
 	}
-
-	var headers: Array[String] = ["Content-Type: application/json"]
-	var body_str := JSON.stringify(workflow)
-
-	http_prompter.request_completed.connect(
-		func(result: int, response_code: int, response_headers: PackedStringArray, response_body: PackedByteArray):
-			_cleanup_request(http_prompter)
-			if response_code != 200:
-				push_error("NeuralStyleBridge: Échec de la soumission du prompt à ComfyUI (Code: %d)." % response_code)
-				callback.call(null)
-				return
-				
-			var json_parser := JSON.new()
-			if json_parser.parse(response_body.get_string_from_utf8()) != OK:
-				push_error("NeuralStyleBridge: Erreur lors de l'analyse du prompt_id.")
-				callback.call(null)
-				return
-				
-			var response_dict: Dictionary = json_parser.data
-			var prompt_id: String = response_dict.get("prompt_id", "")
-			if prompt_id.is_empty():
-				push_error("NeuralStyleBridge: Aucun prompt_id renvoyé par le serveur.")
-				callback.call(null)
-				return
-				
-			# Étape 4 : Lancer le polling de l'historique de rendu
-			_poll_comfy_status(prompt_id, callback, tree)
-	)
-
-	var prompt_url := comfyui_url + "/prompt"
-	var err := http_prompter.request(prompt_url, headers, HTTPClient.METHOD_POST, body_str)
-	if err != OK:
-		push_error("NeuralStyleBridge: Échec de la requête prompt (Err: %d)." % err)
-		_cleanup_request(http_prompter)
-		callback.call(null)
 
 
 ## Boucle de polling pour surveiller l'état de la tâche sur ComfyUI
@@ -260,17 +281,15 @@ func _poll_comfy_status(prompt_id: String, callback: Callable, tree: SceneTree, 
 				_poll_comfy_status(prompt_id, callback, tree, attempt + 1)
 				return
 				
-			# Rendu complété ! Récupérer les informations sur les images générées
+			# Rendu complété ! Récupérer la première image produite, sans supposer
+			# que le workflow utilise l'identifiant de nœud historique "9".
 			var task_info: Dictionary = history_dict[prompt_id]
-			var outputs: Dictionary = task_info.get("outputs", {})
-			
-			# Chercher le nœud SaveImage (nœud ID "9")
-			if not outputs.has("9") or not outputs["9"].has("images") or outputs["9"]["images"].is_empty():
+			var image_info: Dictionary = find_first_output_image(task_info)
+			if image_info.is_empty():
 				push_error("NeuralStyleBridge: Rendu complété mais aucune image de sortie trouvée.")
 				callback.call(null)
 				return
-				
-			var image_info: Dictionary = outputs["9"]["images"][0]
+
 			var generated_filename: String = image_info.get("filename", "")
 			var subfolder: String = image_info.get("subfolder", "")
 			var type: String = image_info.get("type", "output")
@@ -284,7 +303,7 @@ func _poll_comfy_status(prompt_id: String, callback: Callable, tree: SceneTree, 
 			_download_stylized_image(generated_filename, subfolder, type, callback, tree)
 	)
 
-	var history_url := comfyui_url + "/history/" + prompt_id
+	var history_url: String = _endpoint("/history/" + prompt_id.uri_encode())
 	var err := http_poller.request(history_url)
 	if err != OK:
 		_cleanup_request(http_poller)
@@ -321,7 +340,7 @@ func _download_stylized_image(filename: String, subfolder: String, type: String,
 		query_params += "&subfolder=" + subfolder.uri_encode()
 	query_params += "&type=" + type.uri_encode()
 	
-	var download_url := comfyui_url + "/view" + query_params
+	var download_url: String = _endpoint("/view") + query_params
 	var err := http_downloader.request(download_url)
 	if err != OK:
 		push_error("NeuralStyleBridge: Échec de la requête de téléchargement (Err: %d)." % err)
@@ -337,3 +356,29 @@ func _cleanup_request(http_node: HTTPRequest) -> void:
 		http_node.get_parent().remove_child(http_node)
 	http_node.queue_free()
 	_active_http_requests.erase(http_node)
+
+
+## Extrait la première image déclarée par un nœud de sortie ComfyUI. Les IDs
+## de nœuds sont propres à chaque workflow, notamment pour les graphes 3DGS.
+func find_first_output_image(history_entry: Dictionary) -> Dictionary:
+	var outputs: Dictionary = history_entry.get("outputs", {})
+	var node_ids: Array = outputs.keys()
+	node_ids.sort_custom(func(left: Variant, right: Variant) -> bool: return str(left) < str(right))
+	for node_id: Variant in node_ids:
+		var node_output: Variant = outputs[node_id]
+		if not node_output is Dictionary:
+			continue
+		var node_output_dict: Dictionary = node_output
+		var images: Variant = node_output_dict.get("images", [])
+		if not images is Array or images.is_empty():
+			continue
+		var first_image: Variant = images[0]
+		if first_image is Dictionary:
+			var first_image_dict: Dictionary = first_image
+			if not str(first_image_dict.get("filename", "")).is_empty():
+				return first_image_dict.duplicate(true)
+	return {}
+
+
+func _endpoint(path: String) -> String:
+	return comfyui_url.trim_suffix("/") + path

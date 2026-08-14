@@ -13,9 +13,12 @@ func _ready() -> void:
 	print("==============================================\n")
 	
 	var success = true
-	success = success and test_multiplayer_sync_instantiation()
-	success = success and test_pose_sync()
-	success = success and test_brush_sync()
+	success = test_multiplayer_sync_instantiation() and success
+	success = test_pose_sync() and success
+	success = test_invalid_pose_rejected() and success
+	success = test_brush_sync() and success
+	success = test_brush_security_validation() and success
+	success = test_rate_limiting() and success
 	
 	if success:
 		print("=== MULTIPLAYER SYNC TESTS PASSED ===")
@@ -170,4 +173,93 @@ func test_brush_sync() -> bool:
 	splattable.queue_free()
 	sync_node.queue_free()
 	print("Brush synchronization test passed.")
+	return true
+
+
+func test_invalid_pose_rejected() -> bool:
+	print("Testing invalid pose rejection...")
+	var sync_node: FoveaMultiplayerSync = FoveaMultiplayerSyncScript.new()
+	add_child(sync_node)
+	var now: float = Time.get_unix_time_from_system()
+
+	sync_node.update_peer_pose(
+		Vector3(INF, 0.0, 0.0), Quaternion.IDENTITY, Vector3.ZERO,
+		Vector3.ZERO, Quaternion.IDENTITY, Vector3.ZERO,
+		Vector3.ZERO, Quaternion.IDENTITY, Vector3.ZERO,
+		now
+	)
+
+	var rejected: bool = not sync_node._remote_rigs.has(2)
+	if not rejected:
+		push_error("Invalid pose payload spawned a remote rig.")
+	sync_node.queue_free()
+	print("Invalid pose rejection test passed." if rejected else "Invalid pose rejection test failed.")
+	return rejected
+
+
+func test_brush_security_validation() -> bool:
+	print("Testing brush validation and editable-root boundary...")
+	var sync_node: FoveaMultiplayerSync = FoveaMultiplayerSyncScript.new()
+	add_child(sync_node)
+	if sync_node.allow_remote_brush_edits:
+		push_error("Remote brush edits must be disabled by default.")
+		sync_node.queue_free()
+		return false
+
+	var editable_root: Node = Node.new()
+	editable_root.name = "SecurityEditableRoot"
+	add_child(editable_root)
+	sync_node.editable_root_path = sync_node.get_path_to(editable_root)
+
+	var local_splattable: FoveaSplattable = FoveaSplattableScript.new()
+	local_splattable.name = "SecurityLocalSplattable"
+	editable_root.add_child(local_splattable)
+	var local_splat: GaussianSplat = GaussianSplatScript.new(Vector3.ZERO)
+	local_splat.color = Color.BLACK
+	local_splattable.loaded_splats.append(local_splat)
+
+	sync_node.replicate_brush_stroke(
+		local_splattable.get_path(), Vector3.ZERO,
+		SplatBrushEngine.BrushMode.PAINT,
+		sync_node.max_remote_brush_radius + 1.0,
+		Color.RED, 1.0, Vector3.UP
+	)
+	var invalid_radius_rejected: bool = local_splat.color == Color.BLACK
+
+	var outside_splattable: FoveaSplattable = FoveaSplattableScript.new()
+	outside_splattable.name = "SecurityOutsideSplattable"
+	add_child(outside_splattable)
+	var outside_splat: GaussianSplat = GaussianSplatScript.new(Vector3.ZERO)
+	outside_splat.color = Color.BLACK
+	outside_splattable.loaded_splats.append(outside_splat)
+	sync_node.replicate_brush_stroke(
+		outside_splattable.get_path(), Vector3.ZERO,
+		SplatBrushEngine.BrushMode.PAINT, 1.0,
+		Color.RED, 1.0, Vector3.UP
+	)
+	var outside_target_rejected: bool = outside_splat.color == Color.BLACK
+
+	editable_root.queue_free()
+	outside_splattable.queue_free()
+	sync_node.queue_free()
+	if not invalid_radius_rejected:
+		push_error("Oversized remote brush radius was applied.")
+	if not outside_target_rejected:
+		push_error("Brush escaped editable_root_path.")
+	var passed: bool = invalid_radius_rejected and outside_target_rejected
+	print("Brush security validation test passed." if passed else "Brush security validation test failed.")
+	return passed
+
+
+func test_rate_limiting() -> bool:
+	print("Testing per-peer rate limiting...")
+	var sync_node: FoveaMultiplayerSync = FoveaMultiplayerSyncScript.new()
+	var windows: Dictionary = {}
+	var first_allowed: bool = sync_node._consume_rate_limit(windows, 42, 1)
+	var second_rejected: bool = not sync_node._consume_rate_limit(windows, 42, 1)
+	sync_node.free()
+	if not first_allowed or not second_rejected:
+		push_error("Per-peer rate limiter did not enforce its event budget.")
+		return false
+	print("Per-peer rate limiting test passed.")
 	return true

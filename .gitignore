@@ -14,6 +14,18 @@ addons/foveacore/rust/target/
 # Audit exports
 audit_foveacore.diff
 
+# Local agent integrations and generated reports
+/.mcp.json
+/.claude/settings.json
+/.botte/config.json
+/.botte/setup-report.json
+/.botte-cache/
+/.kilocode/
+/.understand-anything/
+
+# Local project-file backups
+/FoveaEngine.csproj.old*
+
 # Logs de test / runtime (D5 — hygiène du dépôt)
 /*.log
 
@@ -40,4 +52,3 @@ test_run*.log
 test_output.log
 script_parse.log
 import.log
-

@@ -10,7 +10,7 @@
 
 Dans le cadre du développement de **FoveaEngine**, l'un des verrous technologiques majeurs est la **génération automatique de colliders physiques (RigidBody3D / CollisionShape3D)** et de **maillages de rendu simplifiés (LOD)** à partir de reconstructions volumétriques denses ou bruitées (telles que les nuages de points issus de COLMAP ou les centres de 3D Gaussian Splats).
 
-La méthode algorithmique traditionnelle de simplification de maillage (par exemple, Quadric Error Metrics dans [mesh_simplifier.gd](file:///f:/foveaengine/fovea-engine/addons/foveacore/scripts/mesh_simplifier.gd)) nécessite un maillage dense de départ qui est souvent difficile à reconstruire proprement (Marching Cubes bruité, non-manifold) et génère des géométries avec des trous ou des auto-intersections impropres à la simulation physique.
+La méthode algorithmique traditionnelle de simplification de maillage (par exemple, Quadric Error Metrics dans [mesh_simplifier.gd](../addons/foveacore/scripts/mesh_simplifier.gd)) nécessite un maillage dense de départ qui est souvent difficile à reconstruire proprement (Marching Cubes bruité, non-manifold) et génère des géométries avec des trous ou des auto-intersections impropres à la simulation physique.
 
 Le projet **MeshFlow** de Meta AI (CVPR 2026) introduit une rupture majeure dans la modélisation 3D générative. Voici comment ses idées clés s'applient à notre moteur :
 
@@ -53,12 +53,12 @@ Au lieu de traiter les coordonnées de sommets comme du texte ou des entiers qua
 ## 🎯 APPLICATION DIRECTE À FOVEAENGINE : LOD & COLLIDERS
 
 ### 1. La Problématique des Colliders dans FoveaEngine (RigidBody3D)
-Actuellement, [physics_proxy_generator.gd](file:///f:/foveaengine/fovea-engine/addons/foveacore/scripts/advanced/physics_proxy_generator.gd) propose d'associer un objet `FoveaSplattable` à un `RigidBody3D` en utilisant un maillage basse résolution (low-poly) généré en amont par un outil externe (StudioTo3D) ou estimé par une simple AABB (boîte englobante). 
+Actuellement, [physics_proxy_generator.gd](../addons/foveacore/scripts/advanced/physics_proxy_generator.gd) propose d'associer un objet `FoveaSplattable` à un `RigidBody3D` en utilisant un maillage basse résolution (low-poly) généré en amont par un outil externe (StudioTo3D) ou estimé par une simple AABB (boîte englobante).
 
 Si l'utilisateur tente de générer un collider à partir d'un scan brut :
 1. Les algorithmes de reconstruction de surface classiques (ex: Poisson Reconstruction) échouent à cause des floaters (splats fantômes) et du bruit.
 2. Le maillage obtenu est complexe (plus de 100k triangles), non-manifold (bords ouverts) et inutilisable par le moteur physique de Godot (GodotPhysics / Jolt).
-3. Le maillage simplifié par QEM ([mesh_simplifier.gd](file:///f:/foveaengine/fovea-engine/addons/foveacore/scripts/mesh_simplifier.gd)) hérite de ces erreurs topologiques, produisant des colliders déformés ou troués.
+3. Le maillage simplifié par QEM ([mesh_simplifier.gd](../addons/foveacore/scripts/mesh_simplifier.gd)) hérite de ces erreurs topologiques, produisant des colliders déformés ou troués.
 
 ### 2. Solution MeshFlow pour les Colliders
 En utilisant le modèle de MeshFlow conditionné par nuage de points, nous pouvons implémenter un pipeline de génération de colliders robuste :

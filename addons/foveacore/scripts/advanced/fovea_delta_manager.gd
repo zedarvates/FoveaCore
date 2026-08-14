@@ -183,7 +183,9 @@ static func serialize_deltas(
 	
 	for i in range(instance_ids.size()):
 		var start := stream.size()
-		stream.resize(start + 20)
+		# Instance id (4 bytes) + weight/frequency/amplitude (12 bytes).
+		# The entry count is appended immediately after this 16-byte header.
+		stream.resize(start + 16)
 		stream.encode_u32(start, instance_ids[i])
 		# store weight, freq, amp as floats
 		var arr_floats := PackedFloat32Array([weights[i], frequencies[i], amplitudes[i]])
@@ -200,7 +202,8 @@ static func serialize_deltas(
 		
 		for idx in pos_dict.keys():
 			var entry_start := stream.size()
-			stream.resize(entry_start + 28)
+			# Splat index (4 bytes) + position/color (7 float32 = 28 bytes).
+			stream.resize(entry_start + 32)
 			stream.encode_u32(entry_start, idx)
 			
 			var pos: Vector3 = pos_dict[idx]
@@ -208,7 +211,7 @@ static func serialize_deltas(
 			
 			var p_floats := PackedFloat32Array([pos.x, pos.y, pos.z, col.r, col.g, col.b, col.a])
 			var p_bytes := p_floats.to_byte_array()
-			for j in range(24):
+			for j in range(28):
 				stream[entry_start + 4 + j] = p_bytes[j]
 				
 	return stream
@@ -252,17 +255,16 @@ static func deserialize_deltas(bytes: PackedByteArray) -> Dictionary:
 		var col_dict := {}
 		
 		for j in range(entry_count):
-			if offset + 28 > bytes.size():
+			if offset + 32 > bytes.size():
 				break
 			var idx := bytes.decode_u32(offset)
-			var p_bytes := bytes.slice(offset + 4, offset + 28)
+			var p_bytes := bytes.slice(offset + 4, offset + 32)
 			var p_floats := p_bytes.to_float32_array()
 			pos_dict[idx] = Vector3(p_floats[0], p_floats[1], p_floats[2])
 			col_dict[idx] = Color(p_floats[3], p_floats[4], p_floats[5], p_floats[6])
-			offset += 28
+			offset += 32
 			
 		result.delta_positions.append(pos_dict)
 		result.delta_colors.append(col_dict)
 		
 	return result
-

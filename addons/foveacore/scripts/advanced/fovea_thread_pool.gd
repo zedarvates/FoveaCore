@@ -1,6 +1,8 @@
 class_name FoveaThreadPool
 extends RefCounted
 
+const FoveaInstancedSplatLayout := preload("res://addons/foveacore/scripts/advanced/fovea_instanced_splat_layout.gd")
+
 ## FoveaEngine — FoveaThreadPool
 ## Décodeur parallèle multi-cœurs pour les Gaussian Splats.
 ##
@@ -77,9 +79,11 @@ static func decode_parallel(
 	# Déterminer la taille réelle d'un splat dans le buffer
 	var byte_size: int = splat_byte_size
 	if byte_size <= 0:
-		byte_size = 16
-		if num_splats > 0 and culled_bytes.size() >= num_splats * 20:
-			byte_size = 20
+		byte_size = FoveaInstancedSplatLayout.CANONICAL_SPLAT_BYTE_SIZE
+		if num_splats > 0 and culled_bytes.size() == num_splats * FoveaInstancedSplatLayout.OUTPUT_SPLAT_BYTE_SIZE:
+			byte_size = FoveaInstancedSplatLayout.OUTPUT_SPLAT_BYTE_SIZE
+		elif num_splats > 0 and culled_bytes.size() == num_splats * FoveaInstancedSplatLayout.LEGACY_OUTPUT_SPLAT_BYTE_SIZE:
+			byte_size = FoveaInstancedSplatLayout.LEGACY_OUTPUT_SPLAT_BYTE_SIZE
 
 	# Déterminer le nombre de threads optimal
 	var cpu_count: int = OS.get_processor_count()
@@ -204,8 +208,13 @@ static func _decode_chunk(
 
 		if not instance_transforms.is_empty():
 			# Lire l'instance_id taggé dans les 16 bits de poids fort de data3
-			var data3: int = culled_bytes.decode_u32(src + 12)
-			instance_id = (data3 >> 16) & 0xFFFF
+			# 24-byte records keep runtime metadata outside the canonical .fovea record.
+			# Read the 20-byte high-word tag only as a legacy readback fallback.
+			if splat_byte_size >= FoveaInstancedSplatLayout.OUTPUT_SPLAT_BYTE_SIZE:
+				instance_id = culled_bytes.decode_u32(src + FoveaInstancedSplatLayout.INSTANCE_ID_OFFSET)
+			elif splat_byte_size >= FoveaInstancedSplatLayout.LEGACY_OUTPUT_SPLAT_BYTE_SIZE:
+				var data3: int = culled_bytes.decode_u32(src + 12)
+				instance_id = (data3 >> 16) & 0xFFFF
 			
 			if instance_id >= 0 and instance_id < instance_morph_types.size():
 				morph_type = instance_morph_types[instance_id]
@@ -215,8 +224,8 @@ static func _decode_chunk(
 
 		# Décoder local_idx si présent (splat_byte_size >= 20)
 		var local_idx: int = -1
-		if splat_byte_size >= 20:
-			local_idx = culled_bytes.decode_u32(src + 16)
+		if splat_byte_size >= FoveaInstancedSplatLayout.LEGACY_OUTPUT_SPLAT_BYTE_SIZE:
+			local_idx = culled_bytes.decode_u32(src + FoveaInstancedSplatLayout.LOCAL_IDX_OFFSET)
 
 		# Appliquer le Delta-Splat (position/deformation locale)
 		if instance_id >= 0 and local_idx >= 0:

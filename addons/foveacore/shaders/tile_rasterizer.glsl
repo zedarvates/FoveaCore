@@ -29,8 +29,9 @@ layout(set = 0, binding = 4, std430) restrict readonly buffer CounterBuffer {
     uint valid_splat_count;
 };
 
-// Push Constants
-layout(push_constant, std430) uniform Params {
+// This parameter block is larger than Godot's cross-platform 128-byte push
+// constant limit, so keep it in a uniform buffer instead.
+layout(set = 0, binding = 5, std140) uniform Params {
     mat4 model_view_matrix;
     mat4 projection_matrix;
     vec3 camera_position;
@@ -54,6 +55,7 @@ struct CollisionNode {
 shared CollisionNode shared_nodes[256];
 shared uint shared_head;
 shared uint shared_splat_count;
+shared uint temp_indices[256];
 
 // Math helper - projection 3D -> 2D
 mat3 compute_cov3d_local(vec3 scale, vec4 rot) {
@@ -195,7 +197,6 @@ void main() {
         
         // Reconstruction locale du tableau à partir de la liste chaînée pour le tri
         // (chaque thread extrait séquentiellement un élément pour éviter les conflits d'accès)
-        shared uint temp_indices[256];
         if (thread_idx == 0) {
             uint curr = shared_head;
             for (uint i = 0; i < active_count; i++) {

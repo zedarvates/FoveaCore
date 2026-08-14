@@ -51,10 +51,10 @@ func _init() -> void:
 	# Robustness: missing file → empty.
 	_assert("missing .splat → empty", Loader.load_splat("user://_does_not_exist.splat").is_empty(), "")
 
-	# Routing: unsupported extension → empty; is_supported() correct.
+	# Routing: unsupported and planned extensions stay outside the public contract.
 	_assert("unsupported ext → empty", Loader.load_gaussians("foo.obj").is_empty(), "")
 	_assert("is_supported(.splat)", Loader.is_supported("a.splat"), "")
-	_assert("is_supported(.spz)", Loader.is_supported("a.spz"), "")
+	_assert("planned .spz is not supported", not Loader.is_supported("a.spz"), "")
 	_assert("not is_supported(.obj)", not Loader.is_supported("a.obj"), "")
 
 	print("\n" + "=".repeat(70))

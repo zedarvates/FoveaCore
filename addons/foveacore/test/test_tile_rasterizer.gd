@@ -8,6 +8,7 @@ extends SceneTree
 
 const GPUCullerPipelineClass := preload("res://addons/foveacore/scripts/advanced/gpu_culler_pipeline.gd")
 const FoveaCompositorEffectClass := preload("res://addons/foveacore/scripts/advanced/fovea_compositor_effect.gd")
+const REQUIRES_GPU := true
 
 var _passed := 0
 var _failed := 0
@@ -66,8 +67,15 @@ func _run_tests() -> void:
 		format.format = RenderingDevice.DATA_FORMAT_R8G8B8A8_UNORM
 		format.width = 64
 		format.height = 64
-		format.usage_bits = RenderingDevice.TEXTURE_USAGE_STORAGE_BIT | RenderingDevice.TEXTURE_USAGE_SAMPLING_BIT
-		var color_tex := rd.texture_create(format, RDTextureView.new())
+		format.usage_bits = (
+			RenderingDevice.TEXTURE_USAGE_STORAGE_BIT
+			| RenderingDevice.TEXTURE_USAGE_SAMPLING_BIT
+			| RenderingDevice.TEXTURE_USAGE_CAN_COPY_FROM_BIT
+		)
+		var initial_pixels := PackedByteArray()
+		initial_pixels.resize(64 * 64 * 4)
+		var initial_data: Array[PackedByteArray] = [initial_pixels]
+		var color_tex := rd.texture_create(format, RDTextureView.new(), initial_data)
 		
 		# Setup dummy AABB boundaries and palette textures
 		var aabb_min := Vector3(-2, -2, -2)
@@ -86,11 +94,10 @@ func _run_tests() -> void:
 		# Set persistent parameters to simulate run cache
 		culler.last_counter_buffer_rid = rd.storage_buffer_create(16)
 		culler.last_valid_splat_count = 10
-		
-		var error_occurred := false
+		culler.skip_sync = true
 		
 		# Attempt a low-level dry-run dispatch of the tile rasterizer shader
-		culler.dispatch_tile_based_rasterization(
+		var dispatch_succeeded: bool = culler.dispatch_tile_based_rasterization(
 			output_buf,
 			camera,
 			color_tex,
@@ -101,22 +108,42 @@ func _run_tests() -> void:
 			covar_tex,
 			palette_tex
 		)
-		
-		_assert("Low-level dispatch_tile_based_rasterization executed without crashing", true)
+		_assert("Tile dispatch is submitted", dispatch_succeeded)
+		if not dispatch_succeeded:
+			_cleanup_gpu_fixtures(culler, output_buf, color_tex, covar_tex, palette_tex, camera)
+			culler.cleanup()
+			_finish()
+			return
+		rd.sync()
+		var rendered_bytes: PackedByteArray = rd.texture_get_data(color_tex, 0)
+		_assert("Tile dispatch writes the complete 64x64 RGBA target", rendered_bytes.size() == 64 * 64 * 4)
+		_assert("Tile dispatch replaces the transparent target with an opaque background", rendered_bytes.size() >= 4 and rendered_bytes[3] == 255)
 		
 		# Clean up dummy resources
-		rd.free_rid(output_buf)
-		rd.free_rid(color_tex)
-		rd.free_rid(covar_tex)
-		rd.free_rid(palette_tex)
-		rd.free_rid(culler.last_counter_buffer_rid)
-		camera.queue_free()
+		_cleanup_gpu_fixtures(culler, output_buf, color_tex, covar_tex, palette_tex, camera)
 	else:
 		print("  [INFO] Skipping GPU dispatch test: RenderingDevice is not available in this headless/dummy context.")
 		_assert("Graceful bypass on missing RenderingDevice", true)
 
 	culler.cleanup()
 	_finish()
+
+func _cleanup_gpu_fixtures(
+		culler: GPUCullerPipeline,
+		output_buf: RID,
+		color_tex: RID,
+		covar_tex: RID,
+		palette_tex: RID,
+		camera: Camera3D
+) -> void:
+	var rd: RenderingDevice = culler.rd
+	rd.free_rid(output_buf)
+	rd.free_rid(color_tex)
+	rd.free_rid(covar_tex)
+	rd.free_rid(palette_tex)
+	rd.free_rid(culler.last_counter_buffer_rid)
+	culler.last_counter_buffer_rid = RID()
+	camera.queue_free()
 
 func _finish() -> void:
 	print("\n" + "======================================================================")

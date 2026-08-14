@@ -2,6 +2,8 @@
 extends ResourceFormatSaver
 class_name FoveaAssetFormatSaver
 
+const FoveaBinaryFormatScript := preload("res://addons/foveacore/scripts/fovea_binary_format.gd")
+
 ## FoveaAssetFormatSaver - Sauvegarde de format d'asset personnalisé pour .fovea dans Godot 4
 
 func _get_recognized_extensions(resource: Resource) -> PackedStringArray:
@@ -20,9 +22,13 @@ func _save(resource: Resource, path: String, flags: int) -> Error:
 		return FileAccess.get_open_error()
 
 	var asset := resource as FoveaAsset
+	var validation_error: String = _validate_asset(asset)
+	if not validation_error.is_empty():
+		push_error("FoveaAssetFormatSaver: Asset invalide: %s" % validation_error)
+		return ERR_INVALID_DATA
 
-	# 1. Écriture temporaire de l'en-tête (72 octets)
-	for i in range(72):
+	# 1. Écriture temporaire de l'en-tête canonique
+	for i in range(FoveaBinaryFormatScript.HEADER_SIZE):
 		file.store_8(0)
 
 	# 2. Écriture de la Palette de Couleurs (RGB32F)
@@ -68,11 +74,11 @@ func _save(resource: Resource, path: String, flags: int) -> Error:
 
 	# 5. Réécriture de l'en-tête finalisé au début du fichier
 	var color_codebook_size: int = asset.color_palette.colors.size() if asset.color_palette != null else 0
-	var covar_codebook_size: int = asset.covariance_codebook.size() / 32
+	var covar_codebook_size: int = asset.covariance_codebook.size() / FoveaBinaryFormatScript.COVARIANCE_ENTRY_SIZE
 
 	file.seek(0)
-	file.store_buffer("FOVEA_3D".to_utf8_buffer()) # 8 bytes
-	file.store_32(2) # version
+	file.store_buffer(FoveaBinaryFormatScript.MAGIC.to_utf8_buffer())
+	file.store_32(FoveaBinaryFormatScript.VERSION)
 	file.store_32(asset.splat_count)
 	file.store_32(color_codebook_size)
 	file.store_32(covar_codebook_size)
@@ -94,6 +100,25 @@ func _save(resource: Resource, path: String, flags: int) -> Error:
 
 	file.close()
 	return OK
+
+
+func _validate_asset(asset: FoveaAsset) -> String:
+	if asset.splat_count <= 0:
+		return "splat_count must be greater than zero"
+	if not FoveaBinaryFormatScript.is_valid_aabb(asset.aabb_min, asset.aabb_max):
+		return "AABB contains non-finite or inverted bounds"
+	var color_count: int = asset.color_palette.colors.size() if asset.color_palette != null else 0
+	if color_count <= 0 or color_count > FoveaBinaryFormatScript.MAX_COLOR_CODEBOOK_SIZE:
+		return "color palette size is outside the canonical range"
+	if asset.covariance_codebook.size() % FoveaBinaryFormatScript.COVARIANCE_ENTRY_SIZE != 0:
+		return "covariance codebook byte size is not aligned"
+	var covariance_count: int = asset.covariance_codebook.size() / FoveaBinaryFormatScript.COVARIANCE_ENTRY_SIZE
+	if covariance_count <= 0 or covariance_count > FoveaBinaryFormatScript.MAX_COVARIANCE_CODEBOOK_SIZE:
+		return "covariance codebook size is outside the canonical range"
+	var expected_splat_bytes: int = asset.splat_count * FoveaBinaryFormatScript.SPLAT_RECORD_SIZE
+	if asset.splats_raw_bytes.size() != expected_splat_bytes:
+		return "splat byte count is %d, expected %d" % [asset.splats_raw_bytes.size(), expected_splat_bytes]
+	return ""
 
 # Helper methods for serialization (exactly matching FoveaAssetWriter)
 func _serialize_style(style: FoveaStyle) -> Dictionary:

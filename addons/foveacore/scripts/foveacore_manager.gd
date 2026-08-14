@@ -295,6 +295,16 @@ func register_splattable(node: FoveaSplattable) -> void:
 		proxy.switch_distance = 30.0
 		node.add_child(proxy)
 
+## Refreshes renderer ownership after a live asset-path change.
+## Existing culling, visibility, proxy, and instancing cleanup paths are reused
+## so a node cannot remain registered under its previous source path.
+func refresh_splattable_asset(node: FoveaSplattable) -> void:
+	if not is_instance_valid(node) or not node.is_inside_tree():
+		return
+	unregister_splattable(node)
+	register_splattable(node)
+
+
 ## Unregisters a [FoveaSplattable] node from the culling and visibility systems.
 ## Cleans up any attached LOD proxy nodes or unused instanced renderers.
 func unregister_splattable(node: FoveaSplattable) -> void:

@@ -1,8 +1,10 @@
-# 📦 Gaussian Compression Format Specification (.fovea v2) — FoveaEngine
+# 📦 Gaussian Compression Research Proposal (.fovea v3 candidate) — FoveaEngine
 
 > **Date :** 2026-06-22 | **Auteurs :** Antigravity & FoveaEngine Team
 >
-> Ce document définit les spécifications techniques du format de fichier propriétaire compressé **`.fovea` v2**. L'objectif est de réduire de 80% à 90% la taille des données 3DGS originales (fichiers PLY bruts) pour permettre le streaming temps réel dans les casques VR (ex: Meta Quest) sans saturer la bande passante réseau ni le bus PCIe/VRAM.
+> **Statut : PROPOSED.** Ce document décrit une piste de recherche incompatible avec le contrat actuel `FOVEA_3D` v2 (72 octets d'en-tête, 16 octets par splat). Il ne doit pas être produit ni chargé par les lecteurs v2 actuels.
+>
+> L'objectif est de réduire de 80% à 90% la taille des données 3DGS originales (fichiers PLY bruts) pour permettre le streaming temps réel dans les casques VR (ex: Meta Quest) sans saturer la bande passante réseau ni le bus PCIe/VRAM. Toute implémentation devra adopter une nouvelle identité, ici nommée provisoirement **`.fovea` v3**.
 
 ---
 
@@ -12,7 +14,7 @@
 |---|---|---|---|---|
 | **PLY Standard** | ~64 - 128 B | Lent (parsing texte/binaire CPU) | Non (requiert conversion) | Non |
 | **.fovea v1** | 16 B | Rapide | Partiel | Non |
-| **.fovea v2** | **8 B** (quantifié + entropy) | Instantané (Direct memory upload) | **Oui** (Decompress Compute Shader) | **Oui (par Chunks Morton)** |
+| **.fovea v3 candidate** | **8 B** (quantifié + entropy) | Hypothèse à mesurer | À implémenter | À implémenter |
 
 ---
 
@@ -61,7 +63,7 @@ L'opacité $\alpha \in [0, 1]$ est encodée directement via une quantification l
 ```
 ┌────────────────────────────────────────────────────────┐
 │ EN-TÊTE DU FICHIER (Header)                            │
-│  - Magic Bytes (8 octets) : 'FOVEA_V2'                 │
+│  - Magic Bytes (8 octets) : 'FOVEA_V3' (proposé)       │
 │  - Nombre total de splats (4 octets)                   │
 │  - Nombre de blocs Morton (4 octets)                   │
 │  - Palette de couleurs RGB (256 x 3 octets = 768 B)    │

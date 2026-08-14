@@ -1,6 +1,8 @@
-# 📄 Spécification du Format d'Asset .fovea
+# 📄 Spécification canonique du Format d'Asset .fovea v2
 
 Ce document décrit la structure binaire du format d'asset propriétaire `.fovea` utilisé par **FoveaEngine**. Ce format est conçu pour stocker de manière compacte et optimisée pour le GPU des Gaussian Splats, des paramètres de style visuels, des maillages polygonaux associés (pour le rendu hybride) ainsi que des métadonnées personnalisées.
+
+> **Statut : contrat implémenté.** Les lecteurs et écrivains actifs utilisent `FOVEA_3D`, version `2`, un en-tête little-endian de 72 octets et des enregistrements de 16 octets par splat. Toute évolution incompatible doit recevoir une nouvelle version et une nouvelle identité de format.
 
 ---
 
@@ -30,7 +32,7 @@ Le fichier est composé d'une en-tête de taille fixe suivie de sections de donn
 
 ## 1. En-tête du Fichier (`FoveaAssetHeader`)
 
-L'en-tête fait exactement **72 octets** et possède l'alignement suivant en C/Rust :
+L'en-tête fait exactement **72 octets** et est sérialisé en little-endian selon l'alignement suivant :
 
 | Offset | Type | Nom | Description |
 |---|---|---|---|
@@ -85,7 +87,9 @@ Située après le codebook de covariance.
   - `opacity` (`uint8`) : Opacité stockée de manière linéaire (0 à 255).
   - `layer_id` (`uint8`) : Identifiant de la couche de rendu (0 = BASE, etc.).
   - `dither_seed` (`uint8`) : Graine pseudo-aléatoire pour le dithering stochastique.
-  - `padding2` (`uint8`) : Padding d'alignement (1 octet).
+  - `brush_type` (`uint8`) : Type de brosse/forme. Correspond exactement à
+    `GaussianSplat.BrushType` : 0 = Stone, 1 = Sponge, 2 = Gaussian,
+    3 = Drybrush, 4 = Stipple.
 
 ---
 

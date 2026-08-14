@@ -210,7 +210,12 @@ func _ready() -> void:
 		backend.error_occurred.connect(func(err: String) -> void: reconstruction_failed.emit(err))
 		backend.oom_detected.connect(func(cmd: String, details: String) -> void: reconstruction_failed.emit(details))
 
-	call_deferred("check_tools")
+	# Tool discovery belongs to the StudioTo3D UI and explicit reconstruction
+	# requests. Running it from the autoload during headless startup emits
+	# expected OS.execute errors for optional FFmpeg/COLMAP tools and makes
+	# runtime smoke tests depend on a reconstruction workstation setup.
+	if DisplayServer.get_name() != "headless":
+		call_deferred("check_tools")
 
 func check_tools() -> Dictionary:
 	# Re-resolve paths from FoveaDependencyManager to catch fresh installs

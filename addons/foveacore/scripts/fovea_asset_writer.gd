@@ -5,8 +5,9 @@ class_name FoveaAssetWriter
 ## Implémente la quantification de couleur (K-Means), la quantification de covariance (K-Means),
 ## l'ordonnancement de Morton spatial et l'écriture structurée de l'en-tête et des blocs.
 
-const MAGIC: String = "FOVEA_3D"
-const VERSION: int = 2
+const FoveaBinaryFormatScript := preload("res://addons/foveacore/scripts/fovea_binary_format.gd")
+const MAGIC: String = FoveaBinaryFormatScript.MAGIC
+const VERSION: int = FoveaBinaryFormatScript.VERSION
 
 ## Fonction principale pour écrire un fichier d'asset .fovea
 static func write_fovea_asset(
@@ -65,8 +66,8 @@ static func write_fovea_asset(
 	)
 
 	# 4. Écriture temporaire de l'en-tête (on réécrira plus tard avec les bons offsets)
-	# 72 octets d'en-tête vide/temporaire
-	for i in range(72):
+	# En-tête fixe vide/temporaire
+	for i in range(FoveaBinaryFormatScript.HEADER_SIZE):
 		file.store_8(0)
 
 	# 5. Écriture de la Palette de Couleurs (RGB32F)

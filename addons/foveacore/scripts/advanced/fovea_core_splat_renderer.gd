@@ -795,14 +795,30 @@ func render_splats_internal(splats: Array[GaussianSplat]) -> int:
     # Packer les splats en format 16-octets
     var raw_bytes: PackedByteArray = pack_gaussian_splats(splats, aabb_min, aabb_max)
 
-    # Décoder de façon parallèle
+    # Décoder les données de couleur en parallèle. Le format compact 16 octets
+    # ne contient pas la covariance complète des GaussianSplat non quantisés :
+    # leur rotation et leur échelle restent donc dans la transform d'instance.
     var decode_result: FoveaThreadPool.DecodeResult = FoveaThreadPool.decode_parallel(raw_bytes, count, aabb_min, aabb_max)
 
-    # Assigner au MultiMesh
-    multimesh.transform_array = decode_result.xf_array
+    var transform_array: PackedVector3Array = PackedVector3Array()
+    transform_array.resize(count * 4)
+    var original_transforms: Array[Transform3D] = []
+    original_transforms.resize(count)
+    for i: int in range(count):
+        var splat: GaussianSplat = splats[i]
+        var basis: Basis = Basis(splat.rotation).scaled(splat.scale)
+        var transform_offset: int = i * 4
+        transform_array[transform_offset] = basis.x
+        transform_array[transform_offset + 1] = basis.y
+        transform_array[transform_offset + 2] = basis.z
+        transform_array[transform_offset + 3] = splat.position
+        original_transforms[i] = Transform3D(basis, splat.position)
+
+    # Assigner au MultiMesh en deux écritures batch, sans setter par instance.
+    multimesh.transform_array = transform_array
     multimesh.custom_data_array = decode_result.cd_array
 
-    _original_transforms = decode_result.original_transforms
+    _original_transforms = original_transforms
 
     return count
 

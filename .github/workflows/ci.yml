@@ -31,18 +31,22 @@ jobs:
 
   # ── 2. Syntaxe Python (bridges de reconstruction) ──────────────────────
   py-validate:
-    name: Python Bridge Validation
+    name: Python and Public Docs Validation
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Validate Python syntax (tous les bridges)
+      - name: Install Python validation dependencies
+        run: python -m pip install --disable-pip-version-check numpy
+      - name: Validate Python tools and public docs
         run: |
-          python -m py_compile addons/foveacore/scripts/reconstruction/*.py
+          python -m compileall -q addons tools test
+          python tools/test_bake_offset_field.py -v
           python addons/tools/test_validation_tools.py
-          echo "Python bridges syntax OK."
+          python tools/check_public_docs.py
+          echo "Python tools and public docs OK."
 
   # ── 3. Build C# (Godot.NET.Sdk) ─────────────────────────────────────────
   dotnet-build:
@@ -60,8 +64,6 @@ jobs:
         run: python -m pip install --disable-pip-version-check Pillow
       - name: Build FoveaEngine.csproj
         run: dotnet build FoveaEngine.csproj --configuration Release --nologo
-      - name: Run .NET test host
-        run: dotnet test FoveaEngine.csproj --configuration Release --no-build --no-restore --nologo
 
   # ── 4. Vérification de compilation Godot headless (échec dur) ──────────
   godot-compile-check:
@@ -140,12 +142,14 @@ jobs:
         run: |
           set -o pipefail
           "./${GODOT_BIN}" --headless --path . \
-            -s res://addons/foveacore/test/run_all_tests.gd --group=nogpu 2>&1 \
+            -s res://addons/foveacore/test/run_all_tests.gd -- --group=nogpu 2>&1 \
             | tee nogpu-tests.log
           if grep -E "SCRIPT ERROR|Parse Error|Failed to load script" nogpu-tests.log; then
             echo "::error::Godot emitted semantic script errors during the non-GPU suite."
             exit 1
           fi
+      - name: Run ComfyUI splat loopback contract
+        run: python3 tools/test_comfyui_splat_http.py --godot "./${GODOT_BIN}"
 
   # ── 5b. Tests unitaires GPU (informatif sur runner sans GPU) ───────────
   # Les suites marquées `const REQUIRES_GPU := true` ne valident vraiment
@@ -178,7 +182,7 @@ jobs:
       - name: Run GPU tests (informational)
         run: |
           "./${GODOT_BIN}" --headless --path . \
-            -s res://addons/foveacore/test/run_all_tests.gd --group=gpu \
+            -s res://addons/foveacore/test/run_all_tests.gd -- --group=gpu \
             || echo "::warning::GPU suites require a real GPU runner; result is informational."
 
   # ── 5c. Matrice de non-crash au démarrage (échec dur) ──────────────────

@@ -1,0 +1,6 @@
+{
+  "local_backend": "127.0.0.1:1234",
+  "local_model": "your-local-model",
+  "daily_token_budget": 50000,
+  "routing": "auto"
+}

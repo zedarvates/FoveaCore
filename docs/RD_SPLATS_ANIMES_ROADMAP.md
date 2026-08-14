@@ -51,7 +51,7 @@ Prompt autonome à donner à un agent (Claude Code, Copilot…) pour implémente
 ```markdown
 # MISSION — Phase 7 : Dynamic Splat Animation pour FoveaCore (Godot 4.6+)
 
-Tu travailles sur FoveaCore (F:\foveaengine\fovea-engine), un renderer hybride
+Tu travailles à la racine du dépôt FoveaCore, un renderer hybride
 Mesh + 3D Gaussian Splatting pour Godot 4 avec pipeline GPU compute complet
 (culling `gpu_culling_compute.glsl`, tri bitonique `sort_bitonic_splats.glsl`,
 tile rasterizer `tile_rasterizer.glsl`) et rendu via

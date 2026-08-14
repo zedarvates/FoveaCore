@@ -1,10 +1,22 @@
+#![allow(clippy::result_large_err)] // Generated Godot bindings expose large error variants.
+
 use godot::prelude::*;
 use std::fs::File;
 use std::io::Read;
 use std::io::Write;
 use std::io::BufReader;
 
+const FOVEA_MAGIC: [u8; 8] = *b"FOVEA_3D";
+const FOVEA_VERSION: u32 = 2;
+const FOVEA_HEADER_SIZE: usize = 72;
+const COLOR_ENTRY_SIZE: usize = 12;
+const COVARIANCE_ENTRY_SIZE: usize = 32;
+const SPLAT_RECORD_SIZE: usize = 16;
+const MAX_COLOR_CODEBOOK_SIZE: u32 = 256;
+const MAX_COVARIANCE_CODEBOOK_SIZE: u32 = 1024;
+
 /// En-tête du fichier .fovea natif
+#[derive(Clone, Copy)]
 #[repr(C)]
 pub struct FoveaAssetHeader {
     pub magic: [u8; 8], // Doit correspondre à b"FOVEA_3D"
@@ -24,6 +36,170 @@ pub struct FoveaAssetHeader {
     pub mesh_size: u32,
     pub meta_offset: u32,
     pub meta_size: u32,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct FoveaLayout {
+    palette_start: usize,
+    palette_end: usize,
+    covariance_start: usize,
+    covariance_end: usize,
+    splats_start: usize,
+    splats_end: usize,
+}
+
+fn encode_header(header: &FoveaAssetHeader) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(FOVEA_HEADER_SIZE);
+    bytes.extend_from_slice(&header.magic);
+    for value in [
+        header.version,
+        header.splat_count,
+        header.color_codebook_size,
+        header.covar_codebook_size,
+    ] {
+        bytes.extend_from_slice(&value.to_le_bytes());
+    }
+    for value in header.aabb_min.into_iter().chain(header.aabb_max) {
+        bytes.extend_from_slice(&value.to_le_bytes());
+    }
+    for value in [
+        header.style_offset,
+        header.style_size,
+        header.mesh_offset,
+        header.mesh_size,
+        header.meta_offset,
+        header.meta_size,
+    ] {
+        bytes.extend_from_slice(&value.to_le_bytes());
+    }
+    debug_assert_eq!(bytes.len(), FOVEA_HEADER_SIZE);
+    bytes
+}
+
+fn read_u32_le(bytes: &[u8], cursor: &mut usize) -> Option<u32> {
+    let end = cursor.checked_add(4)?;
+    let value = u32::from_le_bytes(bytes.get(*cursor..end)?.try_into().ok()?);
+    *cursor = end;
+    Some(value)
+}
+
+fn read_f32_le(bytes: &[u8], cursor: &mut usize) -> Option<f32> {
+    let end = cursor.checked_add(4)?;
+    let value = f32::from_le_bytes(bytes.get(*cursor..end)?.try_into().ok()?);
+    *cursor = end;
+    Some(value)
+}
+
+fn decode_header(bytes: &[u8]) -> Option<FoveaAssetHeader> {
+    if bytes.len() < FOVEA_HEADER_SIZE {
+        return None;
+    }
+    let magic: [u8; 8] = bytes.get(0..8)?.try_into().ok()?;
+    let mut cursor = 8;
+    let version = read_u32_le(bytes, &mut cursor)?;
+    let splat_count = read_u32_le(bytes, &mut cursor)?;
+    let color_codebook_size = read_u32_le(bytes, &mut cursor)?;
+    let covar_codebook_size = read_u32_le(bytes, &mut cursor)?;
+    let aabb_min = [
+        read_f32_le(bytes, &mut cursor)?,
+        read_f32_le(bytes, &mut cursor)?,
+        read_f32_le(bytes, &mut cursor)?,
+    ];
+    let aabb_max = [
+        read_f32_le(bytes, &mut cursor)?,
+        read_f32_le(bytes, &mut cursor)?,
+        read_f32_le(bytes, &mut cursor)?,
+    ];
+    Some(FoveaAssetHeader {
+        magic,
+        version,
+        splat_count,
+        color_codebook_size,
+        covar_codebook_size,
+        aabb_min,
+        aabb_max,
+        style_offset: read_u32_le(bytes, &mut cursor)?,
+        style_size: read_u32_le(bytes, &mut cursor)?,
+        mesh_offset: read_u32_le(bytes, &mut cursor)?,
+        mesh_size: read_u32_le(bytes, &mut cursor)?,
+        meta_offset: read_u32_le(bytes, &mut cursor)?,
+        meta_size: read_u32_le(bytes, &mut cursor)?,
+    })
+}
+
+fn validated_layout(header: &FoveaAssetHeader, file_len: usize) -> Option<FoveaLayout> {
+    if header.magic != FOVEA_MAGIC
+        || header.version != FOVEA_VERSION
+        || header.splat_count == 0
+        || !(1..=MAX_COLOR_CODEBOOK_SIZE).contains(&header.color_codebook_size)
+        || !(1..=MAX_COVARIANCE_CODEBOOK_SIZE).contains(&header.covar_codebook_size)
+    {
+        return None;
+    }
+    if !header.aabb_min.iter().chain(header.aabb_max.iter()).all(|v| v.is_finite())
+        || header.aabb_min.iter().zip(header.aabb_max.iter()).any(|(min, max)| min > max)
+    {
+        return None;
+    }
+
+    let palette_start = FOVEA_HEADER_SIZE;
+    let palette_end = palette_start.checked_add(
+        (header.color_codebook_size as usize).checked_mul(COLOR_ENTRY_SIZE)?,
+    )?;
+    let covariance_start = palette_end;
+    let covariance_end = covariance_start.checked_add(
+        (header.covar_codebook_size as usize).checked_mul(COVARIANCE_ENTRY_SIZE)?,
+    )?;
+    let splats_start = covariance_end;
+    let splats_end = splats_start.checked_add(
+        (header.splat_count as usize).checked_mul(SPLAT_RECORD_SIZE)?,
+    )?;
+    if splats_end > file_len {
+        return None;
+    }
+
+    let mut optional_ranges: Vec<(usize, usize)> = Vec::new();
+    for (offset, size) in [
+        (header.style_offset, header.style_size),
+        (header.mesh_offset, header.mesh_size),
+        (header.meta_offset, header.meta_size),
+    ] {
+        if (offset == 0) != (size == 0) {
+            return None;
+        }
+        if offset == 0 {
+            continue;
+        }
+        let start = offset as usize;
+        let end = start.checked_add(size as usize)?;
+        if start < splats_end || end > file_len {
+            return None;
+        }
+        optional_ranges.push((start, end));
+    }
+    optional_ranges.sort_by_key(|range| range.0);
+    let mut previous_end = splats_end;
+    for (start, end) in optional_ranges {
+        if start < previous_end {
+            return None;
+        }
+        previous_end = end;
+    }
+
+    Some(FoveaLayout {
+        palette_start,
+        palette_end,
+        covariance_start,
+        covariance_end,
+        splats_start,
+        splats_end,
+    })
+}
+
+fn parse_layout(bytes: &[u8]) -> Option<(FoveaAssetHeader, FoveaLayout)> {
+    let header = decode_header(bytes)?;
+    let layout = validated_layout(&header, bytes.len())?;
+    Some((header, layout))
 }
 
 /// Structure GPU ultra-optimisée : EXACTEMENT 16 octets par splat !
@@ -49,7 +225,7 @@ pub struct FoveaPackedSplat {
     pub opacity: u8,          // Opacité (0-255)
     pub layer_id: u8,
     pub dither_seed: u8,      // Seed pour dithering stochastique
-    pub padding2: u8,         // Padding
+    pub brush_type: u8,       // GaussianSplat.BrushType (2 = Gaussian)
 }
 
 /// Représente une couleur RGB pour le K-Means
@@ -427,8 +603,8 @@ impl FoveaAssetLoader {
 
         // 5. Encodage GPU-Ready (16 octets/splat) et écriture binaire
         let header = FoveaAssetHeader {
-            magic: *b"FOVEA_3D",
-            version: 2,  // Version 2: inclut la palette de couleurs
+            magic: FOVEA_MAGIC,
+            version: FOVEA_VERSION,
             splat_count: raw_splats.len() as u32,
             color_codebook_size: color_k as u32,
             covar_codebook_size: actual_k as u32,
@@ -441,13 +617,8 @@ impl FoveaAssetLoader {
             meta_size: 0,
         };
         
-        let header_bytes: &[u8] = unsafe {
-            std::slice::from_raw_parts(
-                (&header as *const FoveaAssetHeader) as *const u8,
-                std::mem::size_of::<FoveaAssetHeader>()
-            )
-        };
-        if out_file.write_all(header_bytes).is_err() { return false; }
+        let header_bytes = encode_header(&header);
+        if out_file.write_all(&header_bytes).is_err() { return false; }
         
         // --- Écriture de la palette de couleurs (RGB, 3 floats par couleur) ---
         let mut palette_bytes = Vec::with_capacity(color_k * 12); // 3 * 4 bytes
@@ -482,7 +653,9 @@ impl FoveaAssetLoader {
                 opacity: op8,
                 layer_id: 0,
                 dither_seed: dither_seeds[i],
-                padding2: 0,
+                // Keep the binary contract aligned with GaussianSplat.BrushType:
+                // 0 = Stone, 2 = Gaussian.
+                brush_type: 2,
             });
         }
 
@@ -554,29 +727,19 @@ impl FoveaAssetLoader {
             return PackedByteArray::new();
         }
 
-        // 2. Vérification de sécurité mathématique (Magic Bytes)
-        if buffer.len() < 8 || &buffer[0..8] != b"FOVEA_3D" {
+        // 2. Validation complète de l'en-tête, des tailles et des sections.
+        let (_, layout) = match parse_layout(&buffer) {
+            Some(parsed) => parsed,
+            None => {
             godot_print!("FoveaEngine [Rust Error] : Fichier corrompu ou format invalide !");
             return PackedByteArray::new();
-        }
+            }
+        };
 
         godot_print!("FoveaEngine [Rust] : Asset chargé en RAM ({} octets). Prêt pour VRAM.", buffer.len());
 
-        let header: FoveaAssetHeader = unsafe { std::ptr::read(buffer.as_ptr() as *const _) };
-        let header_size = std::mem::size_of::<FoveaAssetHeader>();
-        let palette_size = (header.color_codebook_size as usize) * 12; // 3 floats * 4 bytes
-        let covar_size = (header.covar_codebook_size as usize) * 32;
-        
-        let splats_start = header_size + palette_size + covar_size;
-        let splats_end = splats_start + (header.splat_count as usize) * 16;
-
-        if buffer.len() < splats_end {
-            godot_print!("FoveaEngine [Rust Error] : Fichier trop court pour le nombre de splats !");
-            return PackedByteArray::new();
-        }
-
         // 3. On ne renvoie QUE les octets des splats pour le buffer du MultiMesh (Zéro décalage)
-        PackedByteArray::from(&buffer[splats_start..splats_end])
+        PackedByteArray::from(&buffer[layout.splats_start..layout.splats_end])
     }
     
     /// Lit l'en-tête binaire d'un fichier .fovea pour en extraire l'AABB (Bounding Box)
@@ -588,14 +751,20 @@ impl FoveaAssetLoader {
             Err(_) => return Aabb::new(Vector3::ZERO, Vector3::ZERO),
         };
 
-        let mut header_bytes = [0u8; std::mem::size_of::<FoveaAssetHeader>()];
+        let file_len = match file.metadata() {
+            Ok(metadata) => metadata.len() as usize,
+            Err(_) => return Aabb::new(Vector3::ZERO, Vector3::ZERO),
+        };
+        let mut header_bytes = [0u8; FOVEA_HEADER_SIZE];
         if file.read_exact(&mut header_bytes).is_err() {
             return Aabb::new(Vector3::ZERO, Vector3::ZERO);
         }
 
-        let header: FoveaAssetHeader = unsafe { std::ptr::read(header_bytes.as_ptr() as *const _) };
-
-        if &header.magic != b"FOVEA_3D" {
+        let header = match decode_header(&header_bytes) {
+            Some(header) if validated_layout(&header, file_len).is_some() => header,
+            _ => return Aabb::new(Vector3::ZERO, Vector3::ZERO),
+        };
+        if header.magic != FOVEA_MAGIC {
             return Aabb::new(Vector3::ZERO, Vector3::ZERO);
         }
 
@@ -615,19 +784,15 @@ impl FoveaAssetLoader {
         };
 
         let mut buffer = Vec::new();
-        if file.read_to_end(&mut buffer).is_err() || buffer.len() < 48 {
+        if file.read_to_end(&mut buffer).is_err() {
             return PackedByteArray::new();
         }
 
-        let header: FoveaAssetHeader = unsafe { std::ptr::read(buffer.as_ptr() as *const _) };
-        let header_size = std::mem::size_of::<FoveaAssetHeader>();
-        let palette_size = (header.color_codebook_size as usize) * 12;
-
-        if buffer.len() < header_size + palette_size {
-            return PackedByteArray::new();
-        }
-
-        PackedByteArray::from(&buffer[header_size..header_size + palette_size])
+        let (_, layout) = match parse_layout(&buffer) {
+            Some(parsed) => parsed,
+            None => return PackedByteArray::new(),
+        };
+        PackedByteArray::from(&buffer[layout.palette_start..layout.palette_end])
     }
     
     /// Lit spécifiquement la palette de covariance (K-Means Codebook) pour le shader
@@ -640,20 +805,15 @@ impl FoveaAssetLoader {
         };
 
         let mut buffer = Vec::new();
-        if file.read_to_end(&mut buffer).is_err() || buffer.len() < 48 {
+        if file.read_to_end(&mut buffer).is_err() {
             return PackedByteArray::new();
         }
 
-        let header: FoveaAssetHeader = unsafe { std::ptr::read(buffer.as_ptr() as *const _) };
-        let header_size = std::mem::size_of::<FoveaAssetHeader>();
-        let palette_size = (header.color_codebook_size as usize) * 12;
-        let covar_size = (header.covar_codebook_size as usize) * 32;
-
-        if buffer.len() < header_size + palette_size + covar_size {
-            return PackedByteArray::new();
-        }
-
-        PackedByteArray::from(&buffer[header_size + palette_size..header_size + palette_size + covar_size])
+        let (_, layout) = match parse_layout(&buffer) {
+            Some(parsed) => parsed,
+            None => return PackedByteArray::new(),
+        };
+        PackedByteArray::from(&buffer[layout.covariance_start..layout.covariance_end])
     }
 
     /// Alias de compatibilité pour load_covar_codebook appelé par GDScript
@@ -868,5 +1028,93 @@ impl FoveaAssetLoader {
         dict.set("culled_occlusion", culled_occlusion);
         
         dict
+    }
+}
+
+#[cfg(test)]
+mod format_tests {
+    use super::*;
+
+    fn canonical_header() -> FoveaAssetHeader {
+        FoveaAssetHeader {
+            magic: FOVEA_MAGIC,
+            version: FOVEA_VERSION,
+            splat_count: 1,
+            color_codebook_size: 1,
+            covar_codebook_size: 1,
+            aabb_min: [0.0, 0.0, 0.0],
+            aabb_max: [1.0, 1.0, 1.0],
+            style_offset: 0,
+            style_size: 0,
+            mesh_offset: 0,
+            mesh_size: 0,
+            meta_offset: 0,
+            meta_size: 0,
+        }
+    }
+
+    fn canonical_file_bytes() -> Vec<u8> {
+        let mut bytes = encode_header(&canonical_header());
+        bytes.resize(
+            FOVEA_HEADER_SIZE + COLOR_ENTRY_SIZE + COVARIANCE_ENTRY_SIZE + SPLAT_RECORD_SIZE,
+            0,
+        );
+        bytes
+    }
+
+    #[test]
+    fn canonical_header_round_trips_as_little_endian() {
+        let header = canonical_header();
+        let encoded = encode_header(&header);
+        assert_eq!(encoded.len(), FOVEA_HEADER_SIZE);
+        assert_eq!(&encoded[0..8], &FOVEA_MAGIC);
+        assert_eq!(u32::from_le_bytes(encoded[8..12].try_into().unwrap()), FOVEA_VERSION);
+
+        let decoded = decode_header(&encoded).expect("canonical header decodes");
+        assert_eq!(decoded.magic, FOVEA_MAGIC);
+        assert_eq!(decoded.version, FOVEA_VERSION);
+        assert_eq!(decoded.splat_count, 1);
+    }
+
+    #[test]
+    fn canonical_layout_has_exact_section_boundaries() {
+        let bytes = canonical_file_bytes();
+        let (_, layout) = parse_layout(&bytes).expect("canonical layout validates");
+        assert_eq!(layout.palette_start, FOVEA_HEADER_SIZE);
+        assert_eq!(layout.palette_end, FOVEA_HEADER_SIZE + COLOR_ENTRY_SIZE);
+        assert_eq!(layout.covariance_end, FOVEA_HEADER_SIZE + COLOR_ENTRY_SIZE + COVARIANCE_ENTRY_SIZE);
+        assert_eq!(layout.splats_end, bytes.len());
+        assert_eq!(std::mem::size_of::<FoveaPackedSplat>(), SPLAT_RECORD_SIZE);
+    }
+
+    #[test]
+    fn corrupted_headers_are_rejected() {
+        let mut unsupported_version = canonical_file_bytes();
+        unsupported_version[8..12].copy_from_slice(&(FOVEA_VERSION + 1).to_le_bytes());
+        assert!(parse_layout(&unsupported_version).is_none());
+
+        let mut section_inside_payload = canonical_file_bytes();
+        section_inside_payload[48..52].copy_from_slice(&(FOVEA_HEADER_SIZE as u32).to_le_bytes());
+        section_inside_payload[52..56].copy_from_slice(&1u32.to_le_bytes());
+        assert!(parse_layout(&section_inside_payload).is_none());
+
+        let truncated = canonical_file_bytes()[0..FOVEA_HEADER_SIZE - 1].to_vec();
+        assert!(parse_layout(&truncated).is_none());
+    }
+
+    #[test]
+    fn gdscript_generated_golden_fixture_is_accepted() {
+        // The fixture is generated through FoveaAssetWriter in
+        // test/fixtures/generate_fixtures.gd. Keeping this compile-time input
+        // makes the GDScript writer -> Rust reader contract deterministic.
+        let bytes = include_bytes!("../../../../test/fixtures/reference_3dgs.fovea");
+        let (header, layout) = parse_layout(bytes).expect("GDScript golden fixture validates");
+
+        assert_eq!(header.splat_count, 8_000);
+        assert_eq!(layout.splats_end, header.meta_offset as usize);
+        assert_eq!(header.style_offset, 0);
+        assert_eq!(header.style_size, 0);
+        assert_eq!(header.meta_size as usize, bytes.len() - layout.splats_end);
+        assert!(header.meta_size > 0);
     }
 }

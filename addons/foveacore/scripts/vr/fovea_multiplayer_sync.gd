@@ -10,7 +10,15 @@ const NetworkInterpolatorScript = preload("res://addons/foveacore/scripts/networ
 
 @export var local_rig: FoveaVRRig = null
 @export var remote_rig_scene: PackedScene = null
-@export var sync_rate_hz: float = 30.0
+@export_range(1.0, 120.0, 1.0) var sync_rate_hz: float = 30.0
+@export_group("Network Safety")
+@export var allow_remote_brush_edits: bool = false
+@export var editable_root_path: NodePath = NodePath("..")
+@export_range(0.01, 100.0, 0.01) var max_remote_brush_radius: float = 5.0
+@export_range(1, 240, 1) var max_pose_updates_per_second: int = 90
+@export_range(1, 120, 1) var max_brush_updates_per_second: int = 30
+@export_range(1.0, 1000.0, 1.0) var max_pose_speed: float = 100.0
+@export_range(10.0, 100000.0, 10.0) var max_world_coordinate: float = 10000.0
 
 var _time_since_last_sync: float = 0.0
 
@@ -32,6 +40,8 @@ var _prev_left_hand_pos := Vector3.ZERO
 var _prev_right_hand_pos := Vector3.ZERO
 var _last_local_pose_time := 0.0
 var _cleanup_timer := 0.0
+var _pose_rate_windows: Dictionary = {}
+var _brush_rate_windows: Dictionary = {}
 
 
 func _enter_tree() -> void:
@@ -82,7 +92,7 @@ func _physics_process(delta: float) -> void:
 		return
 		
 	_time_since_last_sync += delta
-	var interval := 1.0 / sync_rate_hz
+	var interval: float = 1.0 / maxf(sync_rate_hz, 1.0)
 	if _time_since_last_sync >= interval:
 		_time_since_last_sync = 0.0
 		_send_local_pose()
@@ -173,11 +183,32 @@ func update_peer_pose(
 	right_pos: Vector3, right_rot: Quaternion, right_vel: Vector3,
 	timestamp: float
 ) -> void:
-	var sender_id := multiplayer.get_remote_sender_id()
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	var is_remote_call: bool = sender_id != 0
 	if sender_id == 0:
 		# Fallback for local unit testing / direct calls
 		sender_id = 2
-		
+
+	if is_remote_call and not multiplayer.get_peers().has(sender_id):
+		push_warning("FoveaMultiplayerSync: Rejected pose from unknown peer %d." % sender_id)
+		return
+	if not _consume_rate_limit(_pose_rate_windows, sender_id, max_pose_updates_per_second):
+		push_warning("FoveaMultiplayerSync: Pose rate limit exceeded by peer %d." % sender_id)
+		return
+	if not _is_valid_pose_payload(
+		head_pos, head_rot, head_vel,
+		left_pos, left_rot, left_vel,
+		right_pos, right_rot, right_vel,
+		timestamp
+	):
+		push_warning("FoveaMultiplayerSync: Rejected invalid pose payload from peer %d." % sender_id)
+		return
+
+	var receive_time: float = Time.get_unix_time_from_system()
+	var snapshot_time: float = timestamp
+	if absf(timestamp - receive_time) > 5.0:
+		snapshot_time = receive_time
+
 	# Ensure rig is spawned
 	if not _remote_rigs.has(sender_id):
 		_spawn_remote_rig(sender_id)
@@ -186,25 +217,25 @@ func update_peer_pose(
 	var head_snap = NetworkInterpolatorScript.NetworkSnapshot.new()
 	head_snap.player_id = sender_id
 	head_snap.position = head_pos
-	head_snap.rotation = head_rot
+	head_snap.rotation = head_rot.normalized()
 	head_snap.velocity = head_vel
-	head_snap.timestamp = timestamp
+	head_snap.timestamp = snapshot_time
 	_head_interpolator.receive_snapshot(head_snap)
 	
 	var left_snap = NetworkInterpolatorScript.NetworkSnapshot.new()
 	left_snap.player_id = sender_id
 	left_snap.position = left_pos
-	left_snap.rotation = left_rot
+	left_snap.rotation = left_rot.normalized()
 	left_snap.velocity = left_vel
-	left_snap.timestamp = timestamp
+	left_snap.timestamp = snapshot_time
 	_left_hand_interpolator.receive_snapshot(left_snap)
 	
 	var right_snap = NetworkInterpolatorScript.NetworkSnapshot.new()
 	right_snap.player_id = sender_id
 	right_snap.position = right_pos
-	right_snap.rotation = right_rot
+	right_snap.rotation = right_rot.normalized()
 	right_snap.velocity = right_vel
-	right_snap.timestamp = timestamp
+	right_snap.timestamp = snapshot_time
 	_right_hand_interpolator.receive_snapshot(right_snap)
 
 
@@ -315,6 +346,8 @@ func _on_peer_connected(peer_id: int) -> void:
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	_despawn_remote_rig(peer_id)
+	_pose_rate_windows.erase(peer_id)
+	_brush_rate_windows.erase(peer_id)
 
 
 func _despawn_remote_rig(peer_id: int) -> void:
@@ -354,21 +387,85 @@ func _connect_brush(brush: SplatBrushEngine) -> void:
 func _on_brush_applied(splattable_path: NodePath, global_position: Vector3, mode: int, radius: float, color: Color, opacity: float, flow_dir: Vector3, brush: SplatBrushEngine) -> void:
 	if not multiplayer or not multiplayer.has_multiplayer_peer():
 		return
-		
-	# Broadcast brush stroke
-	replicate_brush_stroke.rpc(splattable_path, global_position, mode, radius, color, opacity, flow_dir)
+
+	if multiplayer.is_server():
+		receive_brush_stroke.rpc(
+			splattable_path, global_position, mode, radius, color, opacity, flow_dir,
+			multiplayer.get_unique_id()
+		)
+	else:
+		request_brush_stroke.rpc_id(
+			1, splattable_path, global_position, mode, radius, color, opacity, flow_dir
+		)
 
 
-@rpc("any_peer", "call_local", "reliable")
+## Compatibility entry point for local tools and unit tests. Network peers must
+## use request_brush_stroke; this method intentionally is not exposed as an RPC.
 func replicate_brush_stroke(
-	splattable_path: NodePath, global_position: Vector3, mode: int, 
+	splattable_path: NodePath, global_position: Vector3, mode: int,
 	radius: float, color: Color, opacity: float, flow_dir: Vector3
 ) -> void:
-	var splattable := get_node_or_null(splattable_path) as FoveaSplattable
-	if splattable == null:
-		push_warning("FoveaMultiplayerSync: Received brush stroke for invalid splattable: %s" % str(splattable_path))
+	if not _is_valid_brush_payload(splattable_path, global_position, mode, radius, color, opacity, flow_dir):
+		push_warning("FoveaMultiplayerSync: Rejected invalid local brush payload.")
 		return
-		
+	_apply_brush_stroke(splattable_path, global_position, mode, radius, color, opacity, flow_dir)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_brush_stroke(
+	splattable_path: NodePath, global_position: Vector3, mode: int,
+	radius: float, color: Color, opacity: float, flow_dir: Vector3
+) -> void:
+	if not multiplayer.is_server():
+		push_warning("FoveaMultiplayerSync: Non-authority peer rejected a brush request.")
+		return
+
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id <= 0 or not multiplayer.get_peers().has(sender_id):
+		push_warning("FoveaMultiplayerSync: Rejected brush request from unknown peer.")
+		return
+	if not allow_remote_brush_edits:
+		push_warning("FoveaMultiplayerSync: Remote brush edits are disabled.")
+		return
+	if not _consume_rate_limit(_brush_rate_windows, sender_id, max_brush_updates_per_second):
+		push_warning("FoveaMultiplayerSync: Brush rate limit exceeded by peer %d." % sender_id)
+		return
+	if not _is_valid_brush_payload(splattable_path, global_position, mode, radius, color, opacity, flow_dir):
+		push_warning("FoveaMultiplayerSync: Rejected invalid brush payload from peer %d." % sender_id)
+		return
+	if not _apply_brush_stroke(splattable_path, global_position, mode, radius, color, opacity, flow_dir):
+		return
+
+	receive_brush_stroke.rpc(
+		splattable_path, global_position, mode, radius, color, opacity, flow_dir,
+		sender_id
+	)
+
+
+@rpc("authority", "call_remote", "reliable")
+func receive_brush_stroke(
+	splattable_path: NodePath, global_position: Vector3, mode: int,
+	radius: float, color: Color, opacity: float, flow_dir: Vector3,
+	origin_peer_id: int
+) -> void:
+	# The originating client already applied its local brush optimistically.
+	if multiplayer.get_unique_id() == origin_peer_id:
+		return
+	if not _is_valid_brush_payload(splattable_path, global_position, mode, radius, color, opacity, flow_dir):
+		push_warning("FoveaMultiplayerSync: Authority sent an invalid brush payload.")
+		return
+	_apply_brush_stroke(splattable_path, global_position, mode, radius, color, opacity, flow_dir)
+
+
+func _apply_brush_stroke(
+	splattable_path: NodePath, global_position: Vector3, mode: int,
+	radius: float, color: Color, opacity: float, flow_dir: Vector3
+) -> bool:
+	var splattable: FoveaSplattable = _resolve_editable_splattable(splattable_path)
+	if splattable == null:
+		push_warning("FoveaMultiplayerSync: Brush target is outside editable_root_path: %s" % str(splattable_path))
+		return false
+
 	# Apply locally without triggering signals
 	var temp_brush := SplatBrushEngine.new()
 	temp_brush.is_replicating = true
@@ -381,6 +478,89 @@ func replicate_brush_stroke(
 	add_child(temp_brush)
 	var success := temp_brush.apply_brush(splattable, global_position)
 	temp_brush.queue_free()
-	
+
 	if success and splattable.has_method("_update_local_renderer"):
 		splattable.call("_update_local_renderer")
+	return success
+
+
+func _resolve_editable_splattable(splattable_path: NodePath) -> FoveaSplattable:
+	var splattable: FoveaSplattable = get_node_or_null(splattable_path) as FoveaSplattable
+	var editable_root: Node = get_node_or_null(editable_root_path)
+	if splattable == null or editable_root == null:
+		return null
+	if splattable != editable_root and not editable_root.is_ancestor_of(splattable):
+		return null
+	return splattable
+
+
+func _is_valid_pose_payload(
+	head_pos: Vector3, head_rot: Quaternion, head_vel: Vector3,
+	left_pos: Vector3, left_rot: Quaternion, left_vel: Vector3,
+	right_pos: Vector3, right_rot: Quaternion, right_vel: Vector3,
+	timestamp: float
+) -> bool:
+	if not is_finite(timestamp):
+		return false
+	var positions: Array[Vector3] = [head_pos, left_pos, right_pos]
+	var velocities: Array[Vector3] = [head_vel, left_vel, right_vel]
+	var rotations: Array[Quaternion] = [head_rot, left_rot, right_rot]
+	for position: Vector3 in positions:
+		if not _is_finite_vector3(position) or _max_abs_component(position) > max_world_coordinate:
+			return false
+	for velocity: Vector3 in velocities:
+		if not _is_finite_vector3(velocity) or velocity.length() > max_pose_speed:
+			return false
+	for rotation: Quaternion in rotations:
+		if not _is_finite_quaternion(rotation) or rotation.length_squared() <= 0.000001:
+			return false
+	return true
+
+
+func _is_valid_brush_payload(
+	splattable_path: NodePath, global_position: Vector3, mode: int,
+	radius: float, color: Color, opacity: float, flow_dir: Vector3
+) -> bool:
+	if splattable_path.is_empty() or str(splattable_path).length() > 512:
+		return false
+	if not _is_finite_vector3(global_position) or _max_abs_component(global_position) > max_world_coordinate:
+		return false
+	if mode < SplatBrushEngine.BrushMode.PAINT or mode > SplatBrushEngine.BrushMode.SCALE:
+		return false
+	if not is_finite(radius) or radius <= 0.0 or radius > max_remote_brush_radius:
+		return false
+	if not _is_finite_color(color) or not is_finite(opacity) or opacity < 0.0 or opacity > 1.0:
+		return false
+	if not _is_finite_vector3(flow_dir) or flow_dir.length() > max_pose_speed:
+		return false
+	return true
+
+
+func _consume_rate_limit(windows: Dictionary, peer_id: int, max_events: int) -> bool:
+	if peer_id <= 0:
+		return true
+	var now_msec: int = Time.get_ticks_msec()
+	var state: Dictionary = windows.get(peer_id, {"start_msec": now_msec, "count": 0})
+	if now_msec - int(state.get("start_msec", now_msec)) >= 1000:
+		state = {"start_msec": now_msec, "count": 0}
+	if int(state.get("count", 0)) >= maxi(max_events, 1):
+		return false
+	state["count"] = int(state.get("count", 0)) + 1
+	windows[peer_id] = state
+	return true
+
+
+static func _is_finite_vector3(value: Vector3) -> bool:
+	return is_finite(value.x) and is_finite(value.y) and is_finite(value.z)
+
+
+static func _is_finite_quaternion(value: Quaternion) -> bool:
+	return is_finite(value.x) and is_finite(value.y) and is_finite(value.z) and is_finite(value.w)
+
+
+static func _is_finite_color(value: Color) -> bool:
+	return is_finite(value.r) and is_finite(value.g) and is_finite(value.b) and is_finite(value.a)
+
+
+static func _max_abs_component(value: Vector3) -> float:
+	return maxf(absf(value.x), maxf(absf(value.y), absf(value.z)))
