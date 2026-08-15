@@ -10,7 +10,8 @@ This checklist separates implemented prototypes from evidence required before ch
 - [x] Initialize `botte-secrete`, verify its clean `9d184b5` checkout, and confirm that commit is reachable from the public submodule URL.
 - [ ] Rotate the OpenAI credential reported by Gitleaks in historical `.kilocode/task_history.json` at commit `c2e6095`.
 - [x] Rehearse the `.kilocode` purge in a disposable mirror; the rewritten 136-commit history passes Gitleaks with no leaks.
-- [ ] Purge `.kilocode` from Git history and rerun Gitleaks; the current 141-commit history scan reports one leak.
+- [x] Purge `.kilocode` from the sanitized history and rerun Gitleaks; the clean public candidate scans 148 commits with no leaks and has zero reachable `.kilocode` objects.
+- [ ] Replace every public remote branch and tag with the sanitized refs, then verify a fresh remote clone; the current remotes still expose the old history.
 - [ ] Reconcile the current dirty worktree into a focused release branch without staging unrelated local changes.
 
 ## Feature evidence gates
