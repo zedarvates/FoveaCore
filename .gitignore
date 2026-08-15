@@ -11,10 +11,18 @@ __pycache__/
 # Rust build artifacts
 addons/foveacore/rust/target/
 
+# Native build intermediates (the prebuilt runtime DLL remains versioned)
+/addons/foveacore/gdextension/.sconsign.dblite
+/addons/foveacore/gdextension/src/*.obj
+/addons/foveacore/gdextension/src/*.obj.import
+/addons/foveacore/gdextension/bin/*.exp
+/addons/foveacore/gdextension/bin/*.lib
+
 # Audit exports
 audit_foveacore.diff
 
 # Local agent integrations and generated reports
+/.codex/
 /.mcp.json
 /.claude/settings.json
 /.botte/config.json
