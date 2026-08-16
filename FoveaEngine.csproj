@@ -5,7 +5,11 @@
     <TargetFramework Condition=" '$(GodotTargetPlatform)' == 'ios' ">net9.0</TargetFramework>
     <EnableDynamicLoading>true</EnableDynamicLoading>
   </PropertyGroup>
-  <ItemGroup>
+  <!-- Release still compiles editor scripts registered by the Godot project. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <NoWarn>$(NoWarn);NETSDK1023</NoWarn>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(Configuration)' == 'Release'">
     <PackageReference Include="GodotSharpEditor" Version="4.7.0-dev.5" PrivateAssets="all" />
   </ItemGroup>
 </Project>

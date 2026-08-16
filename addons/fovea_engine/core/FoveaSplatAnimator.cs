@@ -102,8 +102,15 @@ namespace FoveaEngine
             int countB = MorphTargetResource.SplatCount;
             int maxCount = Math.Max(countA, countB);
 
-            // Re-allocate mutable resource arrays only when shape/count changes
-            if (_animatedResource.Positions == null || _animatedResource.Positions.Length != maxCount)
+            // Keep every derived attribute aligned with the splat count. Normals
+            // are optional on source assets, so cloning a source may leave this
+            // array empty even when Positions already has the right size.
+            if (_animatedResource.Positions == null || _animatedResource.Positions.Length != maxCount
+                || _animatedResource.RotationsFlat == null || _animatedResource.RotationsFlat.Length != maxCount * 4
+                || _animatedResource.Scales == null || _animatedResource.Scales.Length != maxCount
+                || _animatedResource.Colors == null || _animatedResource.Colors.Length != maxCount
+                || _animatedResource.Opacities == null || _animatedResource.Opacities.Length != maxCount
+                || _animatedResource.Normals == null || _animatedResource.Normals.Length != maxCount)
             {
                 _animatedResource.Positions = new Vector3[maxCount];
                 _animatedResource.RotationsFlat = new float[maxCount * 4];

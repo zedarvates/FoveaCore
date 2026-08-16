@@ -57,11 +57,8 @@ namespace FoveaEngine
 
         private void ExitTest(int exitCode)
         {
-            if (OS.HasFeature("headless") || System.Environment.CommandLine.Contains("--quit"))
-            {
-                GD.Print($"Exiting with code {exitCode}.");
-                GetTree().Quit(exitCode);
-            }
+            GD.Print($"Exiting with code {exitCode}.");
+            GetTree().Quit(exitCode);
         }
 
         private bool TestResourceAndSorting()

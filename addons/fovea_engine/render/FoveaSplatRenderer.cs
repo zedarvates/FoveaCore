@@ -316,8 +316,7 @@ namespace FoveaEngine
 
             FoveaSplatDecoder.DecodeParallel(_packedBytes, count, aabbMin, aabbMax, xfArray, cdArray, origTransforms);
 
-            Multimesh.TransformArray = xfArray;
-            Multimesh.CustomDataArray = cdArray;
+            UploadInstanceBuffer(xfArray, cdArray);
         }
 
         private void UpdateGPUCulling(Camera3D camera)
@@ -365,8 +364,7 @@ namespace FoveaEngine
 
                             FoveaSplatDecoder.DecodeParallel(culledBytes, survivingCount, aabbMin, aabbMax, xfArray, cdArray, origTransforms);
 
-                            Multimesh.TransformArray = xfArray;
-                            Multimesh.CustomDataArray = cdArray;
+                            UploadInstanceBuffer(xfArray, cdArray);
                         }
                     }
                 }
@@ -376,6 +374,46 @@ namespace FoveaEngine
                 GD.PushError($"FoveaSplatRenderer: GPU Culling process failed, rendering direct. Error: {ex.Message}");
                 RenderSplatsDirect();
             }
+        }
+
+        private void UploadInstanceBuffer(Vector3[] transforms, Color[] customData)
+        {
+            const int TransformFloatCount = 12;
+            const int CustomDataFloatCount = 4;
+            const int FloatsPerInstance = TransformFloatCount + CustomDataFloatCount;
+
+            if (transforms.Length != customData.Length * 4)
+            {
+                GD.PushError("FoveaSplatRenderer: MultiMesh transform/custom-data count mismatch.");
+                return;
+            }
+
+            var buffer = new float[customData.Length * FloatsPerInstance];
+            for (int instanceIndex = 0; instanceIndex < customData.Length; instanceIndex++)
+            {
+                int transformIndex = instanceIndex * 4;
+                int bufferIndex = instanceIndex * FloatsPerInstance;
+
+                CopyVector3(transforms[transformIndex], buffer, bufferIndex);
+                CopyVector3(transforms[transformIndex + 1], buffer, bufferIndex + 3);
+                CopyVector3(transforms[transformIndex + 2], buffer, bufferIndex + 6);
+                CopyVector3(transforms[transformIndex + 3], buffer, bufferIndex + 9);
+
+                Color value = customData[instanceIndex];
+                buffer[bufferIndex + TransformFloatCount] = value.R;
+                buffer[bufferIndex + TransformFloatCount + 1] = value.G;
+                buffer[bufferIndex + TransformFloatCount + 2] = value.B;
+                buffer[bufferIndex + TransformFloatCount + 3] = value.A;
+            }
+
+            Multimesh.Buffer = buffer;
+        }
+
+        private static void CopyVector3(Vector3 value, float[] destination, int offset)
+        {
+            destination[offset] = value.X;
+            destination[offset + 1] = value.Y;
+            destination[offset + 2] = value.Z;
         }
 
         private void SetDefaultCovarTexture()

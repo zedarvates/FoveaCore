@@ -7,7 +7,7 @@ namespace FoveaEngine
     public partial class FoveaSplatEditorPlugin : EditorPlugin
     {
         private FoveaSplatImporter _importer;
-        private Control _dock;
+        private EditorDock _dock;
 
         private FoveaSplatSelectionTool _selectionTool = new FoveaSplatSelectionTool();
         private FoveaSplatBrushTool _brushTool = new FoveaSplatBrushTool();
@@ -47,12 +47,20 @@ namespace FoveaEngine
                 var dockScene = GD.Load<PackedScene>("res://addons/fovea_engine/ui/FoveaSplatManagerUI.tscn");
                 if (dockScene != null)
                 {
-                    _dock = (Control)dockScene.Instantiate();
-                    if (_dock is FoveaSplatManagerUI managerUI)
+                    var dockContent = (Control)dockScene.Instantiate();
+                    if (dockContent is FoveaSplatManagerUI managerUI)
                     {
                         managerUI.InitializePlugin(this);
                     }
-                    AddControlToDock(DockSlot.LeftUr, _dock);
+
+                    _dock = new EditorDock
+                    {
+                        Title = "Fovea Splats",
+                        DefaultSlot = EditorDock.DockSlot.LeftUr,
+                        AvailableLayouts = EditorDock.DockLayout.All,
+                    };
+                    _dock.AddChild(dockContent);
+                    AddDock(_dock);
                     GD.Print("FoveaSplatEditorPlugin: Splat Manager UI Dock registered.");
                 }
             }
@@ -82,7 +90,7 @@ namespace FoveaEngine
             // Remove UI Dock
             if (_dock != null)
             {
-                RemoveControlFromDocks(_dock);
+                RemoveDock(_dock);
                 _dock.QueueFree();
                 _dock = null;
             }
@@ -95,7 +103,7 @@ namespace FoveaEngine
             if (ActiveEditMode == EditMode.None) return (int)AfterGuiInput.Pass;
 
             // Get selected node in editor
-            var selection = GetEditorInterface().GetSelection();
+            var selection = EditorInterface.Singleton.GetSelection();
             var selectedNodes = selection.GetSelectedNodes();
             if (selectedNodes.Count == 0 || !(selectedNodes[0] is FoveaSplatNode3D splatNode))
             {
