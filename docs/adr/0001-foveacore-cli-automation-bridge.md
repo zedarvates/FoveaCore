@@ -16,7 +16,7 @@ private project infrastructure.
 ## Decision
 
 FoveaCore exposes a small GDScript automation contract at
-`scripts/integration/fovea_cli_bridge.gd`. Contract version 1 supports bounded
+`addons/foveacore/scripts/integration/fovea_cli_bridge.gd`. Contract version 1 supports bounded
 status, validation, and unsaved node creation. It starts no listener, writes no
 files, and calls no model provider.
 
