@@ -287,9 +287,6 @@ An open-source WebGL-based viewer for rendering massive, city-scale environments
 
 ## Related Projects
 
-- [Hermes Brain](https://github.com/zedarvates/hermes-brain) — Cognitive architecture
-- [CogniARC](https://github.com/zedarvates/cogniarc) — ARC-AGI-3 solver
-- [Ultra Pipeline Framework](https://github.com/zedarvates/ultra-pipeline-framework) — DAG orchestration
 
 ---
 
@@ -308,4 +305,4 @@ MIT
 
 ---
 
-[![Donate](https://img.shields.io/badge/☕%20Soutenir-BTC%20%7C%20ETH-orange)](DONATE.md)
+
