@@ -151,22 +151,9 @@ namespace FoveaEngine
             BBox = new Aabb(min, max - min);
         }
 
-        private static uint ExpandBits(uint v)
-        {
-            v &= 0x000003ff;                  
-            v = (v | (v << 16)) & 0x030000ff; 
-            v = (v | (v << 8))  & 0x0300f00f; 
-            v = (v | (v << 4))  & 0x030c30c3; 
-            v = (v | (v << 2))  & 0x09249249; 
-            return v;
-        }
-
         public static uint CalculateMorton3D(float x, float y, float z)
         {
-            uint ux = (uint)Mathf.Clamp(x * 1023.0f, 0.0f, 1023.0f);
-            uint uy = (uint)Mathf.Clamp(y * 1023.0f, 0.0f, 1023.0f);
-            uint uz = (uint)Mathf.Clamp(z * 1023.0f, 0.0f, 1023.0f);
-            return (ExpandBits(ux) << 2) | (ExpandBits(uy) << 1) | ExpandBits(uz);
+            return FoveaMorton.EncodeNormalized(x, y, z);
         }
 
         /// <summary>
