@@ -107,6 +107,19 @@ jobs:
             echo "::error::Godot emitted compile/load errors that the in-process loader could not count."
             exit 1
           fi
+      - name: Run C# Gaussian Splat runtime suite
+        run: |
+          set -o pipefail
+          "./${GODOT_BIN}" --headless --xr-mode off --path . \
+            --scene res://test/test_fovea_splat.tscn 2>&1 | tee csharp-runtime.log
+          if ! grep -F "=== ALL GAUSSIAN SPLAT SUITE TESTS PASSED ===" csharp-runtime.log; then
+            echo "::error::The C# Gaussian Splat runtime suite did not report success."
+            exit 1
+          fi
+          if grep -E "Test Run CRASHED|GAUSSIAN SPLAT SUITE TESTS FAILED|SCRIPT ERROR|Parse Error" csharp-runtime.log; then
+            echo "::error::The C# Gaussian Splat runtime suite emitted a fatal diagnostic."
+            exit 1
+          fi
 
   # ── 5a. Tests unitaires non-GPU (échec dur) ────────────────────────────
   # Valident la logique pure (parsing, .fovea, math, cleaner...) sans
@@ -378,9 +391,32 @@ jobs:
       - name: Build C++ extension
         working-directory: addons/foveacore/gdextension
         run: scons platform=windows target=template_release arch=x86_64
+      - name: Download Godot Mono for C++ runtime smoke
+        shell: pwsh
+        run: |
+          Invoke-WebRequest `
+            -Uri "https://github.com/godotengine/godot-builds/releases/download/4.7-dev5/Godot_v4.7-dev5_mono_win64.zip" `
+            -OutFile godot-cpp-smoke.zip
+          Expand-Archive -LiteralPath godot-cpp-smoke.zip -DestinationPath godot-cpp-smoke
+          $godot = Get-ChildItem -Path godot-cpp-smoke -Filter '*_console.exe' -Recurse |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $godot) { throw 'Godot Mono console executable was not found in the archive.' }
+          "GODOT_CPP_SMOKE_BIN=$godot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Smoke-test C++ extension load
+        shell: pwsh
+        run: |
+          & $env:GODOT_CPP_SMOKE_BIN --headless --xr-mode off --path . `
+            -s res://addons/foveacore/gdextension/test_cpp_extension_load.gd
+          if ($LASTEXITCODE -ne 0) { throw "C++ extension smoke failed with exit code $LASTEXITCODE." }
+      - name: Verify C++ extension fails closed when the binary is unavailable
+        shell: pwsh
+        run: |
+          & $env:GODOT_CPP_SMOKE_BIN --headless --xr-mode off --path . `
+            -s res://addons/foveacore/gdextension/test_cpp_extension_load.gd -- --force-missing-binary
+          if ($LASTEXITCODE -ne 1) { throw "C++ missing-binary control exited with $LASTEXITCODE instead of 1." }
       - name: Upload C++ extension
         uses: actions/upload-artifact@v4
         with:
           name: foveacore-cpp-windows-x86_64
-          path: addons/foveacore/gdextension/bin/foveacore.dll
+          path: addons/foveacore/gdextension/bin/foveacore_cpp.dll
           if-no-files-found: error

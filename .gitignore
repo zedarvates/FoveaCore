@@ -17,6 +17,7 @@ addons/foveacore/rust/target/
 /addons/foveacore/gdextension/src/*.obj.import
 /addons/foveacore/gdextension/bin/*.exp
 /addons/foveacore/gdextension/bin/*.lib
+/addons/foveacore/gdextension/bin/foveacore_cpp.dll
 
 # Audit exports
 audit_foveacore.diff

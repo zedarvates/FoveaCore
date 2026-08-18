@@ -1,5 +1,3 @@
-import os
-
 # Configuration
 env = Environment()
 
@@ -8,6 +6,10 @@ godot_cpp_path = "#godot-cpp"
 target = ARGUMENTS.get("target", "template_release")
 platform = ARGUMENTS.get("platform", "windows")
 arch = ARGUMENTS.get("arch", "x86_64")
+
+if platform != "windows" or target != "template_release" or arch != "x86_64":
+    print("Unsupported C++ target: only windows/template_release/x86_64 is currently validated.")
+    Exit(1)
 
 # Compiler flags - MSVC compatible
 if platform == "windows":
@@ -27,19 +29,20 @@ env.Append(CPPPATH=[
 ])
 
 # Libraries
+godot_cpp_library = (
+    f"godot-cpp/bin/libgodot-cpp.{platform}.{target}.{arch}.lib"
+)
 env.Append(LIBS=[
-    "godot-cpp/bin/libgodot-cpp.windows.template_release.x86_64.lib"
+    godot_cpp_library
 ])
 
 # Sources
 sources = Glob("src/*.cpp")
 
-# Output
-if platform == "windows":
-    env.SharedLibrary(target="#bin/foveacore", source=sources)
-else:
-    env.SharedLibrary(target="#bin/libfoveacore", source=sources)
+# Keep the experimental C++ artifact distinct from the canonical Rust binary.
+env.SharedLibrary(target="#bin/foveacore_cpp", source=sources)
 
 print("Building FoveaCore GDExtension...")
 print(f"  Platform: {platform}")
 print(f"  Target: {target}")
+print("  Output: bin/foveacore_cpp.dll")

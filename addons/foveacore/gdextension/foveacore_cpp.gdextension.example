@@ -1,0 +1,9 @@
+[configuration]
+
+entry_symbol = "foveacore_cpp_init"
+compatibility_minimum = "4.2"
+
+[libraries]
+
+windows.debug.x86_64 = "res://addons/foveacore/gdextension/bin/foveacore_cpp.dll"
+windows.release.x86_64 = "res://addons/foveacore/gdextension/bin/foveacore_cpp.dll"
