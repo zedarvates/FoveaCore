@@ -44,6 +44,7 @@ jobs:
         run: |
           python -m compileall -q addons tools test
           python tools/test_bake_offset_field.py -v
+          python tools/test_file_digest.py -v
           python addons/tools/test_validation_tools.py
           python tools/check_public_docs.py
           echo "Python tools and public docs OK."
