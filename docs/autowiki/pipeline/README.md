@@ -31,7 +31,7 @@ Backends include the classical FFmpeg/COLMAP path plus optional bridge entry poi
 
 Configured jobs are **IMPLEMENTED_UNVALIDATED** until a current run is inspected.
 
-The C++ job proves only that its Windows release source compiles and links. It writes `gdextension/bin/foveacore.dll` with the `foveacore_init` entry point, while the active descriptor expects the Rust `gdext_rust_init` symbol at the same path. The release workflow removes the C++ build tree and packages Rust artifacts. Treat this as a **CONFLICT**, not as a second loadable runtime, until the output and descriptor contracts are separated.
+The C++ job remains a standalone Windows release surface. It now writes `gdextension/bin/foveacore_cpp.dll` with the `foveacore_cpp_init` entry point, while the active release descriptor continues to package Rust `gdext_rust_init` as `foveacore.dll`. A local explicit descriptor smoke test loads and instantiates `FoveaRenderer`; the updated remote CI job, cross-platform builds, and release packaging remain separate gates.
 
 ## Audit
 

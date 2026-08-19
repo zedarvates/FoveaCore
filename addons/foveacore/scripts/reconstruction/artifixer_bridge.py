@@ -16,6 +16,22 @@ import time
 from pathlib import Path
 
 
+def find_training_point_cloud(input_dir: Path) -> Path:
+    """Return the highest completed 3DGS iteration instead of assuming 7k."""
+    point_cloud_dir = input_dir / "output" / "point_cloud"
+    candidates = []
+    if point_cloud_dir.is_dir():
+        for candidate in point_cloud_dir.glob("iteration_*/point_cloud.ply"):
+            try:
+                iteration = int(candidate.parent.name.removeprefix("iteration_"))
+            except ValueError:
+                continue
+            candidates.append((iteration, candidate))
+    if candidates:
+        return max(candidates, key=lambda item: item[0])[1]
+    return input_dir / "gaussians.ply"
+
+
 def main():
     parser = argparse.ArgumentParser(description="FoveaCore ArtiFixer Bridge")
     parser.add_argument("--input", required=True, help="Input reconstruction directory (contains COLMAP db or sparse/)")
@@ -56,10 +72,7 @@ def main():
 
         # Output mock or refined PLY
         # Try to locate existing PLY in the session workspace to refine, otherwise create a new mock
-        source_ply = input_dir / "output" / "point_cloud" / "iteration_7000" / "point_cloud.ply"
-        if not source_ply.exists():
-            # Check other common paths
-            source_ply = input_dir / "gaussians.ply"
+        source_ply = find_training_point_cloud(input_dir)
             
         target_ply = output_dir / "artifixer_refined.ply"
         
@@ -173,7 +186,7 @@ def main():
         shutil.copy(refined_ply_source, target_ply)
     else:
         # Fallback to copy original PLY if 3DGRUT failed or did not run
-        source_ply = input_dir / "output" / "point_cloud" / "iteration_7000" / "point_cloud.ply"
+        source_ply = find_training_point_cloud(input_dir)
         if source_ply.exists():
             shutil.copy(source_ply, target_ply)
             print("Warning: 3DGRUT refined PLY not found, fell back to original 3DGS PLY.", file=sys.stderr)

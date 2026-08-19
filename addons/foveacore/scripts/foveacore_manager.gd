@@ -148,6 +148,8 @@ func _init_culling_nodes() -> void:
 
 	_splat_renderer = FoveaCoreSplatRenderer.new()
 	_splat_renderer.name = "FoveaCoreSplatRenderer"
+	_splat_renderer.enable_foveated_rendering = foveated_enabled and vr_enabled
+	_splat_renderer.enable_layered_splatting = enable_layered_splatting
 	add_child(_splat_renderer)
 
 	_splat_sorter = SplatSorter.new()
@@ -158,6 +160,11 @@ func _init_subsystems() -> void:
 	add_child(_vr)
 	_vr.xr_unavailable.connect(_on_xr_unavailable)
 	_vr.setup(vr_enabled, xr_shader_enabled)
+	# Explicit desktop mode does not emit xr_unavailable, so apply the same
+	# full-fidelity fallback here instead of leaving the CPU and shader passes on.
+	if not vr_enabled:
+		foveated_enabled = false
+		_splat_renderer.enable_foveated_rendering = false
 
 	## 2. Sous-système Foveated
 	_foveated = FoveaFoveatedSubsystem.new()
@@ -254,7 +261,9 @@ func _run_culling_pass() -> void:
 				_hybrid_renderer.setup_for_node(node._mesh_instance_ref, _splat_renderer)
 
 	# Génération + tri via le sous-système splat
-	_splat_pipeline.process_frame(visibility_result, camera, camera_pos)
+	var allow_static_reuse: bool = not foveated_enabled \
+		and (_animation == null or not _animation.has_active_modifiers())
+	_splat_pipeline.process_frame(visibility_result, camera, camera_pos, allow_static_reuse)
 
 	# Passe foveated (filtrage par densité + minimize_overdraw)
 	if foveated_enabled:
@@ -356,6 +365,8 @@ func set_splat_density(density: float) -> void:
 ## Dynamically activates or deactivates foveated rendering at runtime.
 func toggle_foveated(enabled: bool) -> void:
 	foveated_enabled = enabled
+	if _splat_renderer:
+		_splat_renderer.enable_foveated_rendering = enabled
 	if _foveated:
 		_foveated.mark_dirty()
 		if not enabled:
@@ -392,6 +403,8 @@ func _on_xr_unavailable(reason: String) -> void:
 	print("FoveaCoreManager: OpenXR non disponible (%s). Repli sur le mode Desktop." % reason)
 	vr_enabled = false
 	foveated_enabled = false
+	if _splat_renderer:
+		_splat_renderer.enable_foveated_rendering = false
 	if _foveated:
 		_foveated.disable()
 

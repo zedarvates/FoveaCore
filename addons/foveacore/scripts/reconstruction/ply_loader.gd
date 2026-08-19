@@ -126,6 +126,17 @@ static func _map_properties_to_splat(splat: GaussianSplat, data: Array[float], p
 	if prop_map.has("y"): splat.position.y = data[prop_map["y"]]
 	if prop_map.has("z"): splat.position.z = data[prop_map["z"]]
 
+	# Surface normal (optional in standard 3DGS PLY files).
+	if prop_map.has("nx") and prop_map.has("ny") and prop_map.has("nz"):
+		var normal: Vector3 = Vector3(
+			data[prop_map["nx"]],
+			data[prop_map["ny"]],
+			data[prop_map["nz"]]
+		)
+		if normal.is_finite() and normal.length_squared() > 0.00000001:
+			splat.normal = normal.normalized()
+			splat.surface_normal = splat.normal
+
 	# Opacity (logit -> sigmoid)
 	if prop_map.has("opacity"):
 		var logit: float = data[prop_map["opacity"]]

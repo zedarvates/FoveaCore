@@ -30,13 +30,14 @@
 - **Decision:** reclassify the 8-byte design as a future v3 research proposal with a distinct identity.
 - **Evidence:** shared GDScript constants, GDScript reader/writer checks, Rust little-endian header tests, and the canonical format specification.
 
-## Pending
-
 ### DD-006 — Native artifact ownership
 
-- **State:** PROPOSED
-- **Question:** which native implementation owns the packaged `foveacore` artifact on each platform when Rust and C++ surfaces coexist?
-- **Exit criterion:** packaging documentation, unique artifact identities, and a CI assertion.
+- **Decision:** Rust owns the canonical packaged `foveacore` artifact and active descriptor on every current release target.
+- **Decision:** C++ remains an opt-in experimental Windows target with `foveacore_cpp_init`, `foveacore_cpp.dll`, and a non-active descriptor template.
+- **Evidence state:** VALIDATED locally on Windows; remote CI and other platforms remain open.
+- **Evidence:** 14/14 ownership assertions, successful SCons/MSVC release build, distinct PE exports, successful Godot registration/instantiation smoke, and a missing-binary negative control.
+
+## Pending
 
 ### DD-007 — Agent interchange schema
 

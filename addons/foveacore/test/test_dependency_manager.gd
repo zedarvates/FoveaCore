@@ -32,8 +32,10 @@ func _init() -> void:
 			_assert("%s found ⇒ source in {setting,local,path}" % name,
 				p["source"] in ["setting", "local", "path"], str(p["source"]))
 
-	# resolve() returns the bare command when nothing is installed locally.
-	_assert("resolve(ffmpeg) non-empty", DepMgr.resolve("ffmpeg") != "", DepMgr.resolve("ffmpeg"))
+	# resolve() returns an existing executable, or empty when unavailable.
+	var ffmpeg_path: String = DepMgr.resolve("ffmpeg")
+	_assert("resolve(ffmpeg) is empty or existing",
+		ffmpeg_path.is_empty() or FileAccess.file_exists(ffmpeg_path), ffmpeg_path)
 	_assert("resolve(unknown) echoes name", DepMgr.resolve("nope") == "nope", "")
 
 	# download_url respects the current OS.

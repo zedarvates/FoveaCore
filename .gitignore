@@ -49,6 +49,41 @@ audit_foveacore.diff
 /reconstructions/*
 !/reconstructions/.gitkeep
 
+# Redistributable CC0 synthetic-video -> 3DGS default demo proof. Keep the
+# heavy source model, extracted frames, checkpoints, and intermediate PLY local.
+!/reconstructions/horse_statue_cc0_v1/
+/reconstructions/horse_statue_cc0_v1/*
+!/reconstructions/horse_statue_cc0_v1/render_turntable.gd
+!/reconstructions/horse_statue_cc0_v1/prepare_geometry_masked_dataset.py
+!/reconstructions/horse_statue_cc0_v1/source_video/
+/reconstructions/horse_statue_cc0_v1/source_video/*
+!/reconstructions/horse_statue_cc0_v1/source_video/horse_statue_cc0_turntable_60f.mp4
+!/reconstructions/horse_statue_cc0_v1/dataset_geometry_v1/
+/reconstructions/horse_statue_cc0_v1/dataset_geometry_v1/*
+!/reconstructions/horse_statue_cc0_v1/dataset_geometry_v1/preprocess_manifest.json
+!/reconstructions/horse_statue_cc0_v1/dataset_geometry_v1/sparse/
+/reconstructions/horse_statue_cc0_v1/dataset_geometry_v1/sparse/*
+!/reconstructions/horse_statue_cc0_v1/dataset_geometry_v1/sparse/0/
+/reconstructions/horse_statue_cc0_v1/dataset_geometry_v1/sparse/0/*
+!/reconstructions/horse_statue_cc0_v1/dataset_geometry_v1/sparse/0/turntable_prior_manifest.json
+!/reconstructions/horse_statue_cc0_v1/dataset_geometry_v1/output/
+/reconstructions/horse_statue_cc0_v1/dataset_geometry_v1/output/*
+!/reconstructions/horse_statue_cc0_v1/dataset_geometry_v1/output/cfg.yml
+!/reconstructions/horse_statue_cc0_v1/dataset_geometry_v1/output/fovea_gsplat_training_manifest.json
+!/reconstructions/horse_statue_cc0_v1/dataset_geometry_v1/output/stats/
+/reconstructions/horse_statue_cc0_v1/dataset_geometry_v1/output/stats/*
+!/reconstructions/horse_statue_cc0_v1/dataset_geometry_v1/output/stats/val_step6999.json
+!/reconstructions/horse_statue_cc0_v1/fovea_runtime/
+/reconstructions/horse_statue_cc0_v1/fovea_runtime/*
+!/reconstructions/horse_statue_cc0_v1/fovea_runtime/horse_statue_6999_runtime_v1.ply
+!/reconstructions/horse_statue_cc0_v1/fovea_runtime/horse_statue_6999_runtime_v1.manifest.json
+!/reconstructions/horse_statue_cc0_v1/fovea_runtime/runtime_proof_manifest_v1.json
+!/reconstructions/horse_statue_cc0_v1/fovea_runtime/capture_az000.png
+!/reconstructions/horse_statue_cc0_v1/fovea_runtime/capture_az090.png
+!/reconstructions/horse_statue_cc0_v1/fovea_runtime/capture_az180.png
+!/reconstructions/horse_statue_cc0_v1/fovea_runtime/capture_az270.png
+!/reconstructions/horse_statue_cc0_v1/fovea_runtime/demo_default_cc0_video_v1.png
+
 # Generated benchmark artifact (C6) — the official number lives in the benchmark README
 /benchmark_report.json
 
@@ -61,3 +96,8 @@ test_run*.log
 test_output.log
 script_parse.log
 import.log
+
+# C# unit-test artifacts
+/tests/FoveaEngine.Tests/bin/
+/tests/FoveaEngine.Tests/obj/
+

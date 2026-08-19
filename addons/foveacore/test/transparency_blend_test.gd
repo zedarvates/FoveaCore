@@ -1,31 +1,41 @@
 extends Node3D
-## Test de transparence et mélange de splats avec palette 8-bit
-## Valide :
-## 1) Superposition de splats semi-transparents
-## 2) Mélange de couleurs avec opacité variable
-## 3) Effets de profondeur (z-ordering)
-## 4) Artefacts de transparence avec palette limitée
-## 5) Comparaison visuelle RGB565 vs Palette 8-bit
+
+const REQUIRES_GPU := true
+const RANDOM_SEED: int = 0xF0EA
+const ORACLE_SIZE: Vector2i = Vector2i(256, 256)
+const ORACLE_ALPHA: float = 0.5
+const ORACLE_TOLERANCE: float = 0.08
+const ORACLE_FRAME_TIMEOUT: int = 30
+const TRANSPARENCY_SHADER_CODE: String = """
+shader_type spatial;
+render_mode unshaded, blend_mix, depth_draw_never, cull_disabled;
+
+varying vec4 instance_color;
+
+void vertex() {
+	instance_color = INSTANCE_CUSTOM;
+}
+
+void fragment() {
+	ALBEDO = instance_color.rgb;
+	ALPHA = instance_color.a;
+}
+"""
+## Deterministic transparency harness.
+## The five 3D layouts are visual fixtures reported as `constructed`.
+## Only the isolated framebuffer alpha-composition oracle is automated.
 
 @export var test_mode: String = "all"  # "all", "transparency", "blend", "zorder", "palette_artifacts", "rgb565_vs_palette"
 @export var splat_count: int = 200
-@export var enable_palette: bool = true
 @export var palette_name: String = "watercolor_16"
 
 var camera: Camera3D
-var viewport_rgb565: SubViewport
-var viewport_palette: SubViewport
-var viewport_reference: SubViewport
-
-# Scènes de test
-var transparency_test_scene: Node3D
-var blend_test_scene: Node3D
-var zorder_test_scene: Node3D
-var palette_artifact_scene: Node3D
 
 # Résultats
 var test_results: Dictionary = {}
 var current_test: String = ""
+var _transparency_shader: Shader
+var _oracle_frame_post_draw_seen: bool = false
 
 signal test_complete(result: Dictionary)
 signal test_progress(message: String)
@@ -34,23 +44,38 @@ func _ready() -> void:
 	print("\n" + "=".repeat(80))
 	print("FoveaEngine - Test Transparence & Mélange de Splats")
 	print("=".repeat(80))
-	
+	seed(RANDOM_SEED)
 	_setup_camera()
-	
+	call_deferred("_execute_harness")
+
+func _execute_harness() -> void:
 	if test_mode == "all":
-		_run_all_tests()
+		await _run_all_tests()
 	else:
-		_run_specific_test(test_mode)
+		var mode_is_valid: bool = _run_specific_test(test_mode)
+		if not mode_is_valid:
+			get_tree().quit(1)
+			return
+		await get_tree().process_frame
+
+	var oracle_passed: bool = await _run_framebuffer_oracle()
+	print("\n" + "=".repeat(80))
+	print("Tous les tests terminés!")
+	print("=".repeat(80))
+	_print_summary()
+	get_tree().quit(0 if oracle_passed else 1)
 
 func _setup_camera() -> void:
-	camera = Camera3D.new()
-	camera.name = "TestCamera"
+	camera = get_node_or_null("Camera3D") as Camera3D
+	if camera == null:
+		camera = Camera3D.new()
+		camera.name = "TestCamera"
+		add_child(camera)
 	camera.position = Vector3(0, 2, 8)
 	camera.look_at(Vector3(0, 0, 0))
-	add_child(camera)
 
 func _run_all_tests() -> void:
-	var tests = [
+	var tests: Array[Dictionary] = [
 		{"name": "transparency", "func": _test_transparency_stacking},
 		{"name": "blend", "func": _test_color_blending},
 		{"name": "zorder", "func": _test_z_ordering},
@@ -58,27 +83,26 @@ func _run_all_tests() -> void:
 		{"name": "rgb565_vs_palette", "func": _test_rgb565_vs_palette}
 	]
 	
-	for i in range(tests.size()):
-		var t = tests[i]
+	for i: int in range(tests.size()):
+		var t: Dictionary = tests[i]
 		print("\n[%d/%d] Test: %s" % [i+1, tests.size(), t.name])
 		test_progress.emit("Test %s en cours..." % t.name)
 		current_test = t.name
-		t.func.call()
-		await get_tree().create_timer(0.5).timeout
-	
-	print("\n" + "=".repeat(80))
-	print("Tous les tests terminés!")
-	print("=".repeat(80))
-	_print_summary()
+		var test_callable: Callable = t.func
+		test_callable.call()
+		await get_tree().process_frame
 
-func _run_specific_test(mode: String) -> void:
+func _run_specific_test(mode: String) -> bool:
 	match mode:
 		"transparency": _test_transparency_stacking()
 		"blend": _test_color_blending()
 		"zorder": _test_z_ordering()
 		"palette_artifacts": _test_palette_artifacts()
 		"rgb565_vs_palette": _test_rgb565_vs_palette()
-		_: push_error("Mode de test inconnu: %s" % mode)
+		_:
+			push_error("Mode de test inconnu: %s" % mode)
+			return false
+	return true
 
 ## === TEST 1: Superposition de splats semi-transparents ===
 
@@ -125,7 +149,7 @@ func _test_transparency_stacking() -> void:
 	test_results["transparency"] = {
 		"layer_count": layer_count,
 		"base_alpha": base_alpha,
-		"status": "passed",
+		"status": "constructed",
 		"description": "Superposition de %d couches avec alpha=%.2f" % [layer_count, base_alpha]
 	}
 	test_complete.emit(test_results["transparency"])
@@ -202,7 +226,7 @@ func _test_color_blending() -> void:
 		"gradient_steps": gradient_count,
 		"color_count": colors.size(),
 		"opacity_steps": 8,
-		"status": "passed",
+		"status": "constructed",
 		"description": "Mélange de couleurs avec %d étapes d'opacité" % gradient_count
 	}
 	test_complete.emit(test_results["blend"])
@@ -266,7 +290,7 @@ func _test_z_ordering() -> void:
 		"depth_count": depth_count,
 		"depth_range": depth_spacing * (depth_count - 1),
 		"overlap_count": positions.size(),
-		"status": "passed",
+		"status": "constructed",
 		"description": "Validation de l'ordre Z avec %d profondeurs" % depth_count
 	}
 	test_complete.emit(test_results["zorder"])
@@ -344,7 +368,7 @@ func _test_palette_artifacts() -> void:
 		"limit_colors": limit_colors.size(),
 		"banding_steps": banding_steps,
 		"palette_size": 16,
-		"status": "passed",
+		"status": "constructed",
 		"description": "Détection artefacts avec palette 16 couleurs"
 	}
 	test_complete.emit(test_results["palette_artifacts"])
@@ -466,75 +490,227 @@ func _test_rgb565_vs_palette() -> void:
 	test_results["rgb565_vs_palette"] = {
 		"color_count": test_colors.size(),
 		"alpha_count": alpha_colors.size(),
-		"status": "passed",
+		"status": "constructed",
 		"description": "Comparaison visuelle RGB565 vs Palette 8-bit"
 	}
 	test_complete.emit(test_results["rgb565_vs_palette"])
 
 ## === Fonctions utilitaires ===
 
-func _create_splat_plane(position: Vector3, color: Color, count: int) -> FoveaCoreSplatRenderer:
-	"""Crée un plan de splats avec la couleur spécifiée"""
-	var splat = FoveaCoreSplatRenderer.new()
-	splat.use_triangle_mesh = true
-	splat.splat_subdivisions = 16
-	splat.multimesh = _create_multimesh_with_color(count, color, position)
-	
-	var material = ShaderMaterial.new()
-	material.shader = load("res://addons/foveacore/shaders/splat_render_triangle.gdshader")
-	material.set_shader_parameter("use_palette", enable_palette)
-	
-	if enable_palette:
-		var palette = _get_palette()
-		if palette:
-			var data: PackedByteArray = palette.to_packed_rgb_array()
-			var img := Image.create_from_data(1, palette.colors.size(), false, Image.FORMAT_RGBA8, data)
-			var tex := ImageTexture.create_from_image(img)
-			material.set_shader_parameter("palette_texture", tex)
-			material.set_shader_parameter("palette_size", palette.colors.size())
-	
-	splat.material_override = material
-	return splat
+func _create_splat_plane(position: Vector3, color: Color, count: int) -> MultiMeshInstance3D:
+	"""Creates a bounded visual fixture without allocating a rendering device per plane."""
+	var fixture := MultiMeshInstance3D.new()
+	fixture.multimesh = _create_multimesh_with_color(count, color, position)
+	fixture.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+	var material := ShaderMaterial.new()
+	material.shader = _get_transparency_shader()
+	fixture.material_override = material
+	return fixture
+
+func _get_transparency_shader() -> Shader:
+	if _transparency_shader == null:
+		_transparency_shader = Shader.new()
+		_transparency_shader.code = TRANSPARENCY_SHADER_CODE
+	return _transparency_shader
 
 func _create_multimesh_with_color(count: int, color: Color, position: Vector3) -> MultiMesh:
 	"""Crée un MultiMesh avec une couleur spécifique"""
-	var mesh = _create_triangle_splat_mesh()
-	var multimesh = MultiMesh.new()
+	var mesh: ArrayMesh = _create_triangle_splat_mesh()
+	var multimesh := MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	multimesh.use_custom_data = true
 	multimesh.mesh = mesh
 	multimesh.instance_count = count
-	
-	for i in range(count):
-		var offset = Vector3(
+
+	var transforms := PackedVector3Array()
+	transforms.resize(count * 4)
+	var custom_data := PackedColorArray()
+	custom_data.resize(count)
+
+	for i: int in range(count):
+		var offset := Vector3(
 			randf() * 2 - 1,
 			randf() * 2 - 1,
 			randf() * 2 - 1
 		) * 0.5
-		var transform = Transform3D(Basis(), position + offset)
-		multimesh.set_instance_transform(i, transform)
-		
-		# Stocker la couleur dans custom_data
-		multimesh.set_instance_custom_data(i, Color(color.r, color.g, color.b, color.a))
-	
+		var base_index: int = i * 4
+		transforms[base_index] = Vector3.RIGHT
+		transforms[base_index + 1] = Vector3.UP
+		transforms[base_index + 2] = Vector3.BACK
+		transforms[base_index + 3] = position + offset
+		custom_data[i] = color
+
+	multimesh.transform_array = transforms
+	multimesh.custom_data_array = custom_data
 	return multimesh
 
 func _create_triangle_splat_mesh() -> ArrayMesh:
 	"""Crée un maillage triangle simple pour les splats"""
-	var st = SurfaceTool.new()
+	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	
 	# Triangle simple (sera étiré par le shader)
-	var vertices = [
+	var vertices: Array[Vector3] = [
 		Vector3(-1, -1, 0),
 		Vector3(1, -1, 0),
 		Vector3(0, 1, 0)
 	]
 	
-	for v in vertices:
+	for v: Vector3 in vertices:
 		st.add_vertex(v)
 	
 	return st.commit()
+
+func _run_framebuffer_oracle() -> bool:
+	print("\n--- Oracle: composition alpha dans le framebuffer ---")
+	var oracle_viewport := SubViewport.new()
+	oracle_viewport.name = "TransparencyFramebufferOracle"
+	oracle_viewport.size = ORACLE_SIZE
+	oracle_viewport.disable_3d = true
+	oracle_viewport.transparent_bg = false
+	oracle_viewport.render_target_clear_mode = SubViewport.CLEAR_MODE_ALWAYS
+	oracle_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	add_child(oracle_viewport)
+
+	var background := ColorRect.new()
+	background.color = Color.BLACK
+	background.position = Vector2.ZERO
+	background.size = Vector2(ORACLE_SIZE)
+	oracle_viewport.add_child(background)
+
+	var left_position := Vector2(24, 64)
+	var right_position := Vector2(152, 64)
+	var layer_size := Vector2(80, 128)
+	var left_layer: ColorRect = _create_oracle_layer(left_position, layer_size)
+	var right_layer: ColorRect = _create_oracle_layer(right_position, layer_size)
+	oracle_viewport.add_child(left_layer)
+	oracle_viewport.add_child(right_layer)
+	if not await _wait_for_oracle_frame():
+		oracle_viewport.queue_free()
+		var display_name: String = DisplayServer.get_name()
+		var failure_reason: String = (
+			"Framebuffer oracle requires a real rendering driver; display server is headless."
+			if display_name.to_lower() == "headless"
+			else "No rendered framebuffer became available within %d frames (display server: %s)." % [
+				ORACLE_FRAME_TIMEOUT,
+				display_name,
+			]
+		)
+		return _record_oracle_failure(failure_reason)
+
+	var first_image: Image = oracle_viewport.get_texture().get_image()
+	if first_image.is_empty():
+		oracle_viewport.queue_free()
+		return _record_oracle_failure("Framebuffer capture returned an empty image.")
+
+	var one_layer_sample := Vector2i(64, 128)
+	var two_layer_sample := Vector2i(192, 128)
+	var corner := Vector2i(2, 2)
+	var background_pixel: Color = first_image.get_pixelv(corner)
+	var one_layer_pixel: Color = first_image.get_pixelv(one_layer_sample)
+
+	var second_layer: ColorRect = _create_oracle_layer(right_position, layer_size)
+	oracle_viewport.add_child(second_layer)
+	if not await _wait_for_oracle_frame():
+		oracle_viewport.queue_free()
+		return _record_oracle_failure("The second framebuffer sample timed out after %d frames." % ORACLE_FRAME_TIMEOUT)
+
+	var two_layer_image: Image = oracle_viewport.get_texture().get_image()
+	if two_layer_image.is_empty():
+		oracle_viewport.queue_free()
+		return _record_oracle_failure("Second framebuffer capture returned an empty image.")
+	var two_layer_pixel: Color = two_layer_image.get_pixelv(two_layer_sample)
+
+	var expected_one: float = ORACLE_ALPHA
+	var expected_two: float = 1.0 - pow(1.0 - ORACLE_ALPHA, 2.0)
+	var checks: Dictionary = {
+		"background_black": background_pixel.get_luminance() <= ORACLE_TOLERANCE,
+		"one_layer_red": absf(one_layer_pixel.r - expected_one) <= ORACLE_TOLERANCE,
+		"two_layer_red": absf(two_layer_pixel.r - expected_two) <= ORACLE_TOLERANCE,
+		"red_increases": two_layer_pixel.r > one_layer_pixel.r + 0.1,
+		"one_layer_no_leak": maxf(one_layer_pixel.g, one_layer_pixel.b) <= ORACLE_TOLERANCE,
+		"two_layer_no_leak": maxf(two_layer_pixel.g, two_layer_pixel.b) <= ORACLE_TOLERANCE,
+	}
+
+	var capture_path: String = _get_user_argument_value("--capture=")
+	if not capture_path.is_empty():
+		var save_error: Error = two_layer_image.save_png(capture_path)
+		checks["capture_saved"] = save_error == OK
+
+	var forced_failure: bool = OS.get_cmdline_user_args().has("--force-oracle-failure")
+	if forced_failure:
+		checks["negative_control"] = false
+
+	var passed: bool = true
+	for check_value: Variant in checks.values():
+		passed = passed and bool(check_value)
+
+	test_results["framebuffer_oracle"] = {
+		"status": "passed" if passed else "failed",
+		"description": "One red layer %.3f (expected %.3f), two layers %.3f (expected %.3f)" % [
+			one_layer_pixel.r,
+			expected_one,
+			two_layer_pixel.r,
+			expected_two,
+		],
+		"background": background_pixel,
+		"one_layer": one_layer_pixel,
+		"two_layers": two_layer_pixel,
+		"checks": checks,
+		"forced_failure": forced_failure,
+	}
+	print("TRANSPARENCY_ORACLE: %s | one=%.3f two=%.3f checks=%s" % [
+		"PASS" if passed else "FAIL",
+		one_layer_pixel.r,
+		two_layer_pixel.r,
+		str(checks),
+	])
+	oracle_viewport.queue_free()
+	if not passed:
+		push_error("Transparency framebuffer oracle failed.")
+	return passed
+
+func _create_oracle_layer(layer_position: Vector2, layer_size: Vector2) -> ColorRect:
+	var layer := ColorRect.new()
+	layer.color = Color(1.0, 0.0, 0.0, ORACLE_ALPHA)
+	layer.position = layer_position
+	layer.size = layer_size
+	return layer
+
+func _wait_for_oracle_frame() -> bool:
+	if DisplayServer.get_name().to_lower() == "headless":
+		return false
+	_oracle_frame_post_draw_seen = false
+	var callback := Callable(self, "_on_oracle_frame_post_draw")
+	if RenderingServer.frame_post_draw.is_connected(callback):
+		RenderingServer.frame_post_draw.disconnect(callback)
+	RenderingServer.frame_post_draw.connect(callback, Object.CONNECT_ONE_SHOT)
+	for _frame_index: int in range(ORACLE_FRAME_TIMEOUT):
+		await get_tree().process_frame
+		if _oracle_frame_post_draw_seen:
+			return true
+	if RenderingServer.frame_post_draw.is_connected(callback):
+		RenderingServer.frame_post_draw.disconnect(callback)
+	return false
+
+func _on_oracle_frame_post_draw() -> void:
+	_oracle_frame_post_draw_seen = true
+
+func _record_oracle_failure(description: String) -> bool:
+	test_results["framebuffer_oracle"] = {
+		"status": "failed",
+		"description": description,
+	}
+	print("TRANSPARENCY_ORACLE: FAIL | %s" % description)
+	push_error(description)
+	return false
+
+func _get_user_argument_value(prefix: String) -> String:
+	for argument: String in OS.get_cmdline_user_args():
+		if argument.begins_with(prefix):
+			return argument.trim_prefix(prefix)
+	return ""
 
 func _get_palette() -> FoveaColorPalette:
 	"""Obtient la palette configurée"""

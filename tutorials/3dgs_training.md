@@ -1,87 +1,78 @@
-# 🎓 3DGS Training, Baking, & SplatBrush Guide — FoveaEngine
+# Tutorial: Train, bake, and inspect a Gaussian-splat asset
 
-This guide covers offline training of 3D Gaussian Splats, conversion into the optimized `.fovea` binary format, and VR sculpting/cleaning using the **SplatBrush** editor.
+This tutorial covers the current FoveaEngine training contract, native `.fovea` export, and the experimental editor brush. It replaces the older Graphdeco `train.py` instructions. Those commands are no longer what StudioTo3D launches.
 
----
+## 1. Train with the official gsplat bridge
 
-## 1. Traditional Offline 3DGS Training
+Use this path after FFmpeg and COLMAP have produced a dataset with images plus a sparse model. The bridge verifies a CUDA-enabled gsplat runtime, runs the official trainer, copies the final PLY to the StudioTo3D location, and writes a hash-addressed manifest.
 
-When feed-forward neural reconstruction (WorldMirror 2.0 / DVLT) is not used, you can train a Gaussian Splat model using traditional SfM points.
+```bash
+python addons/foveacore/scripts/reconstruction/gsplat_bridge.py -s <dataset_dir> -m <dataset_dir>/output --iterations 7000
+```
 
-### Prerequisites
-- Install [NVIDIA CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit).
-- Clone the reference 3DGS training repository:
-  ```bash
-  git clone --recursive https://github.com/graphdeco-inria/gaussian-splatting
-  cd gaussian-splatting
-  conda env create --file environment.yml
-  conda activate gaussian_splatting
-  ```
+Rules that the bridge enforces:
 
-### Training Pipeline Steps
-1. **Prepare Images**: Place your images in a folder named `input/`.
-2. **Compute Camera Poses**: Run COLMAP structure from motion:
-   ```bash
-   python convert.py -s <path_to_input_folder>
-   ```
-3. **Train the Splat Model**: Run the optimization (typically 7,000 iterations is sufficient for FoveaEngine):
-   ```bash
-   python train.py -s <path_to_input_folder> --iterations 7000
-   ```
-4. **Locate the Output**: The trained PLY file is saved at:
-   `output/<session_id>/point_cloud/iteration_7000/point_cloud.ply`
+- `-m` must be `<dataset_dir>/output`
+- the output directory must be empty
+- photorealistic training requires at least 1,000 iterations
+- existing PLY or manifest files are never overwritten
 
----
+If gsplat is installed in another interpreter, set `FOVEA_GSPLAT_PYTHON` to that executable before running the same command.
 
-## 2. Baking & Optimizing to `.fovea` Format
+A successful run publishes:
 
-For native serialization and experimental runtime testing, convert your `.ply` file into a compressed binary `.fovea` asset. Validate performance on your target renderer and hardware; this conversion is not a frame-rate guarantee.
+```text
+<dataset_dir>/output/point_cloud/iteration_7000/point_cloud.ply
+<dataset_dir>/output/fovea_gsplat_training_manifest.json
+```
 
-### Using the Godot Editor UI
-1. Select the public `FoveaSplat3D` node in the Scene tree.
-2. Set `source_path` to the `.ply` asset you want to convert and wait for it to load.
-3. In the **Fovea Actions** inspector section, click **Convert to .fovea**.
-4. The editor writes a `.fovea` file next to the source file, using the same base name.
-5. FoveaEngine writes the native asset with:
-   - a color palette of up to 256 entries;
-   - a covariance codebook of up to 1024 entries;
-   - Morton spatial ordering and quantized positions within the asset bounds.
+`--dry-run` validates the dataset and runtime without launching CUDA training.
 
-Coplanar merging is a separate experimental runtime option; it is not part of this export step.
+## 2. Load the trained PLY in Godot
 
-### Using GDScript Programmatically
+Open [`demo/drop_a_ply.tscn`](../demo/drop_a_ply.tscn) or add a `FoveaSplat3D` node and set `source_path` to the published PLY. Confirm the visual result on your GPU before converting formats or claiming quality.
+
+## 3. Bake a native `.fovea` file
+
+Native `.fovea` export is available for structural and experimental runtime testing. It is not a frame-rate guarantee and does not by itself prove image parity.
+
+### Editor
+
+1. Select a `FoveaSplat3D` node.
+2. Set `source_path` to the loaded `.ply` and wait for `asset_loaded`.
+3. In **Fovea Actions**, click **Convert to .fovea**.
+4. The editor writes a `.fovea` file next to the source, using the same base name.
+
+The writer stores a color palette of up to 256 entries, a covariance codebook of up to 1024 entries, Morton ordering, and quantized positions inside the asset bounds. Coplanar merging is a separate experimental runtime option.
+
+### GDScript
+
 ```gdscript
 var splat := FoveaSplat3D.new()
 add_child(splat)
 splat.source_path = "res://reconstructions/input.ply"
-await get_tree().process_frame
+await splat.asset_loaded
 
 if not splat.export_to_fovea("res://reconstructions/output.fovea"):
 	push_error("Fovea export failed")
 ```
 
----
+`generate_collisions` only applies after a `.fovea` source is loaded.
 
-## 3. Editing with the SplatBrush (VR Sculpting & Cleaning)
+## 4. Experimental editing
 
-FoveaEngine includes an interactive real-time editor to clean floaters, shape volume geometry, and paint physical flow currents.
+[`addons/foveacore/scenes/splat_brush_playground.tscn`](../addons/foveacore/scenes/splat_brush_playground.tscn) is the editor sandbox. OpenXR is experimental; the desktop camera fallback is the supported inspection path in this tutorial.
 
-### Editor Setup
-1. Open the scene `res://addons/foveacore/scenes/splat_brush_playground.tscn`.
-2. Ensure you have your VR headset connected via OpenXR (e.g., Quest, Vive) or use the Desktop fallback camera.
-3. Select the public `FoveaSplat3D` node you wish to edit.
+Brush modes:
 
-### Brush Modes
-Using the VR controllers (or mouse on desktop):
+- `ERASE` - remove floaters inside the brush sphere
+- `DENSITY` - clone splats into sparse regions
+- `COLOR` - modulate RGB
+- `FLOW` - paint direction vectors consumed by the experimental water-particle shader
 
-1. **`ERASE` Mode**:
-   - Deletes splats within the brush sphere. Use this to clean "floaters" or background noise left over by reconstruction.
-2. **`DENSITY` Mode**:
-   - Clones or duplicates splats to fill in sparse or empty areas.
-3. **`COLOR` Mode**:
-   - Modulates the RGB values of splats.
-4. **`FLOW` Mode (Water & Particle Physics)**:
-   - Paints directional vectors onto the splats. These vectors are read by `water_splat_particle.gdshader` to direct real-time fluid advection, simulating localized water currents flowing over objects.
+Keep a copy of the source asset. Verify the result visually, then export a new `.fovea` file only if the target renderer supports that path. Brush and clay-deformer output is not a production editing certificate.
 
-### Saving Edits
-Treat brush and clay-deformer output as experimental. Keep a copy of the source asset, verify the result visually, then export a new `.fovea` asset through the Fovea inspector action when the target renderer supports the path.
+## Next steps
+
+- Follow [Reconstruction setup](reconstruction_setup.md) if FFmpeg or COLMAP is still missing.
+- Read [Feature status](../docs/feature-status.md) before treating GPU sorting, XR, or research bridges as available.

@@ -84,7 +84,7 @@ func _update_preview() -> void:
 	elif object is FoveaStyle:
 		# Use global visual style config
 		match object.visual_style:
-			"Realistic":
+			"Photorealistic", "Realistic":
 				preview_material.albedo_color = Color(0.8, 0.8, 0.8)
 				preview_material.roughness = 0.5
 				preview_material.metallic = 0.1

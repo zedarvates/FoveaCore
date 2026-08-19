@@ -15,8 +15,8 @@ layout(binding = 1) buffer IndexBuffer {
 // Push constants
 layout(push_constant) uniform PushConsts {
     uint total_count;  // Nombre d'éléments (puissance de 2)
-    uint stage;       // Étape actuelle (0 .. log2(N)-1)
-    uint pad0;
+    uint sequence_length; // k: longueur de la séquence bitonique courante
+    uint compare_distance; // j: distance du compare-exchange courant
     uint pad1;
 } pc;
 
@@ -24,37 +24,24 @@ void main() {
     uint gid = gl_GlobalInvocationID.x;
     if (gid >= pc.total_count) return;
 
-    // k = 2^(stage+1)
-    uint k = 1u << (pc.stage + 1u);
-    // j = moitié de k, puis décale
-    uint j = k >> 1;
+    // Each dispatch performs exactly one compare-exchange pass. The caller
+    // inserts a device barrier between passes; a shader-side loop cannot
+    // synchronize different 256-thread workgroups and produced corrupt
+    // permutations for real assets larger than one workgroup.
+    uint ixj = gid ^ pc.compare_distance;
+    if (ixj <= gid || ixj >= pc.total_count) return;
 
-    while (j > 0u) {
-        uint ixj = gid ^ j;
-        if (ixj > gid && ixj < pc.total_count) {
-            // Direction : les blocs de taille k alternent asc/desc
-            bool ascending = ((gid & k) == 0u);
+    bool ascending = ((gid & pc.sequence_length) == 0u);
+    float d_i = depths[gid];
+    float d_j = depths[ixj];
+    bool need_swap = ascending ? (d_i > d_j) : (d_i < d_j);
 
-            float d_i = depths[gid];
-            float d_j = depths[ixj];
+    if (need_swap) {
+        depths[gid] = d_j;
+        depths[ixj] = d_i;
 
-            // Pour tri ascendant : on veut d_i <= d_j
-            // Si ascending, swap si d_i > d_j
-            // Si descending, swap si d_i < d_j
-            bool need_swap = ascending ? (d_i > d_j) : (d_i < d_j);
-
-            if (need_swap) {
-                // Swap depths
-                float tmp_d = d_i;
-                depths[gid] = d_j;
-                depths[ixj] = tmp_d;
-
-                // Swap indices
-                uint tmp_i = indices[gid];
-                indices[gid] = indices[ixj];
-                indices[ixj] = tmp_i;
-            }
-        }
-        j >>= 1;
+        uint tmp_i = indices[gid];
+        indices[gid] = indices[ixj];
+        indices[ixj] = tmp_i;
     }
 }

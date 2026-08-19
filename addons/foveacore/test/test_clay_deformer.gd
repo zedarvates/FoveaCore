@@ -15,6 +15,9 @@
 
 extends Node
 
+## Interactive demo contract: requires an assigned renderer and scene input.
+const REQUIRES_INTEGRATION := true
+
 ## Assigner le FoveaCoreSplatRenderer de la scène
 @export var renderer: FoveaCoreSplatRenderer = null
 

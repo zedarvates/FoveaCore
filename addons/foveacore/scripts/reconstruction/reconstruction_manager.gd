@@ -5,6 +5,8 @@ class_name FoveaReconstructionManager
 ## Interaces with externally compiled tools for SfM and 3DGS-Training
 
 const DepMgr := preload("res://addons/foveacore/scripts/reconstruction/fovea_dependency_manager.gd")
+const DEFAULT_GAUSSIAN_TRAIN_SCRIPT: String = "gsplat_bridge.py"
+const LEGACY_GAUSSIAN_TRAIN_SCRIPT: String = "train.py"
 
 ## Emitted when a new reconstruction session begins.
 ## [param name] represents the unique name/identifier of the started [ReconstructionSession].
@@ -76,7 +78,7 @@ var python_path: String = "python":
 		_propagate_python_path()
 		_save_user_settings()
 
-var gaussian_train_script: String = "train.py":
+var gaussian_train_script: String = DEFAULT_GAUSSIAN_TRAIN_SCRIPT:
 	set(val):
 		gaussian_train_script = val
 		_propagate_gaussian_train_script()
@@ -432,7 +434,16 @@ func _load_user_settings() -> void:
 	if config.has_section_key("tools", "python_path"):
 		python_path = config.get_value("tools", "python_path")
 	if config.has_section_key("tools", "gaussian_train_script"):
-		gaussian_train_script = config.get_value("tools", "gaussian_train_script")
+		var configured_training_script: String = str(
+			config.get_value("tools", "gaussian_train_script")
+		).strip_edges()
+		# Migrate only the former unspecified default. Explicit custom paths remain
+		# untouched, while existing workstations adopt the verified gsplat bridge.
+		gaussian_train_script = (
+			DEFAULT_GAUSSIAN_TRAIN_SCRIPT
+			if configured_training_script == LEGACY_GAUSSIAN_TRAIN_SCRIPT
+			else configured_training_script
+		)
 	if config.has_section_key("tools", "star_bridge_script"):
 		star_bridge_script = config.get_value("tools", "star_bridge_script")
 	if config.has_section_key("tools", "worldmirror_bridge_script"):
@@ -987,7 +998,7 @@ func run_training(session: ReconstructionSession) -> void:
 		exporter.finalize_session(session)
 		
 		# Load the resulting PLY if it exists
-		var ply_path: String = session.output_directory.path_join("output/point_cloud/iteration_7000/point_cloud.ply")
+		var ply_path: String = session.get_training_point_cloud_path()
 		var global_ply: String = ProjectSettings.globalize_path(ply_path)
 		if FileAccess.file_exists(global_ply):
 			_post_process_reconstruction_splats(session, global_ply)
@@ -1090,6 +1101,9 @@ func _on_backend_finished(status: int, output: String) -> void:
 
 func _post_process_reconstruction_splats(session: ReconstructionSession, global_ply: String) -> void:
 	print("ReconstructionManager: Post-processing splats...")
+	if session.visual_style == "Photorealistic" and session.splat_count_density >= 0.99:
+		print("ReconstructionManager: Preserving full-fidelity photorealistic PLY without lossy rewrite.")
+		return
 	var gaussians: Array[GaussianSplat] = PLYLoader.load_gaussians_from_ply(global_ply)
 	if gaussians.is_empty():
 		push_error("ReconstructionManager: Failed to load PLY for post-processing.")

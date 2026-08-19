@@ -152,5 +152,7 @@ func _apply_quality_preset() -> void:
 			_splattable.splat_density = 2.0
 			_splattable.culling_priority = 9
 		_:
-			# AUTO — leave the delegate's defaults so global settings apply.
-			pass
+			# AUTO restores neutral local values so the manager's global settings
+			# remain authoritative even after switching from an explicit preset.
+			_splattable.splat_density = 1.0
+			_splattable.culling_priority = 5

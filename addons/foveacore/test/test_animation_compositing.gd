@@ -10,4 +10,6 @@ func _init() -> void:
 	subsystem._process(0.016)
 	assert(subsystem.get_time() > first_time)
 	print("PASS: animation time advances monotonically")
+	subsystem.free()
+	await process_frame
 	quit(0)

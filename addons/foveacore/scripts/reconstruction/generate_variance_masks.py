@@ -5,8 +5,8 @@ import numpy as np
 
 def main():
     parser = argparse.ArgumentParser(description="Generate temporal variance masks for turntable videos")
-    parser.add_argument("--input", default="f:/foveaengine/fovea-engine/reconstructions/furby_real_test/input", help="Directory containing input frames")
-    parser.add_argument("--output", default="f:/foveaengine/fovea-engine/reconstructions/furby_real_test/masks", help="Directory to save generated masks")
+    parser.add_argument("--input", default="reconstructions/furby_real_test/input", help="Directory containing input frames")
+    parser.add_argument("--output", default="reconstructions/furby_real_test/masks", help="Directory to save generated masks")
     parser.add_argument("--threshold", type=float, default=12.0, help="Variance threshold")
     args = parser.parse_args()
 

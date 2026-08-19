@@ -6,6 +6,7 @@ extends SceneTree
 ## 2. Dynamic generation of indirect draw arguments buffer on GPU.
 ## 3. Asynchronous execution without CPU stalls (skip_sync mode).
 ## 4. GPU-based instance frustum culling execution and mapping.
+const REQUIRES_GPU := true
 
 const GPUCullerPipelineClass := preload("res://addons/foveacore/scripts/advanced/gpu_culler_pipeline.gd")
 const FoveaInstancedCullerClass := preload("res://addons/foveacore/scripts/advanced/fovea_instanced_culler.gd")

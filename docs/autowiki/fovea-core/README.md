@@ -7,13 +7,13 @@
 | Public splat node | VALIDATED (PLY fixtures) | `addons/foveacore/scripts/fovea_splat_3d.gd` |
 | `.splat` parser and router | VALIDATED (14/14 assertions on Godot 4.7.dev5) | `addons/foveacore/scripts/reconstruction/splat_format_loader.gd` |
 | `.spz` decoder | PROPOSED; excluded from the public picker | Planned loader work only |
-| Advanced splat delegate | IMPLEMENTED_UNVALIDATED | `addons/foveacore/scripts/fovea_splattable.gd` |
-| Manager and decoupled subsystems | IMPLEMENTED_UNVALIDATED | `addons/foveacore/scripts/foveacore_manager.gd`, `fovea_*_subsystem.gd` |
+| Public node / advanced delegate boundary | VALIDATED (headless lifecycle and controls) | `FoveaSplat3D` → `FoveaSplattable` propagation passed 26/26, including runtime-only ownership and preset reset behavior. |
+| Manager and decoupled subsystems | VALIDATED (headless facade/lifecycle) | The facade contract passed 30/30 and dynamic `.fovea` registration passed 4/4 on Godot 4.7.dev5; GPU and XR execution remain separate experimental gates. |
 | GPU-aware sorting with CPU fallback | EXPERIMENTAL; invalid GPU permutations fall back to CPU | `addons/foveacore/scripts/fovea_splat_subsystem.gd` and sorter implementations |
-| Native Rust fast path | IMPLEMENTED_UNVALIDATED | `addons/foveacore/rust/` |
-| C++ GDExtension surface | CONFLICT; entry symbol and output collide with Rust | `addons/foveacore/gdextension/` |
+| Native Rust fast path | VALIDATED (format contract and local Windows release build) | The locked workspace passed 5/5 tests and Clippy with warnings denied; its generator reproduced the tracked 208-byte v2 fixture exactly. Runtime performance and portability remain experimental. |
+| C++ GDExtension surface | EXPERIMENTAL; distinct Windows artifact loads locally, while CI and cross-platform parity remain open | `addons/foveacore/gdextension/` |
 | `.fovea` v2 structural reader/writer | VALIDATED on Godot 4.7.dev5 (28/28) and Rust (5 tests) | `addons/foveacore/scripts/fovea_binary_format.gd`, GDScript loader/saver, and Rust fast path |
-| Native `.fovea` runtime rendering | FAILED; registration passes, but the D3D12 visual gate remains blank with compute-contract errors | `addons/foveacore/scripts/fovea_splattable.gd` and native renderers |
+| Native `.fovea` runtime rendering | EXPERIMENTAL; D3D12 capture is framed and green/brown through the CPU passthrough, while image parity and compute culling remain open | `addons/foveacore/scripts/fovea_splattable.gd` and native renderers |
 | GPU, XR, and foveated performance | EXPERIMENTAL | Requires target-hardware measurements |
 
 ## Loader contract

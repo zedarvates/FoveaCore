@@ -65,6 +65,7 @@ func _run_all_tests() -> void:
 	print("Tests échoués: %d" % _tests_failed)
 	print("Taux de réussite: %.1f%%" % (_tests_passed / float(_tests_passed + _tests_failed) * 100.0))
 	print("=".repeat(80))
+	print("[PASS] Color format benchmark assertions passed." if _tests_failed == 0 else "[FAIL] Color format benchmark has %d failed assertion(s)." % _tests_failed)
 	
 	all_tests_complete.emit(_tests_passed, _tests_failed)
 
@@ -119,12 +120,13 @@ func _test_dithering_application() -> void:
 			var val = float(x + y) / 6.0
 			image.set_pixel(x, y, Color(val, val, val, 1.0))
 	
-	var original_pixel = image.get_pixel(0, 0)
+	var original_data: PackedByteArray = image.get_data()
 	_benchmark._apply_floyd_steinberg_dithering(image)
-	var dithered_pixel = image.get_pixel(0, 0)
+	var dithered_data: PackedByteArray = image.get_data()
 	
-	# Le pixel devrait avoir été quantifié
-	if original_pixel != dithered_pixel:
+	# The black corner remains black, so compare the complete image instead of
+	# one already-quantized pixel.
+	if original_data != dithered_data:
 		_test_pass(test_name, "Dithering appliqué avec succès")
 	else:
 		_test_fail(test_name, "Dithering n'a pas modifié l'image")

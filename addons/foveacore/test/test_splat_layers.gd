@@ -128,12 +128,21 @@ func _run_tests() -> void:
 	# Check generated current_splats
 	_assert("Subsystem generated current splats", subsystem.current_splats.size() > 0)
 	if subsystem.current_splats.size() > 0:
-		var final_splat = subsystem.current_splats[0]
+		# The subsystem now performs the renderer-required back-to-front sort, so
+		# source index zero is no longer a stable assertion target.
+		var final_splat: GaussianSplat = null
+		for candidate: GaussianSplat in subsystem.current_splats:
+			if candidate.layer_type == GaussianSplat.LayerType.SHADOW:
+				final_splat = candidate
+				break
+		_assert("Subsystem copied LayerType", final_splat != null)
+		if final_splat == null:
+			_finish()
+			return
 		# Position should be position + origin_offset
 		# (transformed by identity since splattable is at origin)
 		var expected_pos = Vector3(1.5, 2.0, 2.5)
 		_assert("Subsystem applied origin_offset to final splat position", final_splat.position.is_equal_approx(expected_pos))
-		_assert("Subsystem copied LayerType", final_splat.layer_type == GaussianSplat.LayerType.SHADOW)
 	
 	# --- Test 4: Auto-connection to Godot light source ---
 	print("\n--- Test 4: Auto-connection to Godot light source ---")

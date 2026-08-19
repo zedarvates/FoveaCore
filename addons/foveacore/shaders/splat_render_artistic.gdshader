@@ -37,6 +37,7 @@ uniform int splat_subdivisions = 16;
 uniform float lod_ratio = 1.0;
 
 // Layered Splatting toggle
+uniform bool enable_foveated_rendering = false;
 uniform bool enable_layered_splatting = true;
 
 // ── Paramètres Motion-Adaptive LOD (partagés avec le renderer) ───────────────
@@ -197,11 +198,11 @@ void vertex() {
 	aspect_gaze.x *= VIEWPORT_SIZE.x / VIEWPORT_SIZE.y;
 	
 	float dist_to_gaze = distance(aspect_uv, aspect_gaze);
-	bool is_in_focus = dist_to_gaze <= fovea_inner_radius;
+	bool is_in_focus = !enable_foveated_rendering || dist_to_gaze <= fovea_inner_radius;
 	
 	// Dynamic Foveated Layer Weight Calculation
 	float layer_weight = 1.0;
-	if (enable_layered_splatting) {
+	if (enable_foveated_rendering && enable_layered_splatting) {
 		if (layer_type == 0u) {
 			layer_weight = is_in_focus ? 0.8 : 0.3;
 		} else if (layer_type == 1u) {
@@ -249,9 +250,9 @@ void vertex() {
 		POSITION = vec4(0.0);
 	} else if (rand_val > lod_ratio) {
 		POSITION = vec4(0.0);
-	} else if (dist_to_gaze > fovea_outer_radius && rand_val > 0.25) {
+	} else if (enable_foveated_rendering && dist_to_gaze > fovea_outer_radius && rand_val > 0.25) {
 		POSITION = vec4(0.0);
-	} else if (dist_to_gaze > fovea_inner_radius && rand_val > 0.50) {
+	} else if (enable_foveated_rendering && dist_to_gaze > fovea_inner_radius && rand_val > 0.50) {
 		POSITION = vec4(0.0);
 	} else if (length(ndc_pos) > 1.25) {
 		POSITION = vec4(0.0);

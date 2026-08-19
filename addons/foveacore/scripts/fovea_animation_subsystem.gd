@@ -51,3 +51,9 @@ func apply(splats: Array[GaussianSplat]) -> void:
 
 func get_time() -> float:
 	return _time
+
+## Returns true only when this subsystem can mutate splats on the current frame.
+## Static render caches may safely stay active while animation is enabled but
+## no modifier is registered.
+func has_active_modifiers() -> bool:
+	return enabled and not _modifiers.is_empty()

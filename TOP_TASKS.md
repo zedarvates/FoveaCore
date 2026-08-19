@@ -17,26 +17,26 @@ technique) · 🟡 P2 (Phase 7 en cours) · 🔵 P3 (backlog R&D avancé) · �
 
 ## 🔴 P0 — Vérification immédiate (avant tout merge/commit)
 
-- [ ] 1. Lancer les 8 scripts de test Phase 7 dans Godot :
+- [x] 1. Lancer les 8 scripts de test Phase 7 dans Godot :
       `godot --script res://addons/foveacore/test/test_animation_subsystem.gd`,
       `test_flow_field_animator.gd`, `test_morph_covariance_animator.gd`,
       `test_material_oscillation.gd`, `test_lod_stretch_animator.gd`,
       `test_flipbook_animator.gd`, `test_neural_offset_field.gd`,
       `test_bone_skin_animation.gd`.
-- [ ] 2. Vérifier la compilation de `splat_render_triangle.gdshader` après l'ajout
+- [x] 2. Vérifier la compilation de `splat_render_triangle.gdshader` après l'ajout
       de la branche `LAYER_ANIM` (layer_type == 7u) — jamais compilé dans cet environnement.
-- [ ] 3. Valider dans l'éditeur les hypothèses d'API `Skeleton3D` utilisées par
+- [x] 3. Valider dans l'éditeur les hypothèses d'API `Skeleton3D` utilisées par
       `fovea_bone_skin_animator.gd`/`test_bone_skin_animation.gd`
       (`set_bone_rest`, `reset_bone_pose`, `set_bone_pose_position`,
       `get_bone_global_pose`, `force_update_all_bone_transforms`) — risque le
       plus élevé de tout le batch Phase 7, jamais exécuté contre un vrai Godot.
-- [ ] 4. Committer les fichiers de la session en cours (nouveaux animateurs
+- [x] 4. Committer les fichiers de la session en cours (nouveaux animateurs
       Phase 7, modifs `foveacore_manager.gd`/`fovea_splat_subsystem.gd`/
       `gaussian_splat.gd`/`style_engine.gd`, shader, docs) en commits logiques
       groupés par sous-phase.
-- [ ] 5. Ouvrir `test/demo_desktop.tscn` et vérifier l'absence de régression
+- [x] 5. Ouvrir `test/demo_desktop.tscn` et vérifier l'absence de régression
       visuelle sur le rendu de base après les changements Phase 7.
-- [ ] 6. Vérifier que `git status` ne contient plus de travail non commité
+- [x] 6. Vérifier que `git status` ne contient plus de travail non commité
       résiduel d'avant cette session (suite à B6 de `AUDIT_TODO_2026-06-11.md`).
 
 ---
@@ -46,7 +46,7 @@ technique) · 🟡 P2 (Phase 7 en cours) · 🔵 P3 (backlog R&D avancé) · �
 - [ ] 7. **D1 — Typage strict** : ~1230 variables encore non typées (`var x = ...`)
       hors du cœur du pipeline de rendu déjà traité. Continuer fichier par
       fichier en respectant la règle CLAUDE.md "Strictly Typed GDScript".
-- [ ] 8. Auditer les nouveaux animateurs Phase 7 pour confirmer qu'ils respectent
+- [x] 8. Auditer les nouveaux animateurs Phase 7 pour confirmer qu'ils respectent
       déjà cette règle (typage complet) avant qu'ils ne s'ajoutent à la dette.
 
 ---
@@ -57,9 +57,9 @@ technique) · 🟡 P2 (Phase 7 en cours) · 🔵 P3 (backlog R&D avancé) · �
 *`docs/RD_SPLATS_ANIMES_ROADMAP.md`.)*
 
 ### 7.1 Flow-Driven Animation
-- [ ] 9. Preset `CURRENT` : rasteriser les strokes de `splat_brush_engine.gd`
+- [x] 9. Preset `CURRENT` : rasteriser les strokes de `splat_brush_engine.gd`
       dans une texture 3D de flux échantillonnable (outil auteur, pas juste un modifier).
-- [ ] 10. Portage GPU compute (`splat_animate.glsl`, mode `ANIM_FLOW`) pour le
+- [x] 10. Portage GPU compute (`splat_animate.glsl`, mode `ANIM_FLOW`) pour le
       chemin `FoveaInstancedSplatRenderer` (budget VR 1M splats / 0,5 ms).
 - [ ] 11. Démo scène forêt/rideau + GIF pour le README et la boutique Godot.
 
@@ -72,7 +72,7 @@ technique) · 🟡 P2 (Phase 7 en cours) · 🔵 P3 (backlog R&D avancé) · �
       *"Morph Covariance Animation: Animating the Gaussians Themselves"*.
 
 ### 7.3 LAYER_ANIM & Flipbook Temporel
-- [ ] 15. Extension `fovea_asset_loader.gd` : importer un dossier `.ply`/`.fovea`
+- [x] 15. Extension `fovea_asset_loader.gd` : importer un dossier `.ply`/`.fovea`
       en tant que flipbook (peupler `flipbook_frame`/`flipbook_frame_count` au chargement).
 - [ ] 16. Pont StudioTo3D : séquence vidéo reconstruite (pipeline STAR/WorldMirror)
       → flipbook automatique.
@@ -81,12 +81,12 @@ technique) · 🟡 P2 (Phase 7 en cours) · 🔵 P3 (backlog R&D avancé) · �
 - [ ] 18. Démo flamme stylisée + sort magique en VR.
 
 ### 7.4 Material Oscillation & LOD Stretch
-- [ ] 19. Exposer des presets nommés en éditeur ("Living Watercolor",
+- [x] 19. Exposer des presets nommés en éditeur ("Living Watercolor",
       "Pulsing Metal", "Breathing Wood") comme valeurs par défaut de `MaterialStyleConfig`.
 - [ ] 20. Animation fovéatée : injecter une référence caméra dans
       `FoveaAnimationSubsystem.apply()` (ou déplacer ces animateurs vers le GPU)
       pour pouvoir couper l'animation hors zone de regard.
-- [ ] 21. Brancher `FoveaLodStretchAnimator` dans la logique existante de
+- [x] 21. Brancher `FoveaLodStretchAnimator` dans la logique existante de
       `fovea_hybrid_lod_controller.gd` plutôt qu'en animateur indépendant.
 
 ### 7.5 Neural Offset Field

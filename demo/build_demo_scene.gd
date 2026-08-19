@@ -10,20 +10,22 @@ extends SceneTree
 
 const FoveaSplat3DScript := preload("res://addons/foveacore/scripts/fovea_splat_3d.gd")
 const FpsOverlayScript := preload("res://demo/fps_overlay.gd")
-const FIXTURE := "res://test/fixtures/reference_3dgs.ply"
+const DefaultSplatDemoScript := preload("res://demo/default_splat_demo.gd")
+const VIDEO_SPLAT := "res://reconstructions/horse_statue_cc0_v1/fovea_runtime/horse_statue_6999_runtime_v1.ply"
 const OUT := "res://demo/drop_a_ply.tscn"
 
 func _init() -> void:
 	var root := Node3D.new()
 	root.name = "DropAPlyDemo"
+	root.set_script(DefaultSplatDemoScript)
 
 	var env := WorldEnvironment.new()
 	env.name = "WorldEnvironment"
 	var e := Environment.new()
-	e.background_mode = Environment.BG_SKY
-	e.sky = Sky.new()
-	e.sky.sky_material = ProceduralSkyMaterial.new()
-	e.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	e.background_mode = Environment.BG_COLOR
+	e.background_color = Color(0.06, 0.06, 0.09)
+	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	e.ambient_light_color = Color(0.4, 0.4, 0.4)
 	env.environment = e
 	_attach(root, env)
 
@@ -41,7 +43,7 @@ func _init() -> void:
 
 	var splat: Node3D = FoveaSplat3DScript.new()
 	splat.name = "FoveaSplat3D"
-	splat.set("source_path", FIXTURE)
+	splat.set("source_path", VIDEO_SPLAT)
 	_attach(root, splat)
 
 	var layer := CanvasLayer.new()
@@ -54,6 +56,13 @@ func _init() -> void:
 	label.add_theme_color_override("font_color", Color(0.7, 1.0, 0.7))
 	layer.add_child(label)
 	label.owner = root
+
+	var source_status: Label = Label.new()
+	source_status.name = "SourceStatus"
+	source_status.position = Vector2(12, 32)
+	source_status.text = "Resolving splat source..."
+	layer.add_child(source_status)
+	source_status.owner = root
 
 	var packed := PackedScene.new()
 	var err := packed.pack(root)

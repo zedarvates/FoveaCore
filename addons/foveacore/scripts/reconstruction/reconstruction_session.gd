@@ -8,7 +8,7 @@ class_name ReconstructionSession
 @export var output_directory: String = "res://reconstructions/"
 
 @export_group("Pre-processing")
-@export var extraction_fps: int = 2
+@export var extraction_fps: int = 4
 @export var background_threshold: float = 0.95
 @export var blur_threshold: float = 0.25
 @export var mask_mode: String = "Smart Studio"
@@ -21,15 +21,16 @@ class_name ReconstructionSession
 @export var artifixer_checkpoint: String = "" # Path to artifixer checkpoint PT file
 @export var dry_run: bool = false
 @export var exhaustive_matching: bool = false # Use COLMAP exhaustive matching instead of sequential (video) mode
+@export_range(1000, 100000, 1000) var training_iterations: int = 30000
 
 @export_group("Styling & Optimization")
-@export var visual_style: String = "Realistic"
-@export var splat_shape: String = "Auto"
+@export var visual_style: String = "Photorealistic"
+@export var splat_shape: String = "Triangle"
 @export var splat_count_density: float = 1.0
-@export var auto_tag_color: bool = true
+@export var auto_tag_color: bool = false
 @export var enable_wind: bool = false
-@export var wind_speed: float = 1.0
-@export var wind_strength: float = 0.1
+@export var wind_speed: float = 0.0
+@export var wind_strength: float = 0.0
 
 @export_group("Reconstruction State")
 @export var is_processed: bool = false
@@ -63,6 +64,7 @@ func to_dict() -> Dictionary:
 		"artifixer_checkpoint": artifixer_checkpoint,
 		"dry_run": dry_run,
 		"exhaustive_matching": exhaustive_matching,
+		"training_iterations": training_iterations,
 		"visual_style": visual_style,
 		"splat_shape": splat_shape,
 		"splat_count_density": splat_count_density,
@@ -98,7 +100,11 @@ func from_dict(dict: Dictionary) -> void:
 	artifixer_checkpoint = dict.get("artifixer_checkpoint", artifixer_checkpoint) as String
 	dry_run = dict.get("dry_run", dry_run) as bool
 	exhaustive_matching = dict.get("exhaustive_matching", exhaustive_matching) as bool
-	visual_style = dict.get("visual_style", visual_style) as String
+	# Sessions saved before the quality field existed were trained at 7k.
+	training_iterations = dict.get("training_iterations", 7000) as int
+	var loaded_visual_style: String = dict.get("visual_style", visual_style) as String
+	# Migrate sessions saved before the preset was named explicitly.
+	visual_style = "Photorealistic" if loaded_visual_style == "Realistic" else loaded_visual_style
 	splat_shape = dict.get("splat_shape", splat_shape) as String
 	splat_count_density = dict.get("splat_count_density", splat_count_density) as float
 	auto_tag_color = dict.get("auto_tag_color", auto_tag_color) as bool
@@ -111,3 +117,9 @@ func from_dict(dict: Dictionary) -> void:
 	status = dict.get("status", status) as String
 	low_poly_mesh_path = dict.get("low_poly_mesh_path", low_poly_mesh_path) as String
 	splat_data_path = dict.get("splat_data_path", splat_data_path) as String
+
+
+func get_training_point_cloud_path() -> String:
+	return output_directory.path_join(
+		"output/point_cloud/iteration_%d/point_cloud.ply" % training_iterations
+	)

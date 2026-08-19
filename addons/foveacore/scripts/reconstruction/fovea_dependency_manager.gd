@@ -53,7 +53,8 @@ const TOOLS: Dictionary = {
 
 
 ## Returns the command/path used to invoke [param name]. Resolution order:
-## explicit project setting → local TOOLS_DIR binary → bare command (system PATH).
+## explicit project setting → local TOOLS_DIR binary → executable found in
+## the system PATH. Returns an empty string when the tool is unavailable.
 static func resolve(name: String) -> String:
 	return _resolved(name)["path"] as String
 
@@ -68,6 +69,8 @@ static func probe(name: String) -> Dictionary:
 	var info: Dictionary = TOOLS[name]
 	var res: Dictionary = _resolved(name)
 	var exe: String = res["path"] as String
+	if exe.is_empty():
+		return result
 
 	var output: Array = []
 	var code: int = OS.execute(exe, info["probe_args"] as Array[String], output, true, false)
@@ -105,7 +108,7 @@ static func minimal_pipeline_ready() -> bool:
 # ── internals ───────────────────────────────────────────────────────────────
 
 ## Resolves a tool to {path, source}. Order: explicit project setting →
-## local TOOLS_DIR install → bare command name (system PATH).
+## local TOOLS_DIR install → executable found in the system PATH.
 static func _resolved(name: String) -> Dictionary:
 	if not TOOLS.has(name):
 		return {"path": name, "source": "path"}
@@ -116,20 +119,46 @@ static func _resolved(name: String) -> Dictionary:
 	if setting_key != "" and ProjectSettings.has_setting(setting_key):
 		var configured: String = String(ProjectSettings.get_setting(setting_key)).strip_edges()
 		if configured != "":
-			# An absolute/relative path must exist; a bare command is taken as-is.
+			# An absolute/relative path must exist; resolve a bare command now so
+			# OS.execute() is never called with a command that cannot be launched.
 			if ("/" in configured) or ("\\" in configured):
 				if FileAccess.file_exists(configured):
 					return {"path": configured, "source": "setting"}
 			else:
-				return {"path": configured, "source": "setting"}
+				var configured_path: String = _path_binary(configured)
+				if configured_path != "":
+					return {"path": configured_path, "source": "setting"}
 
 	# 2. Binary installed by the integrated downloader under user://fovea_tools/.
 	var local: String = _local_binary_path(name, info["bin"] as String)
 	if local != "":
 		return {"path": local, "source": "local"}
 
-	# 3. Fall back to the bare command (resolved via PATH at run time).
-	return {"path": String(info["bin"]), "source": "path"}
+	# 3. Resolve the system PATH before attempting execution.
+	var path_binary: String = _path_binary(String(info["bin"]))
+	if path_binary != "":
+		return {"path": path_binary, "source": "path"}
+	return {"path": "", "source": ""}
+
+static func _path_binary(command: String) -> String:
+	if command.is_empty():
+		return ""
+	var path_env: String = OS.get_environment("PATH")
+	if path_env.is_empty():
+		return ""
+	var separator: String = ";" if OS.get_name() == "Windows" else ":"
+	var suffixes: Array[String] = [""]
+	if OS.get_name() == "Windows" and command.get_extension().is_empty():
+		suffixes = ["", ".exe", ".com"]
+	for raw_directory: String in path_env.split(separator, false):
+		var directory: String = raw_directory.strip_edges().trim_prefix("\"").trim_suffix("\"")
+		if directory.is_empty():
+			continue
+		for suffix: String in suffixes:
+			var candidate: String = directory.path_join(command + suffix)
+			if FileAccess.file_exists(candidate):
+				return candidate.simplify_path()
+	return ""
 
 static func _local_binary_path(name: String, bin: String) -> String:
 	var ext: String = ".exe" if OS.get_name() == "Windows" else ""

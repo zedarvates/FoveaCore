@@ -332,8 +332,10 @@ func export_to_ply(path: String) -> Error:
 		file.store_float(splat.position.x)
 		file.store_float(splat.position.y)
 		file.store_float(splat.position.z)
-		# normals (estimées à l'up pour l'instant)
-		file.store_float(0.0); file.store_float(1.0); file.store_float(0.0)
+		# Preserve source normals when a styled/decimated export is requested.
+		file.store_float(splat.normal.x)
+		file.store_float(splat.normal.y)
+		file.store_float(splat.normal.z)
 		# f_dc (SH degree-0) from color
 		var r = splat.color.r
 		var g = splat.color.g
@@ -346,17 +348,18 @@ func export_to_ply(path: String) -> Error:
 		file.store_float(f_dc_1)
 		file.store_float(f_dc_2)
 		# opacity (sigmoid inverse)
-		var logit = -log(1.0 / splat.opacity - 1.0)
+		var safe_opacity: float = clampf(splat.opacity, 0.000001, 0.999999)
+		var logit: float = log(safe_opacity / (1.0 - safe_opacity))
 		file.store_float(logit)
 		# scale (log)
-		file.store_float(log(splat.scale.x))
-		file.store_float(log(splat.scale.y))
-		file.store_float(log(splat.scale.z))
-		# rotation (quaternion)
+		file.store_float(log(maxf(splat.scale.x, 0.000001)))
+		file.store_float(log(maxf(splat.scale.y, 0.000001)))
+		file.store_float(log(maxf(splat.scale.z, 0.000001)))
+		# Standard 3DGS quaternion order is w, x, y, z.
+		file.store_float(splat.rotation.w)
 		file.store_float(splat.rotation.x)
 		file.store_float(splat.rotation.y)
 		file.store_float(splat.rotation.z)
-		file.store_float(splat.rotation.w)
 
 	file.close()
 	print("SplatRenderer: Exported %d splats to %s" % [_splats.size(), path])

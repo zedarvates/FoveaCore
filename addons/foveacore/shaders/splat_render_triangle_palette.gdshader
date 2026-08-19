@@ -18,10 +18,10 @@ uniform vec3 aabb_max;
 
 // Codebook Texture (2xK, FORMAT_RGBAF) pour la Vector Quantization (covariance)
 uniform sampler2D covar_texture;
+uniform bool covar_scale_is_linear = false;
 
-// Palette de couleurs (256 couleurs RGB, format RGBA32F)
-// Chaque ligne = 16 couleurs, 16 lignes = 256 couleurs
-uniform sampler2D palette_texture;
+// Palette verticale 1×N (FORMAT_RGBA8), matching setup_palette().
+uniform sampler2D palette_texture : filter_nearest, repeat_disable;
 uniform int palette_size = 256;
 uniform bool use_palette = true; // Uniforme de compatibilite
 
@@ -39,6 +39,7 @@ uniform bool use_dithering = true;
 uniform float dither_strength = 1.0;
 
 // Layered Splatting toggle
+uniform bool enable_foveated_rendering = false;
 uniform bool enable_layered_splatting = true;
 
 // Surface Waves (Dynamic, Repeating & Looping)
@@ -96,7 +97,9 @@ void vertex() {
     vec3 scale = tex0.xyz;
     vec4 rot = vec4(tex0.w, tex1.x, tex1.y, tex1.z);
     
-    mat3 cov3d = compute_cov3d(scale, rot);
+    mat3 cov3d = covar_scale_is_linear
+        ? compute_cov3d_linear(scale, rot)
+        : compute_cov3d(scale, rot);
     
     // Transformer la covariance de l'espace local à l'espace vue (inclut rotation/échelle d'instance)
     mat3 MV = mat3(MODELVIEW_MATRIX);
@@ -151,11 +154,11 @@ void vertex() {
     aspect_gaze.x *= VIEWPORT_SIZE.x / VIEWPORT_SIZE.y;
     
     float dist_to_gaze = distance(aspect_uv, aspect_gaze);
-    bool is_in_focus = dist_to_gaze <= fovea_inner_radius;
+    bool is_in_focus = !enable_foveated_rendering || dist_to_gaze <= fovea_inner_radius;
     
     // Dynamic Foveated Layer Weight Calculation
     float layer_weight = 1.0;
-    if (enable_layered_splatting) {
+    if (enable_foveated_rendering && enable_layered_splatting) {
         if (layer_type == 0u) {
             layer_weight = is_in_focus ? 0.8 : 0.3;
         } else if (layer_type == 1u) {
@@ -197,9 +200,9 @@ void vertex() {
     
     if (layer_weight <= 0.01) {
         POSITION = vec4(0.0);
-    } else if (dist_to_gaze > fovea_outer_radius && random_val > 0.25) {
+    } else if (enable_foveated_rendering && dist_to_gaze > fovea_outer_radius && random_val > 0.25) {
         POSITION = vec4(0.0);
-    } else if (dist_to_gaze > fovea_inner_radius && random_val > 0.50) {
+    } else if (enable_foveated_rendering && dist_to_gaze > fovea_inner_radius && random_val > 0.50) {
         POSITION = vec4(0.0);
     } else {
         if (length(ndc_pos) > 1.25) {
@@ -228,12 +231,12 @@ void vertex() {
 }
 
 // Fonction de dithering Floyd-Steinberg
-float apply_floyd_steinberg_dither(vec2 screen_pos, float intensity) {
+float apply_floyd_steinberg_dither(vec2 pixel_pos, float intensity) {
     if (!use_dithering) return intensity;
     
     // Crée un motif de dithering basé sur la position écran
     // Utilise un motif Bayer 4x4 pour un dithering régulier
-    vec2 dither_coord = floor(screen_pos * VIEWPORT_SIZE / 4.0);
+    vec2 dither_coord = floor(pixel_pos / 4.0);
     float dither_pattern = fract(
         sin(dot(dither_coord, vec2(12.9898, 78.233))) * 43758.5453
     );
@@ -242,7 +245,7 @@ float apply_floyd_steinberg_dither(vec2 screen_pos, float intensity) {
     float dither_noise = (dither_pattern - 0.5) * 0.08 * dither_strength;
     
     // Applique aussi un motif spatial pour réduire le banding
-    vec2 wave = sin(screen_pos.xy * 20.0 + vec2(0.0, 1.0)) * 0.02;
+    vec2 wave = sin(pixel_pos.xy * 0.05 + vec2(0.0, 1.0)) * 0.02;
     dither_noise += wave.x * wave.y * dither_strength;
     
     return clamp(intensity + dither_noise, 0.0, 1.0);
@@ -264,16 +267,13 @@ void fragment() {
     }
     
     // --- RÉCUPÉRATION DE LA COULEUR DE LA PALETTE ---
-    // Convertit l'index de palette (0-255) en coordonnées texture
-    // Palette organisée en grille 16x16 (256 couleurs)
-    float palette_x = float(v_palette_index % 16);
-    float palette_y = float(v_palette_index / 16);
-    vec2 palette_uv = (vec2(palette_x, palette_y) + 0.5) / 16.0;
+    float palette_v = (float(v_palette_index) + 0.5) / float(max(palette_size, 1));
+    vec2 palette_uv = vec2(0.5, palette_v);
     
     vec3 color_from_palette = texture(palette_texture, palette_uv).rgb;
     
     // Applique le dithering pour réduire le banding
-    float dither_factor = apply_floyd_steinberg_dither(v_screen_pos, 1.0);
+    float dither_factor = apply_floyd_steinberg_dither(FRAGCOORD.xy, 1.0);
     
     // Légère variation de couleur pour casser les bandes
     vec3 dithered_color = color_from_palette * dither_factor;
@@ -286,7 +286,7 @@ void fragment() {
     EMISSION = dithered_color * 0.01 + vec3(v_specular);
     
     // Dithering sur l'alpha aussi pour les bords transparents
-    ALPHA = apply_floyd_steinberg_dither(v_screen_pos, alpha);
+    ALPHA = apply_floyd_steinberg_dither(FRAGCOORD.xy, alpha);
 }
 
 void light() {

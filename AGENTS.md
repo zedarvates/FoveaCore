@@ -3,7 +3,7 @@
 ## Build & Test Commands
 - **GDExtension**: `scons target=template_debug platform=windows` (if source available)
 - **Godot Project**: Open in Godot 4.7.dev5 Mono Official (or later 4.7 versions)
-- **Test Scene**: `godot --scene res://test/test_foveacore.tscn`
+- **Test Scene**: `godot --scene res://demo/drop_a_ply.tscn`
 - **Reconstruction Tools**:
   - `python addons/foveacore/scripts/reconstruction/diffsynth_bridge.py`: Unified DiffSynth bridge (WorldMirror/DVLT/Vista4D).
   - `python addons/foveacore/scripts/reconstruction/worldmirror_bridge.py`: WorldMirror 2.0 bridge.

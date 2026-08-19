@@ -20,6 +20,9 @@ extends Node3D
 		mesh_instance = val
 		_update_references()
 
+## Optional LOD stretch animator node to modulate splat scale near transition boundary.
+@export var lod_stretch_animator: FoveaLodStretchAnimator = null
+
 @export_group("LOD Settings")
 ## Distance (in meters) at which the renderer switches from Gaussian Splats to the simplified mesh.
 @export var transition_distance: float = 12.0
@@ -112,6 +115,10 @@ func _evaluate_lod(force: bool = false) -> void:
 		
 	var dist := global_position.distance_to(camera.global_position)
 	var target_lod := 0 # Default to Splat
+
+	if lod_stretch_animator != null and transition_distance > 0.0:
+		var dist_ratio := clampf(dist / transition_distance, 0.0, 1.0)
+		lod_stretch_animator.amplitude = lerpf(0.0, 0.25, dist_ratio)
 	
 	if dist >= transition_distance:
 		target_lod = 1 # Switch to Mesh

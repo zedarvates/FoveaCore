@@ -1,17 +1,41 @@
 extends Resource
 class_name NeuralStyleBridge
 
-## NeuralStyleBridge — Pont de connexion ComfyUI pour le stylisme de textures
-## Permet d'envoyer des requêtes à une instance ComfyUI locale ou distante (port 8188)
-## pour générer ou styliser des textures d'eau en Img2Img.
+## NeuralStyleBridge — ComfyUI bridge for photorealistic Img2Img generation.
+## Sends source images to a local or remote ComfyUI instance and
+## preserves source structure while restoring natural material detail.
 
 @export var comfyui_url: String = "http://127.0.0.1:8188"
+@export var comfyui_fallback_urls: PackedStringArray = PackedStringArray(["http://127.0.0.1:8000"])
 @export var model_path: String = ""
-@export var intensity: float = 0.55 # Denoise factor pour Img2Img
-@export var output_resolution: Vector2i = Vector2i(512, 512)
-@export var checkpoint_name: String = "v1-5-pruned-emaonly.safetensors"
-@export var positive_prompt_suffix: String = "high quality, hyperrealistic water texture, ripple flow"
-@export_multiline var negative_prompt: String = "blurry, low quality, bad details, text, watermark, signature"
+## Low-detail splat previews need a decisive Img2Img pass; weaker values retain
+## their blurred blobs and synthetic colour cast instead of rebuilding detail.
+@export_range(0.0, 1.0, 0.01) var intensity: float = 0.85
+@export var output_resolution: Vector2i = Vector2i(1024, 1024)
+## Empty means: query ComfyUI and select a known photorealistic checkpoint.
+## An explicit value remains an opt-in override, but must exist on the server.
+@export var checkpoint_name: String = ""
+@export_range(1, 100, 1) var sampling_steps: int = 50
+@export_range(1.0, 30.0, 0.1) var guidance_scale: float = 6.5
+@export_enum("euler", "euler_ancestral", "dpmpp_2m", "dpmpp_2m_sde") var sampler_name: String = "dpmpp_2m"
+@export_enum("normal", "karras", "exponential", "sgm_uniform") var scheduler_name: String = "karras"
+@export var positive_prompt_suffix: String = "photorealistic photograph, true-to-life natural colors, natural materials, physically accurate lighting, realistic fine details, sharp focus, high dynamic range, high quality"
+@export_multiline var negative_prompt: String = "cartoon, illustration, childlike drawing, painting, anime, low-poly, plastic, glowing foliage, neon colors, oversaturated, cyan color cast, oversmoothed, blurry, low resolution, compression artifacts, blocky details, bad details, text, watermark, signature"
+
+# GDScript does not treat the implicit conversion to Array[String] as a
+# constant expression during editor class registration. Keep the immutable
+# literal untyped here; every consumer still iterates it as String.
+const PHOTOREALISTIC_CHECKPOINT_HINTS: Array = [
+	"juggernaut",
+	"realvisxl",
+	"realisticvision",
+	"epicrealism",
+	"photoreal",
+	"realistic",
+	"sdxl_base",
+	"sd_xl_base",
+	"sdxl"
+]
 
 # Instance to an external ONNX runtime (via Plugin or GDExtension)
 var _inference_engine: Object = null
@@ -27,48 +51,59 @@ func load_style_model(path: String) -> bool:
 	print("NeuralStyleBridge: Modèle LoRA/ONNX chargé : ", model_path)
 	return true
 
-## Méthode de secours synchrone simulée (existante)
+## Conservative synchronous fallback: never fake photorealism with a color
+## filter when no inference model is available.
 func apply_style(source: Image) -> Image:
-	var stylized := source.duplicate()
-	stylized.adjust_bcs(1.2, 1.5, 0.8) # Simulation rapide
-	print("NeuralStyleBridge: Frame stylisée (Simulation locale).")
-	return stylized
+	var preserved: Image = source.duplicate()
+	push_warning("NeuralStyleBridge: aucun modèle d'inférence actif; image source préservée sans stylisation.")
+	return preserved
 
 func is_style_ready() -> bool:
 	return not model_path.is_empty()
 
 ## --- PIPELINE ASYNCHRONE COMFYUI ---
 
-## Déclenche le pipeline Img2Img asynchrone pour styliser une texture d'eau
+## Starts the asynchronous photorealistic Img2Img pipeline.
 func stylize_texture_comfy(input_image: Image, positive_prompt: String, callback: Callable) -> void:
 	if input_image == null:
 		push_error("NeuralStyleBridge: Image d'entrée nulle.")
 		callback.call(null)
 		return
 
-	# Étape 1 : Sauvegarder l'image au format PNG en mémoire
+	var main_loop: MainLoop = Engine.get_main_loop()
+	if not main_loop is SceneTree:
+		push_error("NeuralStyleBridge: Impossible d'accéder au SceneTree.")
+		callback.call(null)
+		return
+
+	var tree: SceneTree = main_loop as SceneTree
+	_resolve_comfyui_checkpoint(
+		tree,
+		func(resolved_checkpoint: String) -> void:
+			if resolved_checkpoint.is_empty():
+				callback.call(null)
+				return
+			checkpoint_name = resolved_checkpoint
+			_upload_photorealistic_input(input_image, positive_prompt, callback, tree)
+	)
+
+
+func _upload_photorealistic_input(input_image: Image, positive_prompt: String, callback: Callable, tree: SceneTree) -> void:
+	# Lanczos avoids adding bilinear blur before the Img2Img pass.
 	var prepared_image: Image = input_image.duplicate()
-	prepared_image.resize(output_resolution.x, output_resolution.y)
+	prepared_image.resize(output_resolution.x, output_resolution.y, Image.INTERPOLATE_LANCZOS)
 	var png_bytes: PackedByteArray = prepared_image.save_png_to_buffer()
 	if png_bytes.is_empty():
 		push_error("NeuralStyleBridge: Échec de l'encodage de l'image en PNG.")
 		callback.call(null)
 		return
 
-	# Étape 2 : Créer un client HTTP temporaire sur le Root de la scène pour l'asynchronisme
-	var main_loop := Engine.get_main_loop()
-	if not main_loop or not main_loop is SceneTree:
-		push_error("NeuralStyleBridge: Impossible d'accéder au SceneTree.")
-		callback.call(null)
-		return
-
-	var tree := main_loop as SceneTree
-	var http_uploader := HTTPRequest.new()
+	var http_uploader: HTTPRequest = HTTPRequest.new()
 	tree.root.add_child(http_uploader)
 	_active_http_requests.append(http_uploader)
 
-	var filename := "fovea_water_input_" + str(Time.get_ticks_msec()) + ".png"
-	var boundary := "GodotBoundary" + str(Time.get_ticks_msec())
+	var filename: String = "fovea_photoreal_input_" + str(Time.get_ticks_msec()) + ".png"
+	var boundary: String = "GodotBoundary" + str(Time.get_ticks_msec())
 	
 	# Construire le corps multipart/form-data pour l'upload d'image
 	var header_str := "--" + boundary + "\r\n"
@@ -118,6 +153,103 @@ func stylize_texture_comfy(input_image: Image, positive_prompt: String, callback
 		push_error("NeuralStyleBridge: Échec de la requête d'upload (Err: %d)." % err)
 		_cleanup_request(http_uploader)
 		callback.call(null)
+
+
+## Queries configured local endpoints and resolves a checkpoint before upload.
+## This prevents a missing or illustration-oriented legacy default from being
+## submitted silently as a supposedly photorealistic generation.
+func _resolve_comfyui_checkpoint(tree: SceneTree, callback: Callable, candidate_index: int = 0, saw_server: bool = false) -> void:
+	var candidates: Array[String] = get_comfyui_endpoint_candidates()
+	if candidate_index >= candidates.size():
+		if saw_server:
+			push_error("NeuralStyleBridge: aucun checkpoint photoréaliste compatible n'est installé dans ComfyUI.")
+		else:
+			push_error("NeuralStyleBridge: aucune instance ComfyUI joignable sur les endpoints configurés.")
+		callback.call("")
+		return
+
+	var candidate_url: String = candidates[candidate_index]
+	var http_preflight: HTTPRequest = HTTPRequest.new()
+	tree.root.add_child(http_preflight)
+	_active_http_requests.append(http_preflight)
+	http_preflight.request_completed.connect(
+		func(_result: int, response_code: int, _headers: PackedStringArray, response_body: PackedByteArray) -> void:
+			_cleanup_request(http_preflight)
+			if response_code != 200:
+				_resolve_comfyui_checkpoint(tree, callback, candidate_index + 1, saw_server)
+				return
+
+			var parsed: Variant = JSON.parse_string(response_body.get_string_from_utf8())
+			if not parsed is Dictionary:
+				_resolve_comfyui_checkpoint(tree, callback, candidate_index + 1, true)
+				return
+
+			var available: PackedStringArray = extract_available_checkpoints(parsed as Dictionary)
+			var resolved: String = select_photorealistic_checkpoint(available)
+			if resolved.is_empty():
+				_resolve_comfyui_checkpoint(tree, callback, candidate_index + 1, true)
+				return
+
+			comfyui_url = candidate_url
+			callback.call(resolved)
+	)
+
+	var request_error: Error = http_preflight.request(candidate_url.trim_suffix("/") + "/object_info/CheckpointLoaderSimple")
+	if request_error != OK:
+		_cleanup_request(http_preflight)
+		_resolve_comfyui_checkpoint(tree, callback, candidate_index + 1, saw_server)
+
+
+func get_comfyui_endpoint_candidates() -> Array[String]:
+	var candidates: Array[String] = []
+	var configured: Array[String] = [comfyui_url]
+	for fallback_url: String in comfyui_fallback_urls:
+		configured.append(fallback_url)
+	for url: String in configured:
+		var normalized: String = url.strip_edges().trim_suffix("/")
+		if not normalized.is_empty() and not candidates.has(normalized):
+			candidates.append(normalized)
+	return candidates
+
+
+func extract_available_checkpoints(object_info: Dictionary) -> PackedStringArray:
+	var result: PackedStringArray = PackedStringArray()
+	var loader_info: Variant = object_info.get("CheckpointLoaderSimple", {})
+	if not loader_info is Dictionary:
+		return result
+	var input_info: Variant = (loader_info as Dictionary).get("input", {})
+	if not input_info is Dictionary:
+		return result
+	var required_info: Variant = (input_info as Dictionary).get("required", {})
+	if not required_info is Dictionary:
+		return result
+	var checkpoint_spec: Variant = (required_info as Dictionary).get("ckpt_name", [])
+	if not checkpoint_spec is Array or checkpoint_spec.is_empty():
+		return result
+	var names: Variant = checkpoint_spec[0]
+	if not names is Array:
+		return result
+	for name: Variant in names:
+		var checkpoint: String = str(name).strip_edges()
+		if not checkpoint.is_empty():
+			result.append(checkpoint)
+	return result
+
+
+func select_photorealistic_checkpoint(available: PackedStringArray) -> String:
+	var requested: String = checkpoint_name.strip_edges()
+	if not requested.is_empty():
+		for checkpoint: String in available:
+			if checkpoint.to_lower() == requested.to_lower():
+				return checkpoint
+		return ""
+
+	for hint: String in PHOTOREALISTIC_CHECKPOINT_HINTS:
+		for checkpoint: String in available:
+			var normalized: String = checkpoint.to_lower().replace("-", "_").replace(" ", "_")
+			if normalized.contains(hint):
+				return checkpoint
+	return ""
 
 
 ## Soumet le workflow ComfyUI au serveur `/prompt`
@@ -172,6 +304,9 @@ func build_img2img_workflow(image_name: String, positive_prompt: String, seed: i
 
 
 func _build_img2img_workflow(image_name: String, prompt_text: String, seed: int = -1) -> Dictionary:
+	if checkpoint_name.strip_edges().is_empty():
+		push_error("NeuralStyleBridge: le checkpoint doit être résolu avant de construire le workflow.")
+		return {}
 	var resolved_seed: int = seed if seed >= 0 else randi()
 	var complete_prompt: String = prompt_text.strip_edges()
 	if not positive_prompt_suffix.is_empty():
@@ -185,10 +320,10 @@ func _build_img2img_workflow(image_name: String, prompt_text: String, seed: int 
 				"class_type": "KSampler",
 				"inputs": {
 					"seed": resolved_seed,
-					"steps": 20,
-					"cfg": 7.0,
-					"sampler_name": "euler",
-					"scheduler": "normal",
+					"steps": sampling_steps,
+					"cfg": guidance_scale,
+					"sampler_name": sampler_name,
+					"scheduler": scheduler_name,
 					"denoise": intensity,
 					"model": ["4", 0],
 					"positive": ["5", 0],
@@ -226,7 +361,7 @@ func _build_img2img_workflow(image_name: String, prompt_text: String, seed: int 
 			"9": {
 				"class_type": "SaveImage",
 				"inputs": {
-					"filename_prefix": "FoveaStylizedWater",
+					"filename_prefix": "FoveaPhotorealistic",
 					"images": ["8", 0]
 				}
 			},
@@ -250,7 +385,7 @@ func _build_img2img_workflow(image_name: String, prompt_text: String, seed: int 
 
 ## Boucle de polling pour surveiller l'état de la tâche sur ComfyUI
 func _poll_comfy_status(prompt_id: String, callback: Callable, tree: SceneTree, attempt: int = 0) -> void:
-	if attempt > 45: # Timeout après 45 tentatives (~45 secondes)
+	if attempt > 180: # Allow up to three minutes for a 1024px quality pass.
 		push_error("NeuralStyleBridge: Dépassement de délai (timeout) pour le rendu de texture.")
 		callback.call(null)
 		return

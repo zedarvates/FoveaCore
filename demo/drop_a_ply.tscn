@@ -1,41 +1,46 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" path="res://addons/foveacore/scripts/fovea_splat_3d.gd" id="1_ax5rd"]
-[ext_resource type="Script" path="res://demo/fps_overlay.gd" id="2_twvjj"]
-
-[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_fewj4"]
-
-[sub_resource type="Sky" id="Sky_wkp3r"]
-sky_material = SubResource("ProceduralSkyMaterial_fewj4")
+[ext_resource type="Script" path="res://demo/default_splat_demo.gd" id="1_twvjj"]
+[ext_resource type="Script" path="res://addons/foveacore/scripts/fovea_splat_3d.gd" id="2_fewj4"]
+[ext_resource type="Script" path="res://demo/fps_overlay.gd" id="3_wkp3r"]
 
 [sub_resource type="Environment" id="Environment_06pji"]
-background_mode = 2
-sky = SubResource("Sky_wkp3r")
-ambient_light_source = 3
+background_mode = 1
+background_color = Color(0.06, 0.06, 0.09, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.4, 0.4, 0.4, 1)
 
-[node name="DropAPlyDemo" type="Node3D" unique_id=1133306435]
+[node name="DropAPlyDemo" type="Node3D" unique_id=1954996533]
+script = ExtResource("1_twvjj")
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1917609962]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1945482781]
 environment = SubResource("Environment_06pji")
 
-[node name="Sun" type="DirectionalLight3D" parent="." unique_id=826868150]
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=246954362]
 transform = Transform3D(0.8660254, 0.38302222, -0.32139382, 0, 0.64278764, 0.76604444, 0.5, -0.66341394, 0.5566704, 0, 0, 0)
 shadow_enabled = true
 
-[node name="Camera3D" type="Camera3D" parent="." unique_id=349991040]
+[node name="Camera3D" type="Camera3D" parent="." unique_id=380180825]
 transform = Transform3D(1, 0, 0, 0, 0.9723873, 0.23337297, 0, -0.23337297, 0.9723873, 0, 1.2, 5)
 current = true
 
-[node name="FoveaSplat3D" type="Node3D" parent="." unique_id=945692931]
-script = ExtResource("1_ax5rd")
-source_path = "res://test/fixtures/reference_3dgs.ply"
+[node name="FoveaSplat3D" type="Node3D" parent="." unique_id=1654621327]
+script = ExtResource("2_fewj4")
+source_path = "res://reconstructions/horse_statue_cc0_v1/fovea_runtime/horse_statue_6999_runtime_v1.ply"
 
-[node name="HUD" type="CanvasLayer" parent="." unique_id=962691117]
+[node name="HUD" type="CanvasLayer" parent="." unique_id=1435091518]
 
-[node name="FpsOverlay" type="Label" parent="HUD" unique_id=1753502969]
+[node name="FpsOverlay" type="Label" parent="HUD" unique_id=1698779288]
 offset_left = 12.0
 offset_top = 8.0
 offset_right = 12.0
 offset_bottom = 8.0
 theme_override_colors/font_color = Color(0.7, 1, 0.7, 1)
-script = ExtResource("2_twvjj")
+script = ExtResource("3_wkp3r")
+
+[node name="SourceStatus" type="Label" parent="HUD" unique_id=614447320]
+offset_left = 12.0
+offset_top = 32.0
+offset_right = 12.0
+offset_bottom = 32.0
+text = "Resolving splat source..."

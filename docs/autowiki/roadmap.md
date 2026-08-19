@@ -11,14 +11,15 @@ This roadmap prioritizes contract correctness and measurable validation over fea
 - [x] Add cross-language golden fixtures and corrupt-input tests.
 - [x] Assert semantic interpretation of every 16-byte splat field.
 - Run the direct 24-byte instanced GPU readback test under the declared Godot 4.7 CI baseline, then inspect publication-texture parity. A separate non-GPU source-contract suite covers shader/layout drift during the hardware-blocked interval.
+- Keep process- and network-dependent suites marked `REQUIRES_INTEGRATION` so the hard-fail `nogpu` runner remains deterministic.
 - **Exit:** all supported reader/writer combinations pass on the Godot 4.7+ baseline and the conflicting plan is superseded or relabeled.
 
 ### 2. Reconcile public API documentation
 
-- Compare `docs/developer_reference.md` with current script signals and methods.
-- Remove or implement absent signatures deliberately.
-- Add a generated signature check.
-- **Exit:** no undocumented public method and no documented method absent from code.
+- [x] Compare `docs/developer_reference.md` with current stable-node, autoload, and reconstruction script signals and methods.
+- [x] Remove absent signatures and distinguish autoload identities from backing `class_name` values.
+- [x] Add a source-extracted, non-GPU signature drift check.
+- **Exit reached for the scoped public surfaces:** every active public method and signal in the guarded sources is documented; known obsolete signatures are rejected. Full reference generation remains P3 work.
 
 ### 3. Normalize capability status
 
@@ -43,9 +44,9 @@ This roadmap prioritizes contract correctness and measurable validation over fea
 
 ### 6. Clarify native packaging
 
-- Assign platform artifact ownership between Rust and C++ paths.
+- Preserve the accepted Rust-packaged/C++-experimental artifact ownership and validate the updated C++ CI job.
 - Detect collisions and verify binary provenance in CI.
-- **Exit:** one unambiguous packaged native artifact per target.
+- **Exit:** one unambiguous packaged native artifact per target, with any opt-in C++ package covered by install and load tests.
 
 ## P3 — Automation and ergonomics
 

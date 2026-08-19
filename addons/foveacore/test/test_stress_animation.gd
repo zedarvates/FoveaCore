@@ -26,3 +26,4 @@ func _run_all() -> void:
 	print("  ✅ 10,000 frames completed, no NaN")
 	_passed += 1
 	print("  %d/%d" % [_passed, _passed + _failed])
+	sys.free()

@@ -44,6 +44,14 @@
 
 <p align="center"><sub>The checked-in <code>demo_bonsai.ply</code> fixture loaded through <code>FoveaSplat3D</code> in Godot 4.7.dev5, Forward+, and D3D12 desktop mode. This capture demonstrates the current PLY runtime path; it is not a performance benchmark.</sub></p>
 
+### Fail-closed transparency gate
+
+<p align="center">
+  <img src="docs/images/transparency-framebuffer-oracle.png" alt="One and two 50 percent red layers composed over black" width="256" />
+</p>
+
+<p align="center"><sub>The deterministic D3D12 oracle measured one 50% layer at 0.498 and two layers at 0.749, against 0.500 and 0.750 expectations. Its forced negative control exits non-zero. This validates framebuffer composition, not production Gaussian-splat parity. See the <a href="addons/foveacore/test/README_TRANSPARENCY_TESTS.md">transparency harness record</a>.</sub></p>
+
 ## How it fits together
 
 ```mermaid
@@ -78,7 +86,7 @@ Add a `FoveaSplat3D` node in the editor and set `source_path`, or create it from
 
 ```gdscript
 var splat := FoveaSplat3D.new()
-splat.source_path = "res://assets/garden.ply"
+splat.source_path = "res://test/demo_bonsai.ply"
 add_child(splat)
 ```
 
@@ -100,7 +108,7 @@ started in mutation mode:
 
 ```bash
 uo-godot-cli fovea status
-uo-godot-cli fovea add /root/Main res://assets/garden.ply --quality balanced
+uo-godot-cli fovea add /root/Main res://test/demo_bonsai.ply --quality balanced
 uo-godot-cli fovea validate
 ```
 
@@ -112,14 +120,16 @@ Saving is a separate unsafe operation and never happens automatically.
 
 | Area | Status | What it means |
 | --- | --- | --- |
-| Godot addon and `FoveaSplat3D` | Available with validation | Run the supplied scenes on your target renderer and asset. |
+| Godot addon and `FoveaSplat3D` | Available with validation | The public-node/delegate lifecycle and controls pass 26/26 headless assertions; representative rendering still requires the supplied target-renderer gates. |
 | PLY runtime workflow | Available with validation | The checked-in fixture loads and renders; validate your own asset and target GPU. |
 | Local CLI automation contract | Available with validation | Contract v1 can inspect, add, and validate an unsaved splat; it starts no listener and writes no files. |
 | Native `.fovea` v2 structure | Available with validation | Godot 4.7.dev5 passes 28 structural and corrupt-input assertions; the deterministic Rust fixture is byte-reproducible. |
 | Native `.fovea` runtime workflow | Experimental | Godot 4.7.dev5/D3D12 loaded the 12,473-record bonsai, retained 11,808 splats after cleaning, and produced a framed green/brown 800×600 capture through the default CPU passthrough. Palette lookup, asset bounds, and linear covariance scale now match the v2 sections; a synthetic two-instance GPU layout/readback passes, while representative native image parity and acceleration remain open. |
+| Experimental C++ GDExtension | Experimental | The Windows release target now owns `foveacore_cpp.dll` and `foveacore_cpp_init`, leaving the packaged Rust runtime untouched. A local Windows build, Godot registration/instantiation smoke, and missing-binary negative control pass. The CI workflow now builds and smoke-tests that artifact; remote certification, portability, and renderer parity remain open. |
 | FFmpeg + COLMAP StudioTo3D | Available with validation | Requires working local installations and suitable source footage. |
-| GPU sorting and voxel HLOD | Experimental | The prepared-index PLY capture rejects an incomplete GPU permutation and falls back to an exact 12,473-splat CPU sort; transitions, GPU-sort correctness, and image quality are not certified across assets or devices. |
+| GPU sorting and voxel HLOD | Experimental | D3D12 Forward+ returned a complete back-to-front GPU permutation for the 17,013-splat video reconstruction; the focused sorter gate passed 30/30 and the static-cache gate passed 7/7. The settled demo capture reports 60 FPS on the recorded RTX 5060 Ti, while other GPUs, native `.fovea` compute culling, XR, and portability remain open. |
 | Tile-based compute rasterizer | Experimental | The 16×16 path passes a 10/10 D3D12 dispatch/readback gate on an RTX 5060 Ti; standard-renderer equivalence and measured performance remain open. |
+| Transparency framebuffer harness | Experimental | A deterministic alpha oracle passes on the recorded D3D12 system and fails closed under its negative control; the five 3D layouts are not yet compared with production splat output. |
 | OpenXR, eye tracking, and foveation | Experimental | Requires a supported runtime, headset, and representative smoke tests. |
 | Multiplayer VR synchronization | Experimental | A loopback two-process ENet test covers join, pose, authority-mediated brush replication, and disconnect cleanup; two-headset OpenXR validation is still required. |
 | ComfyUI image-to-splat bridge | Experimental | API workflows can upload an image and import generated `.fovea`, `.ply`, or `.splat` output into `FoveaSplat3D`; the loopback contract is tested, while a real 3DGS/Blender workflow remains a release gate. |
@@ -148,6 +158,7 @@ Run the checks relevant to the component you change:
 
 ```bash
 dotnet build FoveaEngine.csproj --configuration Release --nologo
+dotnet test tests/FoveaEngine.Tests/FoveaEngine.Tests.csproj --configuration Release --nologo
 cargo test --manifest-path addons/foveacore/rust/Cargo.toml
 python addons/tools/test_validation_tools.py
 python tools/check_public_docs.py

@@ -30,14 +30,13 @@ func _run_tests() -> void:
 	var culler := GPUCullerPipelineClass.new()
 	_assert("GPUCullerPipeline instantiated", culler != null)
 	
-	var compositor_effect := FoveaCompositorEffectClass.new()
+	var compositor_effect: FoveaCompositorEffect = FoveaCompositorEffectClass.new(culler)
 	_assert("FoveaCompositorEffect instantiated", compositor_effect != null)
 	
 	# Verify flag is present and maps properly
 	_assert("Compositor effect has enable_tile_rasterizer property", "enable_tile_rasterizer" in compositor_effect)
 	_assert("Default enable_tile_rasterizer is false", compositor_effect.enable_tile_rasterizer == false)
 	
-	compositor_effect.culler_pipeline = culler
 	compositor_effect.enable_tile_rasterizer = true
 	_assert("Can set enable_tile_rasterizer to true", compositor_effect.enable_tile_rasterizer == true)
 	
@@ -111,8 +110,9 @@ func _run_tests() -> void:
 		_assert("Tile dispatch is submitted", dispatch_succeeded)
 		if not dispatch_succeeded:
 			_cleanup_gpu_fixtures(culler, output_buf, color_tex, covar_tex, palette_tex, camera)
+			compositor_effect.culler_pipeline = null
 			culler.cleanup()
-			_finish()
+			call_deferred("_finish")
 			return
 		rd.sync()
 		var rendered_bytes: PackedByteArray = rd.texture_get_data(color_tex, 0)
@@ -125,8 +125,9 @@ func _run_tests() -> void:
 		print("  [INFO] Skipping GPU dispatch test: RenderingDevice is not available in this headless/dummy context.")
 		_assert("Graceful bypass on missing RenderingDevice", true)
 
+	compositor_effect.culler_pipeline = null
 	culler.cleanup()
-	_finish()
+	call_deferred("_finish")
 
 func _cleanup_gpu_fixtures(
 		culler: GPUCullerPipeline,
@@ -143,7 +144,7 @@ func _cleanup_gpu_fixtures(
 	rd.free_rid(palette_tex)
 	rd.free_rid(culler.last_counter_buffer_rid)
 	culler.last_counter_buffer_rid = RID()
-	camera.queue_free()
+	camera.free()
 
 func _finish() -> void:
 	print("\n" + "======================================================================")

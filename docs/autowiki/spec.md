@@ -44,7 +44,7 @@ The current release-facing status remains pre-release. GPU, XR, reconstruction, 
 
 ### `FoveaSplat3D`
 
-**State:** IMPLEMENTED_UNVALIDATED
+**State:** VALIDATED for headless lifecycle, delegation, and control propagation; representative rendering remains EXPERIMENTAL
 
 The stable Godot node is defined in `addons/foveacore/scripts/fovea_splat_3d.gd`.
 
@@ -53,9 +53,14 @@ The stable Godot node is defined in `addons/foveacore/scripts/fovea_splat_3d.gd`
 - Methods: `get_advanced() -> FoveaSplattable`, `export_to_fovea(dest_path: String) -> bool`
 - Delegation: advanced behavior is owned by an internal `FoveaSplattable` node.
 
+The focused public-node contract passes 26/26 assertions, including a real
+one-splat PLY load, runtime-only delegate ownership, signal behavior, live
+property propagation, and preset transitions. GPU, XR, collision geometry,
+export fidelity, image quality, and performance remain separate gates.
+
 ### `FoveaCoreManager`
 
-**State:** IMPLEMENTED_UNVALIDATED
+**State:** VALIDATED for headless facade orchestration and dynamic lifecycle; GPU and XR execution remain EXPERIMENTAL
 
 The autoload facade in `addons/foveacore/scripts/foveacore_manager.gd` owns lifecycle and dependency wiring.
 
@@ -68,14 +73,22 @@ The autoload facade in `addons/foveacore/scripts/foveacore_manager.gd` owns life
 - `get_animation_subsystem() -> FoveaAnimationSubsystem`
 - `toggle_hybrid_mode() -> void`
 
+The facade contract passes 30/30 assertions and its dynamic `.fovea` lifecycle
+passes 4/4. This covers ownership, injection, control routing, parameter
+clamping, desktop fallback, renderer creation, path retention, and cleanup.
+
 ### Subsystems
 
-**State:** IMPLEMENTED_UNVALIDATED
+**State:** VALIDATED for headless ownership, injection, control routing, and desktop fallback; compute, XR, and performance remain EXPERIMENTAL
 
 - `FoveaVRSubsystem.setup(enabled: bool, shader: bool)` initializes OpenXR and emits `xr_initialized` or `xr_unavailable`.
 - `FoveaFoveatedSubsystem.setup(...)` owns gaze and foveated-zone state.
 - `FoveaSplatSubsystem.process_frame(...)` generates, transforms, animates, sorts, and submits current splats.
 - `FoveaAnimationSubsystem` applies non-destructive animation modifiers before sorting and submission.
+
+The validation above proves facade wiring and CPU-safe fallback behavior. It
+does not certify RenderingDevice execution, eye tracking, headset composition,
+representative visual fidelity, or sustained frame time.
 
 ### Reconstruction
 
@@ -99,7 +112,7 @@ The detailed component diagram is in [architecture.md](architecture.md).
 
 ### `.fovea` v2 — current implemented layout
 
-**State:** IMPLEMENTED_UNVALIDATED
+**State:** VALIDATED for the v2 structural and cross-language contract; native runtime performance remains EXPERIMENTAL
 
 The active GDScript and Rust implementations use this 72-byte header:
 
@@ -116,6 +129,13 @@ The active GDScript and Rust implementations use this 72-byte header:
 | metadata offset/size | two `uint32` values |
 
 The current GDScript stream order is header → RGB32F palette → 32-byte covariance entries → 16-byte splat records → optional style JSON → optional mesh → optional metadata JSON. The 16-byte splat record contains quantized position, projected normal, palette index, covariance index, opacity, layer, dither seed, and brush type.
+
+The locked Rust workspace passes 5/5 tests, a local Windows release build, and
+Clippy with warnings denied. Its generator reproduces the tracked 208-byte
+fixture byte-for-byte, and Godot 4.7.dev5 accepts that fixture in the 28/28
+structural suite. These checks validate format compatibility and buildability,
+not native throughput, GPU acceleration, XR behavior, or cross-platform release
+artifacts.
 
 `plans/gaussian_compression_spec.md` now describes a **PROPOSED** v3 candidate with a distinct identity. It is not a v2 reader/writer contract.
 
@@ -151,7 +171,7 @@ Minimum acceptance for runtime changes:
 | P1 | Cross-language reader coverage and packed-record semantics are tested; instanced culling uses a 24-byte runtime record with a separate `instance_id`. The unit suite statically checks both shader contracts and its GPU readback checks two visible instances as the unordered identifier set `{0,1}`; it is **skipped** (not passed) when no local `RenderingDevice` exists. | Run that readback and publication-parity path on the CI/project Godot baseline with a Vulkan-capable device. |
 | P1 | Public API reference contains signatures absent from current code. | Generate or verify the reference from parsed script signatures. |
 | P1 | GPU/XR readiness is overclaimed by historical plans and audits. | Keep release state in `docs/feature-status.md` and require target-hardware results. |
-| P2 | Rust and C++ native builds can target similarly named artifacts. | Document packaging ownership and add an artifact identity check. |
+| P2 | Rust and C++ native implementations can drift after their artifact identities were separated. | Keep the 14-assertion ownership contract in the non-GPU suite and require explicit packaging changes. |
 | P2 | Large experimental surface increases false confidence from script-count tests. | Classify tests by capability and require behavior assertions plus fixtures. |
 
 ## 10. Migration and compatibility

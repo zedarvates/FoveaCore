@@ -21,7 +21,8 @@ var _uniform_set: RID = RID()
 var _max_splats: int = 65536
 var _initialized: bool = false
 var _gpu_sort_healthy: bool = true
-var _debug_verbose: bool = false
+var _last_sort_backend: StringName = &"none"
+var _last_gpu_error: String = ""
 
 func _init():
 	_init_gpu()
@@ -43,15 +44,30 @@ func _init_gpu() -> void:
 		return
 
 	var shader_spirv: RDShaderSPIRV = shader_file.get_spirv()
+	var compile_error: String = shader_spirv.get_stage_compile_error(RenderingDevice.SHADER_STAGE_COMPUTE)
+	if not compile_error.is_empty():
+		_last_gpu_error = compile_error
+		push_error("SplatSorter: sort_compute.glsl failed to compile: " + compile_error)
+		return
 	_shader = _rd.shader_create_from_spirv(shader_spirv)
+	if not _shader.is_valid():
+		_last_gpu_error = "Unable to create the compute shader RID."
+		push_error("SplatSorter: " + _last_gpu_error)
+		return
 	_pipeline = _rd.compute_pipeline_create(_shader)
+	if not _pipeline.is_valid():
+		_last_gpu_error = "Unable to create the compute pipeline RID."
+		push_error("SplatSorter: " + _last_gpu_error)
+		return
 
 	_initialized = true
+	_last_gpu_error = ""
 	print("SplatSorter: GPU sorting initialized")
 
 func sort_splats_back_to_front(splats: Array[GaussianSplat], camera: Camera3D) -> Array[int]:
 	"""Retourne les indices des splats triés de lointain -> proche."""
 	if camera == null:
+		_last_sort_backend = &"identity"
 		var indices: Array[int] = []
 		indices.resize(splats.size())
 		for i in range(splats.size()):
@@ -74,10 +90,10 @@ func sort_splats_back_to_front(splats: Array[GaussianSplat], camera: Camera3D) -
 	# 1. Extraire les depths par rapport à la caméra
 	var depths: PackedFloat32Array = PackedFloat32Array()
 	depths.resize(n_pow2)
+	var world_to_camera: Transform3D = camera.global_transform.affine_inverse()
 
 	for i in range(n):
-		var dist = splats[i].position.distance_to(camera.global_position)
-		depths[i] = dist
+		depths[i] = -(world_to_camera * splats[i].position).z
 
 	# Padding avec +inf (loin) pour les éléments supplémentaires
 	for i in range(n, n_pow2):
@@ -112,7 +128,8 @@ func sort_splats_back_to_front(splats: Array[GaussianSplat], camera: Camera3D) -
 			seen_indices[idx] = 1
 			sorted_indices.append(idx)
 	if sorted_indices.size() != n:
-		push_warning("SplatSorter: GPU sort returned an incomplete permutation; falling back to CPU sort.")
+		_last_gpu_error = "GPU sort returned %d unique indices for %d splats." % [sorted_indices.size(), n]
+		push_warning("SplatSorter: %s Falling back to CPU sort." % _last_gpu_error)
 		_gpu_sort_healthy = false
 		_free_buffers()
 		return _cpu_sort_fallback(splats, camera)
@@ -122,7 +139,10 @@ func sort_splats_back_to_front(splats: Array[GaussianSplat], camera: Camera3D) -
 
 	_free_buffers()
 
-	print("SplatSorter: Sorted %d splats (padded to %d) in %d ms (GPU)" % [n, n_pow2, elapsed])
+	_last_sort_backend = &"gpu"
+	_last_gpu_error = ""
+	if debug_verbose:
+		print("SplatSorter: Sorted %d splats (padded to %d) in %d ms (GPU)" % [n, n_pow2, elapsed])
 	sort_completed.emit(sorted_indices, elapsed)
 
 	return sorted_indices
@@ -149,27 +169,33 @@ func _create_buffers_padded(count: int, depths: PackedFloat32Array, indices: Pac
 	return true
 
 func _dispatch_bitonic_sort(count: int) -> void:
-	var stages = ceil(log(count) / log(2.0))
-	if _debug_verbose:
-		print("SplatSorter: Starting bitonic sort, stages=%d, count=%d" % [int(stages), count])
+	var stages: int = ceili(log(float(count)) / log(2.0))
+	if debug_verbose:
+		print("SplatSorter: Starting bitonic sort, stages=%d, count=%d" % [stages, count])
 
-	for stage in range(int(stages)):
-		var push_constants = PackedByteArray()
-		push_constants.resize(16)
-		push_constants.encode_u32(0, count)
-		push_constants.encode_u32(4, stage)
-		push_constants.encode_u32(8, 0)
-		push_constants.encode_u32(12, 0)
+	var compute_list: int = _rd.compute_list_begin()
+	_rd.compute_list_bind_compute_pipeline(compute_list, _pipeline)
+	_rd.compute_list_bind_uniform_set(compute_list, _uniform_set, 0)
+	var workgroups: int = ceili(float(count) / 256.0)
+	var sequence_length: int = 2
+	while sequence_length <= count:
+		var compare_distance: int = sequence_length >> 1
+		while compare_distance > 0:
+			var push_constants: PackedByteArray = PackedByteArray()
+			push_constants.resize(16)
+			push_constants.encode_u32(0, count)
+			push_constants.encode_u32(4, sequence_length)
+			push_constants.encode_u32(8, compare_distance)
+			push_constants.encode_u32(12, 0)
+			_rd.compute_list_set_push_constant(compute_list, push_constants, push_constants.size())
+			_rd.compute_list_dispatch(compute_list, workgroups, 1, 1)
+			_rd.compute_list_add_barrier(compute_list)
+			compare_distance >>= 1
+		sequence_length <<= 1
+	_rd.compute_list_end()
 
-		var compute_list = _rd.compute_list_begin()
-		_rd.compute_list_bind_compute_pipeline(compute_list, _pipeline)
-		_rd.compute_list_bind_uniform_set(compute_list, _uniform_set, 0)
-		_rd.compute_list_set_push_constant(compute_list, push_constants, push_constants.size())
-		_rd.compute_list_dispatch(compute_list, ceil(count / 256.0), 1, 1)
-		_rd.compute_list_end()
-
-		if _debug_verbose:
-			print("SplatSorter: Stage %d/%d recorded" % [stage+1, int(stages)])
+	if debug_verbose:
+		print("SplatSorter: Recorded all %d bitonic stages" % stages)
 
 func _read_index_buffer(count: int) -> Array[int]:
 	var data = _rd.buffer_get_data(_index_buffer)
@@ -195,6 +221,7 @@ func _free_buffers() -> void:
 
 func _cpu_sort_fallback(splats: Array[GaussianSplat], camera: Camera3D) -> Array[int]:
 	"""Tri CPU simple par distance décroissante (back to front)."""
+	_last_sort_backend = &"cpu"
 	if camera == null:
 		var indices: Array[int] = []
 		indices.resize(splats.size())
@@ -203,13 +230,14 @@ func _cpu_sort_fallback(splats: Array[GaussianSplat], camera: Camera3D) -> Array
 		return indices
 
 	var start = Time.get_ticks_msec()
+	var world_to_camera: Transform3D = camera.global_transform.affine_inverse()
 	var indexed: Array[Dictionary] = []
 	for i in range(splats.size()):
-		var dist = splats[i].position.distance_to(camera.global_position)
-		indexed.append({"idx": i, "dist": dist})
+		var view_z: float = (world_to_camera * splats[i].position).z
+		indexed.append({"idx": i, "view_z": view_z})
 
 	indexed.sort_custom(func(a, b):
-		return a["dist"] > b["dist"]
+		return a["view_z"] < b["view_z"]
 	)
 
 	var sorted: Array[int] = []
@@ -217,7 +245,8 @@ func _cpu_sort_fallback(splats: Array[GaussianSplat], camera: Camera3D) -> Array
 		sorted.append(item["idx"])
 
 	var elapsed = Time.get_ticks_msec() - start
-	print("SplatSorter: CPU sorted %d splats in %d ms" % [splats.size(), elapsed])
+	if debug_verbose:
+		print("SplatSorter: CPU sorted %d splats in %d ms" % [splats.size(), elapsed])
 	return sorted
 
 func sort_indices_by_depth(splats: Array[GaussianSplat], depths: Array[float]) -> Array[int]:
@@ -245,6 +274,12 @@ func is_gpu_available() -> bool:
 func get_max_supported_splats() -> int:
 	return _max_splats
 
+func get_last_sort_backend() -> StringName:
+	return _last_sort_backend
+
+func get_last_gpu_error() -> String:
+	return _last_gpu_error
+
 func _cleanup_gpu() -> void:
 	if not _rd:
 		return
@@ -259,14 +294,17 @@ func _cleanup_gpu() -> void:
 	_rd = null
 	_initialized = false
 
-static func sort_by_depth(splats: Array[GaussianSplat], camera_pos: Vector3) -> Array[GaussianSplat]:
+static func sort_by_depth(splats: Array[GaussianSplat], camera: Camera3D) -> Array[GaussianSplat]:
+	if camera == null:
+		return splats
+	var world_to_camera: Transform3D = camera.global_transform.affine_inverse()
 	var indexed: Array[Dictionary] = []
 	for i in range(splats.size()):
-		var dist = splats[i].position.distance_to(camera_pos)
-		indexed.append({"splat": splats[i], "dist": dist})
+		var view_z: float = (world_to_camera * splats[i].position).z
+		indexed.append({"splat": splats[i], "view_z": view_z})
 
 	indexed.sort_custom(func(a, b):
-		return a["dist"] > b["dist"]
+		return a["view_z"] < b["view_z"]
 	)
 
 	var sorted: Array[GaussianSplat] = []

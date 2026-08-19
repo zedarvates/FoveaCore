@@ -24,13 +24,14 @@
 
 | Capability | Evidence state | Current result |
 | --- | --- | --- |
-| `FoveaSplat3D` with PLY fixtures | **VALIDATED** | The 12,473-splat bonsai and 8,000-splat reference fixtures produced desktop D3D12 captures without script, parse, or load errors. |
+| `FoveaSplat3D` / `FoveaSplattable` boundary | **VALIDATED** | The public-to-delegate contract passed 26/26 with a real one-splat PLY load; the 12,473-splat and 8,000-splat fixtures also produced desktop D3D12 captures. |
 | `.splat` parser and router | **VALIDATED** | Godot 4.7.dev5 passed 14/14 assertions over 256 deterministic records and negative inputs; rendering is not yet benchmarked. |
 | `.spz` decoder | **PROPOSED** | Planned files are rejected and no longer advertised by the public picker. |
 | Desktop fallback without OpenXR | **VALIDATED** | The PLY capture path completed without a connected headset. |
 | `.fovea` v2 structure | **VALIDATED** | Godot 4.7.dev5 passed 28 assertions covering canonical fields, packed records, corrupt inputs, and the Rust-generated fixture. |
+| `FoveaCoreManager` facade | **VALIDATED** | A 30-assertion headless contract covers subsystem ownership/injection, bounded public controls, desktop fallback, and detached-refresh rejection; dynamic `.fovea` registration passes 4/4. |
 | Native `.fovea` rendering | **EXPERIMENTAL** | Godot 4.7.dev5/D3D12 produced a framed green/brown capture from 12,473 canonical records (11,808 after cleaning) through the default CPU passthrough. A synthetic two-instance GPU layout/readback passes; representative native parity and acceleration remain open. |
-| GPU depth sorting | **EXPERIMENTAL** | An incomplete padded GPU permutation is rejected and falls back to the exact 12,473-splat CPU sorter. |
+| GPU depth sorting | **VALIDATED** | D3D12 Forward+ passed 30/30 focused assertions through a complete strict back-to-front 17,013-splat permutation. Invalid results still fail closed to the exact CPU sorter; other hardware, rendering APIs, and XR remain separate acceptance gates. |
 | StudioTo3D editor dock | **IMPLEMENTED_UNVALIDATED** | The editor surface exists, but reconstruction still depends on separately installed backends and representative input. |
 | OpenXR, eye tracking, and foveation | **EXPERIMENTAL** | Desktop fallback exists; headset performance and tracking acceptance remain open. |
 
@@ -48,6 +49,8 @@ add_child(splat)
 ```
 
 `FoveaSplat3D` is the stable public entry point. Advanced styles, overrides, instancing, and morph operations remain on its internal `FoveaSplattable` delegate, available after the node is ready through `get_advanced()`.
+
+Switching `quality_preset` back to `AUTO` restores neutral local density and culling priority, allowing `FoveaCoreManager` global settings to become authoritative again.
 
 ## Plugin surface
 

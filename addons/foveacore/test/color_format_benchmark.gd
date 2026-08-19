@@ -347,10 +347,10 @@ func _apply_floyd_steinberg_dithering(image: Image) -> void:
 
 
 func _quantize_color(color: Color) -> Color:
-	"""Quantifie la couleur en 8-bit (256 couleurs)"""
-	var r = round(color.r * 255) / 255.0
-	var g = round(color.g * 255) / 255.0
-	var b = round(color.b * 255) / 255.0
+	"""Quantizes to a fixed RGB332 palette (8 × 8 × 4 = 256 colors)."""
+	var r: float = round(color.r * 7.0) / 7.0
+	var g: float = round(color.g * 7.0) / 7.0
+	var b: float = round(color.b * 3.0) / 3.0
 	return Color(r, g, b, color.a)
 
 

@@ -16,11 +16,20 @@ extends SceneTree
 const FoveaSplat3DScript := preload("res://addons/foveacore/scripts/fovea_splat_3d.gd")
 const DEFAULT_FIXTURE := "res://test/fixtures/reference_3dgs.ply"
 const SETTLE_FRAMES := 90  # let PLY load + HLOD + first draw settle (deterministic)
+const POST_FRAME_FRAMES := 30
 
 var _out := "user://capture.png"
 var _fixture: String = DEFAULT_FIXTURE
 var _auto_frame: bool = false
 var _local_renderer: bool = false
+var _settle_frames: int = SETTLE_FRAMES
+var _post_frame_frames: int = POST_FRAME_FRAMES
+var _azimuth_degrees: float = 45.0
+var _elevation_degrees: float = 14.0
+var _up_axis: String = "y"
+var _camera_fov_degrees: float = 75.0
+var _frame_margin: float = 1.1
+var _camera_c2w_opencv: PackedFloat32Array = PackedFloat32Array()
 
 func _init() -> void:
 	for arg in OS.get_cmdline_user_args() + OS.get_cmdline_args():
@@ -32,8 +41,46 @@ func _init() -> void:
 			_auto_frame = true
 		elif arg == "--local-renderer":
 			_local_renderer = true
+		elif arg.begins_with("--settle-frames="):
+			_settle_frames = clampi(arg.trim_prefix("--settle-frames=").to_int(), 1, 600)
+		elif arg.begins_with("--post-frame-frames="):
+			_post_frame_frames = clampi(arg.trim_prefix("--post-frame-frames=").to_int(), 1, 240)
+		elif arg.begins_with("--azimuth-deg="):
+			_azimuth_degrees = wrapf(arg.trim_prefix("--azimuth-deg=").to_float(), -180.0, 180.0)
+		elif arg.begins_with("--elevation-deg="):
+			_elevation_degrees = clampf(arg.trim_prefix("--elevation-deg=").to_float(), -80.0, 80.0)
+		elif arg.begins_with("--up-axis="):
+			var requested_up_axis: String = arg.trim_prefix("--up-axis=").to_lower()
+			if requested_up_axis in ["x", "y", "z"]:
+				_up_axis = requested_up_axis
+			else:
+				push_error("Capture: --up-axis must be x, y, or z")
+				quit(2)
+				return
+		elif arg.begins_with("--camera-fov-deg="):
+			_camera_fov_degrees = clampf(
+				arg.trim_prefix("--camera-fov-deg=").to_float(), 5.0, 150.0
+			)
+		elif arg.begins_with("--frame-margin="):
+			_frame_margin = maxf(arg.trim_prefix("--frame-margin=").to_float(), 0.1)
+		elif arg.begins_with("--camera-c2w-opencv="):
+			_camera_c2w_opencv = _parse_float_list(
+				arg.trim_prefix("--camera-c2w-opencv=")
+			)
+			if _camera_c2w_opencv.size() != 16:
+				push_error("Capture: --camera-c2w-opencv requires 16 comma-separated values")
+				quit(2)
+				return
 
-	print("Capture: fixture=%s out=%s" % [_fixture, _out])
+	print(
+		"Capture: fixture=%s out=%s azimuth=%.1f elevation=%.1f up_axis=%s" % [
+			_fixture,
+			_out,
+			_azimuth_degrees,
+			_elevation_degrees,
+			_up_axis,
+		]
+	)
 
 	# Hard guard: a real rendering driver is required. Under --headless the dummy
 	# renderer never emits frame_post_draw, which would hang the capture forever.
@@ -63,7 +110,12 @@ func _init() -> void:
 	# Fixed camera — reproducible framing is the whole point of a golden image.
 	var cam := Camera3D.new()
 	cam.current = true
+	cam.keep_aspect = Camera3D.KEEP_HEIGHT
+	cam.fov = _camera_fov_degrees
 	cam.transform = Transform3D(Basis.IDENTITY, Vector3(2.5, 1.5, 3.5)).looking_at(Vector3.ZERO, Vector3.UP)
+	if not _camera_c2w_opencv.is_empty():
+		cam.transform = _opencv_c2w_to_godot(_camera_c2w_opencv)
+		print("Capture: exact OpenCV camera converted to Godot transform=%s" % cam.transform)
 	world.add_child(cam)
 
 	var splat: Node3D = FoveaSplat3DScript.new()
@@ -74,8 +126,8 @@ func _init() -> void:
 			advanced.enable_instancing = false
 	splat.set("source_path", _fixture)
 
-	var is_framed: bool = not _auto_frame
-	for _i in range(SETTLE_FRAMES):
+	var is_framed: bool = not _auto_frame or not _camera_c2w_opencv.is_empty()
+	for _i in range(_settle_frames):
 		await process_frame
 		if not is_framed:
 			is_framed = _try_frame_asset(splat, cam)
@@ -84,7 +136,7 @@ func _init() -> void:
 		quit(1)
 		return
 	if _auto_frame:
-		for _i in range(30):
+		for _i in range(_post_frame_frames):
 			await process_frame
 	var rendered_splat_count: int = _get_rendered_splat_count(splat)
 	if rendered_splat_count <= 0:
@@ -128,12 +180,38 @@ func _try_frame_asset(splat: Node3D, camera: Camera3D) -> bool:
 	var center: Vector3 = bounds.get_center()
 	var radius: float = maxf(bounds.size.length() * 0.5, 0.1)
 	var vertical_half_fov: float = deg_to_rad(camera.fov) * 0.5
-	var distance: float = radius / tan(vertical_half_fov) * 1.1
-	var view_direction: Vector3 = Vector3(1.0, 0.35, 1.0).normalized()
+	var distance: float = radius / tan(vertical_half_fov) * _frame_margin
+	var azimuth: float = deg_to_rad(_azimuth_degrees)
+	var elevation: float = deg_to_rad(_elevation_degrees)
+	var horizontal: float = cos(elevation)
+	var up_vector: Vector3 = Vector3.UP
+	var view_direction: Vector3
+	match _up_axis:
+		"x":
+			up_vector = Vector3.RIGHT
+			view_direction = Vector3(
+				sin(elevation),
+				sin(azimuth) * horizontal,
+				cos(azimuth) * horizontal
+			)
+		"z":
+			up_vector = Vector3.BACK
+			view_direction = Vector3(
+				sin(azimuth) * horizontal,
+				cos(azimuth) * horizontal,
+				sin(elevation)
+			)
+		_:
+			view_direction = Vector3(
+				sin(azimuth) * horizontal,
+				sin(elevation),
+				cos(azimuth) * horizontal
+			)
+	view_direction = view_direction.normalized()
 	camera.near = maxf(radius * 0.001, 0.001)
 	camera.far = maxf(distance + radius * 4.0, 1000.0)
 	camera.global_position = center + view_direction * distance
-	camera.look_at(center, Vector3.UP)
+	camera.look_at(center, up_vector)
 	print("Capture: auto-framed bounds=%s camera=%s" % [bounds, camera.global_position])
 	return true
 
@@ -178,3 +256,23 @@ func _image_has_foreground_signal(image: Image, background: Color) -> bool:
 				if foreground_samples >= 8:
 					return true
 	return false
+
+
+func _parse_float_list(raw_values: String) -> PackedFloat32Array:
+	var parsed: PackedFloat32Array = PackedFloat32Array()
+	for raw_value: String in raw_values.split(",", false):
+		parsed.append(raw_value.strip_edges().to_float())
+	return parsed
+
+
+func _opencv_c2w_to_godot(c2w: PackedFloat32Array) -> Transform3D:
+	# The PLY and OpenCV camera already share the same world coordinates. Only
+	# the camera-local axes change: OpenCV (+X right, +Y down, +Z forward) to
+	# Godot (+X right, +Y up, +Z backward). Translation must stay untouched.
+	var basis := Basis(
+		Vector3(c2w[0], c2w[4], c2w[8]),
+		Vector3(-c2w[1], -c2w[5], -c2w[9]),
+		Vector3(-c2w[2], -c2w[6], -c2w[10]),
+	)
+	var origin := Vector3(c2w[3], c2w[7], c2w[11])
+	return Transform3D(basis, origin)

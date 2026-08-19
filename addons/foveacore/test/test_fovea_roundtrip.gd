@@ -14,6 +14,9 @@ const PLYLoaderScript := preload("res://addons/foveacore/scripts/reconstruction/
 const GaussianSplatScript := preload("res://addons/foveacore/scripts/reconstruction/gaussian_splat.gd")
 const FoveaAssetWriterScript := preload("res://addons/foveacore/scripts/fovea_asset_writer.gd")
 const FoveaAssetFormatLoaderScript := preload("res://addons/foveacore/scripts/fovea_asset_loader.gd")
+const SplatRendererScript := preload("res://addons/foveacore/scripts/reconstruction/splat_renderer.gd")
+const ReconstructionManagerScript := preload("res://addons/foveacore/scripts/reconstruction/reconstruction_manager.gd")
+const ReconstructionSessionScript := preload("res://addons/foveacore/scripts/reconstruction/reconstruction_session.gd")
 
 const FIXTURE_DIR := "res://test/fixtures"
 const EXPECTED_SPLATS := 8000
@@ -36,6 +39,8 @@ func _init() -> void:
 	var ply_splats := _test_reference_ply()
 	var golden_aabb := _test_golden_fovea(ply_splats)
 	_test_roundtrip_reexport(ply_splats, golden_aabb)
+	_test_ply_export_preserves_orientation()
+	_test_photorealistic_post_process_is_lossless()
 	_test_pathological_nan()
 	_test_truncated_header()
 
@@ -119,6 +124,48 @@ func _test_pathological_nan() -> void:
 			non_finite += 1
 	# Informational: the bare loader does not sanitize NaN/Inf (a dedicated validator does).
 	print("  ℹ %d/%d splats carry non-finite positions (sanitization is a separate pass)" % [non_finite, splats.size()])
+
+
+func _test_ply_export_preserves_orientation() -> void:
+	print("\n--- PLY export: standard quaternion order ---")
+	var source: GaussianSplat = GaussianSplatScript.new()
+	source.position = Vector3(0.25, -0.5, 0.75)
+	source.normal = Vector3(0.2, 0.9, -0.3).normalized()
+	source.color = Color(0.2, 0.6, 0.35)
+	source.opacity = 0.8
+	source.scale = Vector3(0.02, 0.04, 0.06)
+	source.rotation = Quaternion(Vector3(0.3, 0.8, 0.2).normalized(), 0.9).normalized()
+	var typed: Array[GaussianSplat] = [source]
+	var renderer: SplatRenderer = SplatRendererScript.new()
+	# Export is pure serialization; assigning the source avoids allocating a
+	# rendering MultiMesh in this deliberately GPU-free test.
+	renderer._splats = typed
+	var path := "user://roundtrip_orientation.ply"
+	var err: Error = renderer.export_to_ply(path)
+	renderer.free()
+	_assert("PLY export succeeds", err == OK, "error=%d" % err)
+	var loaded: Array[GaussianSplat] = PLYLoaderScript.load_gaussians_from_ply(path)
+	_assert("PLY export reloads one splat", loaded.size() == 1, "count=%d" % loaded.size())
+	if loaded.size() == 1:
+		var rotation_dot: float = absf(source.rotation.dot(loaded[0].rotation))
+		_assert("PLY quaternion orientation round-trips", rotation_dot > 0.9999, "abs dot=%.6f" % rotation_dot)
+		_assert("PLY normal round-trips", source.normal.distance_to(loaded[0].normal) < 0.0001, str(loaded[0].normal))
+
+
+func _test_photorealistic_post_process_is_lossless() -> void:
+	print("\n--- photorealistic PLY post-process: byte preservation ---")
+	var source_path: String = FIXTURE_DIR.path_join("reference_3dgs.ply")
+	var target_path := "user://photorealistic_preservation.ply"
+	var source_bytes: PackedByteArray = FileAccess.get_file_as_bytes(source_path)
+	var output: FileAccess = FileAccess.open(target_path, FileAccess.WRITE)
+	output.store_buffer(source_bytes)
+	output.close()
+	var session: ReconstructionSession = ReconstructionSessionScript.new()
+	var manager: FoveaReconstructionManager = ReconstructionManagerScript.new()
+	manager._post_process_reconstruction_splats(session, target_path)
+	manager.free()
+	var preserved_bytes: PackedByteArray = FileAccess.get_file_as_bytes(target_path)
+	_assert("Photorealistic post-process preserves source PLY bytes", preserved_bytes == source_bytes, "%d bytes" % preserved_bytes.size())
 
 
 func _test_truncated_header() -> void:

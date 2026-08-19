@@ -52,28 +52,33 @@ mat3 compute_cov3d_linear(vec3 scale, vec4 rot) {
 
 // 3. PROJECTION DE LA COVARIANCE 3D EN 2D (ANISOTROPIE)
 // Projette la matrice 3D sur l'écran pour obtenir les axes majeur/mineur de l'ellipse (Splat anisotropique).
-vec3 compute_cov2d(vec3 center_cam, mat3 cov3d, mat4 proj_matrix, vec2 viewport_size) {
-    // Limiter la profondeur pour éviter les artefacts derrière la caméra
-    float t = clamp(center_cam.z, -1000.0, -0.1); // Godot est en Forward -Z
-    
-    // Calcul du Jacobien de la projection perspective
+vec3 compute_cov2d_unblurred(vec3 center_cam, mat3 cov3d, mat4 proj_matrix, vec2 viewport_size) {
+    // Godot cameras look down -Z. Express the perspective Jacobian explicitly
+    // in pixel space to avoid row/column ambiguity in column-major GLSL.
+    float depth = max(-center_cam.z, 0.1);
     float focal_x = proj_matrix[0][0] * viewport_size.x * 0.5;
     float focal_y = proj_matrix[1][1] * viewport_size.y * 0.5;
-    
-    mat3 J;
-    J[0] = vec3(focal_x / t, 0.0,         -(focal_x * center_cam.x) / (t * t));
-    J[1] = vec3(0.0,         -focal_y / t, (focal_y * center_cam.y) / (t * t));
-    J[2] = vec3(0.0,         0.0,         0.0);
-    
-    mat3 W = mat3(1.0); // Vue vers Caméra (déjà fait si cov3d est en espace vue)
-    mat3 T = W * J;
-    
-    mat3 cov2d_mat = transpose(T) * cov3d * T;
-    
-    // Ajouter un filtre passe-bas (0.3) pour l'anti-aliasing de base
-    float cov11 = cov2d_mat[0][0] + 0.3;
-    float cov12 = cov2d_mat[0][1];
-    float cov22 = cov2d_mat[1][1] + 0.3;
-    
+    float inv_depth = 1.0 / depth;
+    float inv_depth2 = inv_depth * inv_depth;
+    vec3 du = vec3(
+        focal_x * inv_depth,
+        0.0,
+        focal_x * center_cam.x * inv_depth2
+    );
+    vec3 dv = vec3(
+        0.0,
+        focal_y * inv_depth,
+        focal_y * center_cam.y * inv_depth2
+    );
+    float cov11 = dot(du, cov3d * du);
+    float cov12 = dot(du, cov3d * dv);
+    float cov22 = dot(dv, cov3d * dv);
     return vec3(cov11, cov12, cov22);
+}
+
+vec3 compute_cov2d(vec3 center_cam, mat3 cov3d, mat4 proj_matrix, vec2 viewport_size) {
+    vec3 cov2d = compute_cov2d_unblurred(center_cam, cov3d, proj_matrix, viewport_size);
+    cov2d.x += 0.3;
+    cov2d.z += 0.3;
+    return cov2d;
 }

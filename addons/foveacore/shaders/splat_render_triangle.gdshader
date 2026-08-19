@@ -7,7 +7,7 @@ shader_type spatial;
 // ============================================================================
 
 // Optimisations extrêmes pour VR : Pas d'ombres, pas de culling, blending additif ou alpha
-render_mode cull_disabled, blend_mix, depth_draw_never, depth_prepass_alpha;
+render_mode cull_disabled, blend_mix, depth_draw_never, depth_test_disabled, unshaded;
 
 // Inclusion de notre librairie mathématique
 #include "res://addons/foveacore/shaders/splat_math.gdshaderinc"
@@ -24,6 +24,12 @@ uniform bool covar_scale_is_linear = false;
 uniform sampler2D palette_texture : filter_nearest, repeat_disable;
 uniform bool use_palette = false;
 uniform int palette_size = 16;
+// Standard PLY/procedural splats use INSTANCE_CUSTOM directly as RGBA. Native
+// packed assets use the legacy compact bitstream path until they are moved to
+// an integer texture/buffer (MultiMesh custom data is transported as half floats).
+uniform bool custom_data_is_decoded = false;
+uniform bool antialiased = true;
+uniform bool color_is_srgb = true;
 
 // Paramètres de Fovéation (Eye Tracking / Zone Culling)
 global uniform vec2 fovea_gaze_left;  // Centre du regard œil gauche (0..1)
@@ -38,6 +44,7 @@ uniform int splat_subdivisions = 16;
 uniform float lod_ratio = 1.0;
 
 // Layered Splatting toggle
+uniform bool enable_foveated_rendering = false;
 uniform bool enable_layered_splatting = true;
 
 // Uniforms pour le rendu GPU-driven (VRAM-to-VRAM)
@@ -60,6 +67,8 @@ uniform float wave_tiling_size      = 10.0;
 uniform float wave_loop_period      = 4.0;
 
 // Dynamic Specular Highlights
+// Photorealistic 3DGS colors are baked radiance and must remain unlit by default.
+uniform bool  enable_dynamic_lighting = false;
 uniform vec3  light_direction     = vec3(0.0, -1.0, 0.0);
 uniform float specular_strength   = 0.5;
 uniform float specular_shininess  = 32.0;
@@ -102,13 +111,20 @@ void vertex() {
             decoded_local_pos = aabb_min + q_pos * (aabb_max - aabb_min);
         }
     } else {
-        data0 = floatBitsToUint(INSTANCE_CUSTOM.x);
-        data1 = floatBitsToUint(INSTANCE_CUSTOM.y);
-        data2 = floatBitsToUint(INSTANCE_CUSTOM.z);
-        data3 = floatBitsToUint(INSTANCE_CUSTOM.w);
+        if (custom_data_is_decoded) {
+            data0 = 0u;
+            data1 = 0u;
+            data2 = 0u;
+            data3 = 0u;
+        } else {
+            data0 = floatBitsToUint(INSTANCE_CUSTOM.x);
+            data1 = floatBitsToUint(INSTANCE_CUSTOM.y);
+            data2 = floatBitsToUint(INSTANCE_CUSTOM.z);
+            data3 = floatBitsToUint(INSTANCE_CUSTOM.w);
+        }
     }
 
-    if (should_render) {
+	if (should_render) {
         // Position de l'instance/splat dans le monde via MODEL_MATRIX
         vec3 world_pos;
         if (enable_gpu_driven) {
@@ -118,27 +134,30 @@ void vertex() {
         }
 
         // Extraction de la couleur (palette ou RGB565 selon use_palette)
-        uint color_index = data2 & 0xFFFFu;
-        if (use_palette) {
-            uint palette_idx = data2 & 0xFFu;
-            float tex_v = (float(palette_idx) + 0.5) / float(max(palette_size, 1));
-            vec4 pal_color = textureLod(palette_texture, vec2(0.5, tex_v), 0.0);
-            v_color = pal_color.rgb;
+        if (custom_data_is_decoded) {
+            v_color = clamp(INSTANCE_CUSTOM.rgb, vec3(0.0), vec3(1.0));
+            v_opacity = clamp(INSTANCE_CUSTOM.a, 0.0, 1.0);
         } else {
-            float r = float((color_index >> 11u) & 0x1Fu) / 31.0;
-            float g = float((color_index >> 5u) & 0x3Fu)  / 63.0;
-            float b = float(color_index & 0x1Fu)         / 31.0;
-            v_color = vec3(r, g, b);
+            uint color_index = data2 & 0xFFFFu;
+            if (use_palette) {
+                uint palette_idx = data2 & 0xFFu;
+                float tex_v = (float(palette_idx) + 0.5) / float(max(palette_size, 1));
+                vec4 pal_color = textureLod(palette_texture, vec2(0.5, tex_v), 0.0);
+                v_color = pal_color.rgb;
+            } else {
+                float r = float((color_index >> 11u) & 0x1Fu) / 31.0;
+                float g = float((color_index >> 5u) & 0x3Fu)  / 63.0;
+                float b = float(color_index & 0x1Fu)         / 31.0;
+                v_color = vec3(r, g, b);
+            }
+            v_opacity = float(data3 & 0xFFu) / 255.0;
         }
 
-        // Extraction de l'opacité
-        v_opacity = float(data3 & 0xFFu) / 255.0;
-        
         // Extraction du type de couche (layer_type)
-        uint layer_type = (data3 >> 8u) & 0xFFu;
+        uint layer_type = custom_data_is_decoded ? 0u : ((data3 >> 8u) & 0xFFu);
 
         // --- 2. CALCUL DE LA COVARIANCE (Anisotropie / Ellipses via Codebook) ---
-        uint covar_index = (data2 >> 16u) & 0xFFFFu;
+        uint covar_index = custom_data_is_decoded ? 0u : ((data2 >> 16u) & 0xFFFFu);
         
         ivec2 tex_size = textureSize(covar_texture, 0);
         float tex_v = (float(covar_index) + 0.5) / float(max(tex_size.y, 1));
@@ -172,7 +191,17 @@ void vertex() {
         } else {
             center_cam = (MODELVIEW_MATRIX * vec4(wave_offset, 1.0)).xyz;
         }
-        vec3 cov2d = compute_cov2d(center_cam, cov3d, PROJECTION_MATRIX, VIEWPORT_SIZE);
+        vec3 cov2d = compute_cov2d_unblurred(
+            center_cam, cov3d, PROJECTION_MATRIX, VIEWPORT_SIZE
+        );
+        float det_unblurred = max(cov2d.x * cov2d.z - cov2d.y * cov2d.y, 0.0);
+        cov2d.x += 0.3;
+        cov2d.z += 0.3;
+        float det_blurred = max(cov2d.x * cov2d.z - cov2d.y * cov2d.y, 0.0000001);
+        if (antialiased) {
+            // Match gsplat's EWA compensation for sub-pixel Gaussians.
+            v_opacity *= sqrt(det_unblurred / det_blurred);
+        }
         
         float det = (cov2d.x * cov2d.z) - (cov2d.y * cov2d.y);
         float inv_det = 1.0 / max(det, 0.0000001);
@@ -189,9 +218,10 @@ void vertex() {
         float lambda1 = trace * 0.5 + sqrt_term;  // Valeur propre 1
         float lambda2 = trace * 0.5 - sqrt_term;  // Valeur propre 2
         
-        // Rayons de l'ellipse (3 sigma = 99.7% de la distribution)
-        float radius1 = 3.0 * sqrt(max(lambda1, 0.0));
-        float radius2 = 3.0 * sqrt(max(lambda2, 0.0));
+        // gsplat uses a 3.33-sigma maximum footprint and lets the fragment
+        // alpha threshold tighten it for low-opacity splats.
+        float radius1 = 3.33 * sqrt(max(lambda1, 0.0));
+        float radius2 = 3.33 * sqrt(max(lambda2, 0.0));
         
         // Angle de rotation de l'ellipse
         float cos_2theta = (a - c) / max(trace, 0.0001);
@@ -211,11 +241,11 @@ void vertex() {
         aspect_gaze.x *= VIEWPORT_SIZE.x / VIEWPORT_SIZE.y;
         
         float dist_to_gaze = distance(aspect_uv, aspect_gaze);
-        bool is_in_focus = dist_to_gaze <= fovea_inner_radius;
+        bool is_in_focus = !enable_foveated_rendering || dist_to_gaze <= fovea_inner_radius;
         
         // Dynamic Foveated Layer Weight Calculation
         float layer_weight = 1.0;
-        if (enable_layered_splatting) {
+        if (enable_foveated_rendering && enable_layered_splatting) {
             if (layer_type == 0u) {
                 layer_weight = is_in_focus ? 0.8 : 0.3;
             } else if (layer_type == 1u) {
@@ -267,9 +297,9 @@ void vertex() {
             POSITION = vec4(0.0);
         } else if (random_val > lod_ratio) {
             POSITION = vec4(0.0);
-        } else if (dist_to_gaze > fovea_outer_radius && random_val > 0.25) {
+        } else if (enable_foveated_rendering && dist_to_gaze > fovea_outer_radius && random_val > 0.25) {
             POSITION = vec4(0.0);
-        } else if (dist_to_gaze > fovea_inner_radius && random_val > 0.50) {
+        } else if (enable_foveated_rendering && dist_to_gaze > fovea_inner_radius && random_val > 0.50) {
             POSITION = vec4(0.0);
         } else {
             if (length(ndc_pos) > 1.25) {
@@ -277,7 +307,11 @@ void vertex() {
             } else {
                 POSITION = clip_pos;
                 v_uv = local_pos * 0.5 + 0.5;
-                v_local_pos = vec3(rotated, 0.0);
+                // The mesh has already been mapped to the covariance ellipse.
+                // Preserve its unit-circle coordinate for a numerically stable
+                // Gaussian falloff in fragment(), especially for near-singular
+                // surface splats with extreme anisotropy.
+                v_local_pos = vec3(local_pos, 0.0);
                 
                 vec3 splat_normal = vec3(
                     2.0 * (rot.y * rot.w + rot.x * rot.z),
@@ -299,29 +333,11 @@ void vertex() {
 }
 
 void fragment() {
-    // ============================================================================
-    // Alpha Gaussien reel : exp(-0.5 * d^T * Sigma^-1 * d)
-    // v_conic = (cov2d.z, -cov2d.y, cov2d.x) * inv_det  (conic inverse 2x2 symetrique)
-    //   -> Sigma^-1 = | v_conic.x  v_conic.y |
-    //                  | v_conic.y  v_conic.z |
-    //
-    // v_local_pos.xy est la position dans l'ellipse normalisee (apres rotation+scale)
-    // cela signifie que d est deja dans l'espace de l'ellipse :
-    // on utilise directement les coordonnees locales non-normalisees
-    // stockees avant normalisation dans le vertex shader.
-    // ============================================================================
-
+    // The vertex stage maps the unit circle to a 3-sigma covariance ellipse.
+    // In that normalized domain, d^T Sigma^-1 d = 3.33^2 * dot(d, d), so the
+    // Gaussian exponent is exact without re-inverting a near-singular matrix.
     vec2 d = v_local_pos.xy;
-
-    // Quadratic power : -0.5 * (a*dx^2 + 2b*dx*dy + c*dy^2)
-    float power = -0.5 * (v_conic.x * d.x * d.x
-                        + 2.0 * v_conic.y * d.x * d.y
-                        + v_conic.z * d.y * d.y);
-
-    // Un power positif signifie que le conic est invalide (degenere) -> discard
-    if (power > 0.0) {
-        discard;
-    }
+    float power = -5.54445 * dot(d, d);
 
     // Alpha Gaussien : T = exp(power), module par l'opacite sigmoide du splat
     float gaussian_alpha = exp(power);
@@ -332,19 +348,28 @@ void fragment() {
         discard;
     }
 
-    ALBEDO    = v_color;
+    vec3 linear_color = mix(
+        v_color / 12.92,
+        pow((v_color + vec3(0.055)) / 1.055, vec3(2.4)),
+        step(vec3(0.04045), v_color)
+    );
+    ALBEDO    = color_is_srgb ? linear_color : v_color;
     ALPHA     = alpha;
-    EMISSION  = v_color * 0.01 + vec3(v_specular);
+    EMISSION  = vec3(0.0);
 }
 
 void light() {
+    if (enable_dynamic_lighting) {
     // Éclairage diffus Lambertien standard
     float NdotL = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
     DIFFUSE_LIGHT += LIGHT_COLOR * NdotL * ATTENUATION;
     
     // Brillance spéculaire de surface Blinn-Phong soft
     vec3 H = normalize(VIEW + LIGHT);
-    float NdotH = clamp(dot(NORMAL, H), 0.0, 1.0);
-    float specular = pow(NdotH, 16.0) * 0.15;
-    SPECULAR_LIGHT += LIGHT_COLOR * specular * ATTENUATION;
+        float NdotH = clamp(dot(NORMAL, H), 0.0, 1.0);
+        float specular = pow(NdotH, 16.0) * 0.15;
+        SPECULAR_LIGHT += LIGHT_COLOR * specular * ATTENUATION;
+    } else {
+        DIFFUSE_LIGHT += ALBEDO;
+    }
 }

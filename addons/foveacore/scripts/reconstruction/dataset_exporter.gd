@@ -42,7 +42,7 @@ func prepare_workspace(session: ReconstructionSession) -> bool:
 ## Find the trained .ply and copy it to a clean location in /output
 func finalize_session(session: ReconstructionSession) -> void:
 	var base_dir: String = ProjectSettings.globalize_path(session.output_directory)
-	var trained_path = base_dir.path_join("output/point_cloud/iteration_7000/point_cloud.ply")
+	var trained_path: String = ProjectSettings.globalize_path(session.get_training_point_cloud_path())
 	var final_destination = base_dir.path_join("output").path_join(session.session_name + ".ply")
 	
 	if FileAccess.file_exists(trained_path):

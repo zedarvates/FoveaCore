@@ -11,4 +11,7 @@ func _init() -> void:
 	animator._apply_to_splat(splat, 0.25, 1.0)
 	assert(splat.scale.x > 0.0 and splat.scale.y > 0.0 and splat.scale.z > 0.0)
 	print("PASS: LOD stretch preserves positive scale")
+	animator.free()
+	splat = null
+	await process_frame
 	quit(0)

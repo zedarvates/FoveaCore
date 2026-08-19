@@ -28,6 +28,13 @@ var animation_subsystem: FoveaAnimationSubsystem = null
 ## Position caméra du frame précédent (pour reprojection temporelle)
 var _previous_camera_position: Vector3 = Vector3.ZERO
 
+## Reuse contract for immutable PLY scenes. This avoids cloning, sorting, HLOD
+## bookkeeping, and a full MultiMesh upload every frame while nothing changed.
+var _static_cache_valid: bool = false
+var _static_cache_signature: int = 0
+var _static_cache_camera_transform: Transform3D = Transform3D.IDENTITY
+var _last_frame_reused_static_cache: bool = false
+
 var max_splats: int = 100000
 
 func setup(density: float, max_s: int = 100000) -> void:
@@ -42,10 +49,82 @@ func setup(density: float, max_s: int = 100000) -> void:
 
 ## Traiter les résultats de visibilité pour un frame
 ## Retourne le nombre de splats rendus
-func process_frame(visibility_result, camera: Camera3D, camera_pos: Vector3) -> int:
+func process_frame(
+	visibility_result,
+	camera: Camera3D,
+	camera_pos: Vector3,
+	allow_static_reuse: bool = false
+) -> int:
+	var can_cache: bool = allow_static_reuse and _is_reusable_static_visibility(visibility_result)
+	var scene_signature: int = _compute_static_visibility_signature(visibility_result) if can_cache else 0
+	if can_cache \
+		and _static_cache_valid \
+		and scene_signature == _static_cache_signature \
+		and camera != null \
+		and _static_cache_camera_transform.is_equal_approx(camera.global_transform):
+		_previous_camera_position = camera_pos
+		_last_frame_reused_static_cache = true
+		return current_splats.size()
+
+	_last_frame_reused_static_cache = false
 	_generate_and_filter(visibility_result, camera, camera_pos)
 	_previous_camera_position = camera_pos
-	return _submit_to_renderer()
+	var rendered_count: int = _submit_to_renderer()
+	if can_cache and camera != null:
+		_static_cache_valid = true
+		_static_cache_signature = scene_signature
+		_static_cache_camera_transform = camera.global_transform
+	else:
+		invalidate_static_cache()
+	return rendered_count
+
+func invalidate_static_cache() -> void:
+	_static_cache_valid = false
+	_static_cache_signature = 0
+
+func did_reuse_static_cache_last_frame() -> bool:
+	return _last_frame_reused_static_cache
+
+func _is_reusable_static_visibility(visibility_result) -> bool:
+	if visibility_result == null or not ("per_node_results" in visibility_result):
+		return false
+	var per_node_results: Dictionary = visibility_result.per_node_results
+	if per_node_results.is_empty():
+		return false
+	for node: Variant in per_node_results:
+		if not (node is FoveaSplattable):
+			return false
+		var splattable: FoveaSplattable = node as FoveaSplattable
+		if not splattable.is_static \
+			or not splattable.splatting_enabled \
+			or not splattable.has_ply_splats \
+			or splattable.loaded_splats.is_empty():
+			return false
+	return true
+
+func _compute_static_visibility_signature(visibility_result) -> int:
+	var node_signatures: Array[int] = []
+	var per_node_results: Dictionary = visibility_result.per_node_results
+	for node: Variant in per_node_results:
+		var splattable: FoveaSplattable = node as FoveaSplattable
+		var first_splat: GaussianSplat = splattable.loaded_splats[0]
+		var last_splat: GaussianSplat = splattable.loaded_splats[-1]
+		var properties: Array[Variant] = [
+			splattable.get_instance_id(),
+			splattable.splat_file_path,
+			splattable.loaded_splats.size(),
+			first_splat.get_instance_id(),
+			last_splat.get_instance_id(),
+			splattable.global_transform,
+			splattable.color_override,
+			splattable.scale_override,
+			splattable.alpha_override,
+		]
+		node_signatures.append(hash(properties))
+	# Dictionary iteration order is not an asset identity. Sorting makes the
+	# signature stable while still detecting visibility-set changes.
+	node_signatures.sort()
+	return hash(node_signatures)
 
 ## Génération + reprojection temporelle + occlusion
 func _generate_and_filter(visibility_result, camera: Camera3D, camera_pos: Vector3) -> void:
@@ -155,7 +234,7 @@ func _sort_gpu_aware(splats: Array[GaussianSplat], camera: Camera3D, camera_pos:
 				if idx < splats.size():
 					sorted.append(splats[idx])
 			return sorted
-	return SplatSorter.sort_by_depth(splats, camera_pos)
+	return SplatSorter.sort_by_depth(splats, camera)
 
 ## Soumettre les splats triés au renderer
 func _submit_to_renderer() -> int:

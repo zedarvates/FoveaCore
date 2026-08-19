@@ -11,10 +11,10 @@
 
 ## Section 1 — Vérification & consolidation post-Phase 7 (1-15) `[T-1..6]` 🔴
 
-- [ ] 1. Exécuter `test_animation_subsystem.gd` dans Godot et corriger toute erreur.
-- [ ] 2. Exécuter `test_flow_field_animator.gd` et corriger.
-- [ ] 3. Exécuter `test_morph_covariance_animator.gd` et corriger.
-- [ ] 4. Exécuter `test_material_oscillation.gd` et corriger.
+- [x] 1. Exécuter `test_animation_subsystem.gd` dans Godot et corriger toute erreur. ✅ Godot 4.7-dev5, exit 0, aucun `ERROR` (2026-08-08).
+- [x] 2. Exécuter `test_flow_field_animator.gd` et corriger. ✅ Godot 4.7-dev5, cycle de vie nettoyé, exit 0, aucun `ERROR` (2026-08-08).
+- [x] 3. Exécuter `test_morph_covariance_animator.gd` et corriger. ✅ Godot 4.7-dev5, cycle de vie nettoyé, exit 0, aucun `ERROR` (2026-08-08).
+- [x] 4. Exécuter `test_material_oscillation.gd` et corriger. ✅ Godot 4.7-dev5, presets et bornes validés, cycle de vie nettoyé, aucun `ERROR` (2026-08-08).
 - [ ] 5. Exécuter `test_lod_stretch_animator.gd` et corriger.
 - [ ] 6. Exécuter `test_flipbook_animator.gd` et corriger.
 - [ ] 7. Exécuter `test_neural_offset_field.gd` et corriger.

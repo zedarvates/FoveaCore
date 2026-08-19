@@ -117,22 +117,16 @@ static func _opencv_to_godot_c2w(c2w_cv: Array) -> Transform3D:
 
 	var m: _Matrix4 = _Matrix4.new(c2w_cv)
 
+	# Basis() consumes axis columns. Post-multiplying the OpenCV c2w by
+	# diag(1, -1, -1) flips only the camera-local Y/Z axes. The camera and the
+	# imported splats already share world coordinates, so translation is not
+	# reflected.
 	var basis: Basis = Basis(
-		Vector3(m.m00, m.m01, m.m02),
-		Vector3(m.m10, m.m11, m.m12),
-		Vector3(m.m20, m.m21, m.m22),
+		Vector3(m.m00, m.m10, m.m20),
+		Vector3(-m.m01, -m.m11, -m.m21),
+		Vector3(-m.m02, -m.m12, -m.m22),
 	)
-
-	# Post-multiply: basis * S where S = diag(1, -1, -1)
-	var s_basis: Basis = Basis(
-		Vector3(1, 0, 0),
-		Vector3(0, -1, 0),
-		Vector3(0, 0, -1),
-	)
-	basis = basis * s_basis
-
-	# Translation: flip Y and Z
-	var trans: Vector3 = Vector3(m.m03, -m.m13, -m.m23)
+	var trans: Vector3 = Vector3(m.m03, m.m13, m.m23)
 
 	return Transform3D(basis, trans)
 

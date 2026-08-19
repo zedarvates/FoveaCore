@@ -15,8 +15,9 @@ It is the addon enabled in `project.godot` and the one published in releases.
 | Native fast path | `rust/` → `gdextension/bin/` | Rust (godot-rust/gdext) |
 
 The single public node a game developer needs is **`FoveaSplat3D`**: drop it in a
-scene, assign a `.fovea` / `.ply` / `.spz` source, done. Everything advanced is
+scene, assign a `.fovea` / `.ply` / `.splat` source, done. Everything advanced is
 reachable via `FoveaSplat3D.get_advanced()` (the internal `FoveaSplattable`).
+The planned `.spz` decoder is not part of the public file picker until it exists.
 
 ## Experimental tools: `addons/fovea_labs`
 

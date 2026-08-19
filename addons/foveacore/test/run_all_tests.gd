@@ -15,6 +15,10 @@ var _failed_files := []
 var _group := "all"
 
 func _init() -> void:
+	if _has_cli_flag("--self-test-semantic-failure"):
+		_run_semantic_classifier_self_test()
+		return
+
 	_group = _parse_group()
 
 	print("\n" + "======================================================================")
@@ -100,8 +104,7 @@ func _init() -> void:
 		if not output.is_empty():
 			output_text = str(output[0])
 			print(output_text)
-		var semantic_failure := output_text.contains("[FAIL]") \
-			or output_text.contains("\n  FAIL:")
+		var semantic_failure: bool = _has_semantic_failure(output_text)
 			
 		if exit_code == 0 and not semantic_failure:
 			_passed_scripts += 1
@@ -125,6 +128,40 @@ func _init() -> void:
 	print("======================================================================")
 
 	quit(1 if _failed_scripts > 0 else 0)
+
+
+func _run_semantic_classifier_self_test() -> void:
+	var cases: Array[Dictionary] = [
+		{"name": "bracketed failure", "output": "[FAIL] assertion", "expected": true},
+		{"name": "indented failure", "output": "\n  FAIL: assertion", "expected": true},
+		{"name": "script error", "output": "SCRIPT ERROR: invalid call", "expected": true},
+		{"name": "parse error", "output": "Parse Error: unexpected token", "expected": true},
+		{"name": "clean output", "output": "42 passed, 0 failed", "expected": false},
+	]
+	var failed: int = 0
+	for case: Dictionary in cases:
+		var detected: bool = _has_semantic_failure(str(case["output"]))
+		var expected: bool = bool(case["expected"])
+		if detected == expected:
+			print("RUNNER_CLASSIFIER: PASS — %s" % str(case["name"]))
+		else:
+			failed += 1
+			print("RUNNER_CLASSIFIER: FAIL — %s" % str(case["name"]))
+	print("Runner semantic classifier: %d passed, %d failed" % [cases.size() - failed, failed])
+	quit(1 if failed > 0 else 0)
+
+
+func _has_semantic_failure(output_text: String) -> bool:
+	return output_text.contains("[FAIL]") \
+		or output_text.contains("\n  FAIL:") \
+		or output_text.contains("SCRIPT ERROR:") \
+		or output_text.contains("Parse Error:")
+
+
+func _has_cli_flag(flag: String) -> bool:
+	var arguments: PackedStringArray = OS.get_cmdline_user_args()
+	arguments.append_array(OS.get_cmdline_args())
+	return flag in arguments
 
 
 ## Reads the --group=<value> command-line argument. Defaults to "all".

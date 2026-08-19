@@ -107,6 +107,11 @@ func _test_baking_logic() -> void:
 		_assert("Baked image contains projected colors", non_transparent_count > 0, "%d non-transparent pixels found" % non_transparent_count)
 		print("  Projected pixels: ", non_transparent_count)
 
+	# This splattable is intentionally never added to the tree; release it and
+	# its RefCounted splats explicitly before the standalone SceneTree exits.
+	splattable.loaded_splats.clear()
+	splattable.free()
+
 func _test_packing_logic() -> void:
 	print("\n--- _test_packing_logic ---")
 	
@@ -188,7 +193,7 @@ func _test_controller_integration() -> void:
 		_assert("UV1 offset correct", mat.uv1_offset.is_equal_approx(Vector3(0.1, 0.2, 0.0)))
 		
 	# Clean up
-	root.queue_free()
+	root.free()
 
 func _assert(name: String, condition: bool, detail: String = "") -> void:
 	if condition:

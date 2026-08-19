@@ -264,7 +264,7 @@ func _ready() -> void:
 		
 		var style_opt = OptionButton.new()
 		style_opt.name = "VisualStyleOption"
-		style_opt.add_item("Realistic")
+		style_opt.add_item("Photorealistic")
 		style_opt.add_item("Cartoon")
 		style_opt.add_item("Pixelated")
 		style_opt.add_item("Watercolor")
@@ -843,7 +843,7 @@ func _on_reload_ply_pressed() -> void:
 
 	# 2. Check COLMAP+3DGS output
 	if global_ply.is_empty():
-		var ply_path = current_session.output_directory.path_join("output/point_cloud/iteration_7000/point_cloud.ply")
+		var ply_path: String = current_session.get_training_point_cloud_path()
 		global_ply = ProjectSettings.globalize_path(ply_path)
 
 	if not FileAccess.file_exists(global_ply):
@@ -1357,7 +1357,7 @@ func _on_export_pressed() -> void:
 	if FileAccess.file_exists(ProjectSettings.globalize_path(wm2_ply)):
 		global_ply = ProjectSettings.globalize_path(wm2_ply)
 	else:
-		var ply_path = current_session.output_directory.path_join("output/point_cloud/iteration_7000/point_cloud.ply")
+		var ply_path: String = current_session.get_training_point_cloud_path()
 		global_ply = ProjectSettings.globalize_path(ply_path)
 
 	if not FileAccess.file_exists(global_ply):
@@ -1660,15 +1660,17 @@ func _on_visual_style_changed(index: int) -> void:
 			
 			# Apply predefined generation and rendering presets automatically
 			match style_name:
-				"Realistic":
+				"Photorealistic", "Realistic":
 					current_session.splat_count_density = 1.0
 					current_session.splat_shape = "Triangle"
+					current_session.auto_tag_color = false
 					current_session.enable_wind = false
 					current_session.wind_speed = 0.0
 					current_session.wind_strength = 0.0
 				"Cartoon":
 					current_session.splat_count_density = 0.5
 					current_session.splat_shape = "Quad"
+					current_session.auto_tag_color = true
 					current_session.enable_wind = true
 					current_session.wind_speed = 1.0
 					current_session.wind_strength = 0.03
@@ -1767,7 +1769,7 @@ func _apply_style_to_active_renderer() -> void:
 				
 			var mode_idx = 0
 			match current_session.visual_style:
-				"Realistic": mode_idx = 0
+				"Photorealistic", "Realistic": mode_idx = 0
 				"Oil": mode_idx = 1
 				"Watercolor": mode_idx = 2
 				"Crosshatch": mode_idx = 3

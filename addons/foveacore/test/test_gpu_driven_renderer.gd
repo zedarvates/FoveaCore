@@ -1,5 +1,7 @@
 extends SceneTree
 
+const REQUIRES_GPU := true
+
 ## Unit test for GPU-Driven Rendering & Indirect Draw pipeline.
 ## Validates that FoveaCoreSplatRenderer with enable_gpu_driven skips CPU readbacks,
 ## binds Texture2DRD uniforms to the material, and compiles compute shaders.

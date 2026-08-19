@@ -498,19 +498,7 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
     if needs_recreation:
         # Libérer l'ancien cache s'il existait
         if not cache.is_empty():
-            if cache.get("input", RID()).is_valid(): rd.free_rid(cache["input"])
-            if cache.get("animated", RID()).is_valid(): rd.free_rid(cache["animated"])
-            if cache.get("output", RID()).is_valid(): rd.free_rid(cache["output"])
-            if cache.get("counter", RID()).is_valid(): rd.free_rid(cache["counter"])
-            if cache.get("camera_ubo", RID()).is_valid(): rd.free_rid(cache["camera_ubo"])
-            if cache.get("uniform_set", RID()).is_valid(): rd.free_rid(cache["uniform_set"])
-            if cache.get("depths", RID()).is_valid(): rd.free_rid(cache["depths"])
-            if cache.get("asset_data", RID()).is_valid(): rd.free_rid(cache["asset_data"])
-            if cache.get("depth_uniform_set", RID()).is_valid(): rd.free_rid(cache["depth_uniform_set"])
-            if cache.get("sort_uniform_set", RID()).is_valid(): rd.free_rid(cache["sort_uniform_set"])
-            if cache.get("output_texture", RID()).is_valid(): rd.free_rid(cache["output_texture"])
-            if cache.get("counter_texture", RID()).is_valid(): rd.free_rid(cache["counter_texture"])
-            if cache.get("publish_uniform_set", RID()).is_valid(): rd.free_rid(cache["publish_uniform_set"])
+            _free_gpu_cache_resources(cache)
         
         # Créer les nouveaux buffers persistants à la taille maximale (Task 267)
         # On sépare le pool en deux zones de buffers distincts :
@@ -1099,8 +1087,59 @@ func _precompute_blocks(fovea_path: String, raw_bytes: PackedByteArray, aabb_min
     _cached_blocks[fovea_path] = blocks
     return blocks
 
+func _free_gpu_cache_resources(cache: Dictionary) -> void:
+    if not rd or cache.is_empty():
+        return
+
+    # Uniform sets retain their bound shaders, textures and buffers. Release
+    # them first so the local RenderingDevice can retire every dependency.
+    var uniform_keys: PackedStringArray = PackedStringArray([
+        "uniform_set",
+        "depth_uniform_set",
+        "sort_uniform_set",
+        "publish_uniform_set",
+    ])
+    var resource_keys: PackedStringArray = PackedStringArray([
+        "output_texture",
+        "counter_texture",
+        "input",
+        "animated",
+        "output",
+        "dynamic_output",
+        "counter",
+        "camera_ubo",
+        "depths",
+        "asset_data",
+    ])
+    for key: String in uniform_keys:
+        var uniform_rid: RID = cache.get(key, RID())
+        if uniform_rid.is_valid():
+            rd.free_rid(uniform_rid)
+    for key: String in resource_keys:
+        var resource_rid: RID = cache.get(key, RID())
+        if resource_rid.is_valid():
+            rd.free_rid(resource_rid)
+
 func cleanup() -> void:
     if rd:
+        # Finish queued compute work before releasing resources referenced by
+        # command lists. This is a shutdown-only synchronization point.
+        rd.submit()
+        rd.sync()
+
+        for cache_value: Variant in _gpu_buffers.values():
+            _free_gpu_cache_resources(cache_value as Dictionary)
+        _gpu_buffers.clear()
+
+        for buffer: RID in _vram_global_lod_buffers.values():
+            if buffer.is_valid():
+                rd.free_rid(buffer)
+        _vram_global_lod_buffers.clear()
+        for buffer: RID in _static_input_buffers.values():
+            if buffer.is_valid():
+                rd.free_rid(buffer)
+        _static_input_buffers.clear()
+
         if pipeline_rid.is_valid():
             rd.free_rid(pipeline_rid)
             pipeline_rid = RID()
@@ -1153,6 +1192,19 @@ func cleanup() -> void:
             rd.free_rid(delta_shader_rid)
             delta_shader_rid = RID()
 
+        if animate_pipeline_rid.is_valid():
+            rd.free_rid(animate_pipeline_rid)
+            animate_pipeline_rid = RID()
+        if animate_shader_rid.is_valid():
+            rd.free_rid(animate_shader_rid)
+            animate_shader_rid = RID()
+        if animate_adv_pipeline_rid.is_valid():
+            rd.free_rid(animate_adv_pipeline_rid)
+            animate_adv_pipeline_rid = RID()
+        if animate_adv_shader_rid.is_valid():
+            rd.free_rid(animate_adv_shader_rid)
+            animate_adv_shader_rid = RID()
+
         if inst_cull_pipeline_rid.is_valid():
             rd.free_rid(inst_cull_pipeline_rid)
             inst_cull_pipeline_rid = RID()
@@ -1173,40 +1225,13 @@ func cleanup() -> void:
         if _vram_metadata_buffer.is_valid():
             rd.free_rid(_vram_metadata_buffer)
             _vram_metadata_buffer = RID()
-        for buffer: RID in _vram_global_lod_buffers.values():
-            if buffer.is_valid():
-                rd.free_rid(buffer)
-        _vram_global_lod_buffers.clear()
-        for buffer: RID in _static_input_buffers.values():
-            if buffer.is_valid():
-                rd.free_rid(buffer)
-        _static_input_buffers.clear()
-        
-        # Libérer les buffers GPU persistants en cache
-        for path in _gpu_buffers:
-            var cache: Dictionary = _gpu_buffers[path]
-            if cache.get("input", RID()).is_valid():
-                rd.free_rid(cache["input"])
-            if cache.get("output", RID()).is_valid():
-                rd.free_rid(cache["output"])
-            if cache.get("animated", RID()).is_valid():
-                rd.free_rid(cache["animated"])
-            if cache.get("counter", RID()).is_valid():
-                rd.free_rid(cache["counter"])
-            if cache.get("camera_ubo", RID()).is_valid():
-                rd.free_rid(cache["camera_ubo"])
-            if cache.get("uniform_set", RID()).is_valid():
-                rd.free_rid(cache["uniform_set"])
-            if cache.get("depths", RID()).is_valid():
-                rd.free_rid(cache["depths"])
-            if cache.get("asset_data", RID()).is_valid():
-                rd.free_rid(cache["asset_data"])
-            if cache.get("depth_uniform_set", RID()).is_valid():
-                rd.free_rid(cache["depth_uniform_set"])
-            if cache.get("sort_uniform_set", RID()).is_valid():
-                rd.free_rid(cache["sort_uniform_set"])
-        _gpu_buffers.clear()
-        
+
+        last_output_buffer_rid = RID()
+        last_covar_texture_rid = RID()
+        last_palette_texture_rid = RID()
+        last_counter_buffer_rid = RID()
+        _last_hiz_tex = RID()
+
         rd.free()
         rd = null
 
@@ -1480,9 +1505,16 @@ func dispatch_tile_based_rasterization(
         palette_texture_rid: RID,
         model_transform: Transform3D = Transform3D.IDENTITY
     ) -> bool:
-    if not rd or not output_buffer_rid.is_valid() or not color_texture_rid.is_valid() or not covar_texture_rid.is_valid():
+    if (
+        not rd
+        or camera == null
+        or not output_buffer_rid.is_valid()
+        or not color_texture_rid.is_valid()
+        or not covar_texture_rid.is_valid()
+        or not last_counter_buffer_rid.is_valid()
+    ):
         return false
-    if not raster_pipeline_rid.is_valid():
+    if not raster_shader_rid.is_valid() or not raster_pipeline_rid.is_valid():
         return false
         
     var color_format: RDTextureFormat = rd.texture_get_format(color_texture_rid)
@@ -1579,7 +1611,7 @@ func dispatch_tile_based_rasterization(
     
     var workgroups_x := int(ceil(float(viewport_w) / 16.0))
     var workgroups_y := int(ceil(float(viewport_h) / 16.0))
-    
+
     var compute_list := rd.compute_list_begin()
     rd.compute_list_bind_compute_pipeline(compute_list, raster_pipeline_rid)
     rd.compute_list_bind_uniform_set(compute_list, uniform_set, 0)
@@ -1617,30 +1649,7 @@ func unload_asset_buffers(fovea_path: String) -> void:
         return
     if _gpu_buffers.has(fovea_path):
         var cache: Dictionary = _gpu_buffers[fovea_path]
-        if cache.get("input", RID()).is_valid():
-            rd.free_rid(cache["input"])
-        if cache.get("output", RID()).is_valid():
-            rd.free_rid(cache["output"])
-        if cache.get("counter", RID()).is_valid():
-            rd.free_rid(cache["counter"])
-        if cache.get("camera_ubo", RID()).is_valid():
-            rd.free_rid(cache["camera_ubo"])
-        if cache.get("uniform_set", RID()).is_valid():
-            rd.free_rid(cache["uniform_set"])
-        if cache.get("depths", RID()).is_valid():
-            rd.free_rid(cache["depths"])
-        if cache.get("asset_data", RID()).is_valid():
-            rd.free_rid(cache["asset_data"])
-        if cache.get("depth_uniform_set", RID()).is_valid():
-            rd.free_rid(cache["depth_uniform_set"])
-        if cache.get("sort_uniform_set", RID()).is_valid():
-            rd.free_rid(cache["sort_uniform_set"])
-        if cache.get("output_texture", RID()).is_valid():
-            rd.free_rid(cache["output_texture"])
-        if cache.get("counter_texture", RID()).is_valid():
-            rd.free_rid(cache["counter_texture"])
-        if cache.get("publish_uniform_set", RID()).is_valid():
-            rd.free_rid(cache["publish_uniform_set"])
+        _free_gpu_cache_resources(cache)
         _gpu_buffers.erase(fovea_path)
         print("FoveaEngine: Unloaded GPU culler buffers for asset: %s" % fovea_path)
 

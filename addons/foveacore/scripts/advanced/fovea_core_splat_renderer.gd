@@ -127,7 +127,19 @@ enum PerformanceProfile { MOBILE, VR, DESKTOP_HIGH }
 @export var hlod_distances: Array[float] = [8.0, 18.0, 30.0]
 ## Activer le rendu par tuiles d'écran (16x16) via Compute Shader (Tile-Based Rasterization)
 @export var enable_tile_rasterizer := false
+## Enable gaze-dependent density and peripheral splat expansion. Keep disabled
+## for the full-fidelity desktop/photorealistic path; the manager enables it
+## explicitly when a working XR session requests foveated rendering.
+@export var enable_foveated_rendering: bool = false
 @export var enable_layered_splatting: bool = true
+
+@export_group("Photorealistic Shading")
+## Standard 3DGS stores baked radiance. Keep scene lighting disabled unless an
+## artistic or dynamic asset explicitly opts into relighting.
+@export var enable_dynamic_lighting: bool = false:
+    set(val):
+        enable_dynamic_lighting = val
+        update_material_shader()
 
 @export_group("Surface Waves (Dynamic, Repeating & Looping)")
 ## Activer les vagues de surface dynamique (GPU)
@@ -164,6 +176,10 @@ enum PerformanceProfile { MOBILE, VR, DESKTOP_HIGH }
 var hlod_levels := {}
 var _current_hlod_level := 0
 var _original_splats: Array[GaussianSplat] = []
+var _hlod_source_signature: int = 0
+var _hlod_order_signature: int = 0
+var _hlod_source_count: int = 0
+var _hlod_asset_path: String = ""
 
 var _compositor_effect_added := false
 var _compositor_effect: FoveaCompositorEffect = null
@@ -239,6 +255,10 @@ func _update_performance_profile_budget() -> void:
     material.set_shader_parameter("splat_subdivisions", splat_subdivisions)
     material.set_shader_parameter("use_palette", false)
     material.set_shader_parameter("palette_size", 0)
+    material.set_shader_parameter("enable_foveated_rendering", enable_foveated_rendering)
+    material.set_shader_parameter("enable_layered_splatting", enable_layered_splatting)
+    material.set_shader_parameter("enable_dynamic_lighting", enable_dynamic_lighting)
+    material.set_shader_parameter("custom_data_is_decoded", false)
     self.material_override = material
 
     # Texture covariance par defaut (sphere unite) : evite la lecture de texture vide
@@ -376,11 +396,12 @@ func _process(_delta: float) -> void:
                         mat.set_shader_parameter("motion_stretch_factor", 0.0)
 
         mat.set_shader_parameter("lod_ratio", lod)
+        mat.set_shader_parameter("enable_foveated_rendering", enable_foveated_rendering)
         mat.set_shader_parameter("enable_layered_splatting", enable_layered_splatting)
         
         # Update light direction in shader for dynamic specular calculations
         var main_light: DirectionalLight3D = _find_main_light()
-        if main_light:
+        if main_light and enable_dynamic_lighting:
             var light_dir: Vector3 = -main_light.global_transform.basis.z.normalized()
             mat.set_shader_parameter("light_direction", light_dir)
             
@@ -550,6 +571,8 @@ func update_material_shader() -> void:
     
     if mat.shader and mat.shader.resource_path.ends_with("splat_render_artistic.gdshader"):
         TexturedSplatGenerator.apply_brush_textures(mat)
+        mat.set_shader_parameter("enable_foveated_rendering", enable_foveated_rendering)
+        mat.set_shader_parameter("enable_layered_splatting", enable_layered_splatting)
         mat.set_shader_parameter("enable_waves", enable_waves)
         mat.set_shader_parameter("wave_speed", wave_speed)
         mat.set_shader_parameter("wave_amplitude", wave_amplitude)
@@ -573,7 +596,10 @@ func update_material_shader() -> void:
     else:
         mat.shader = preload("res://addons/foveacore/shaders/splat_render_triangle.gdshader")
         mat.set_shader_parameter("use_palette", has_palette)
-        
+
+    mat.set_shader_parameter("enable_foveated_rendering", enable_foveated_rendering)
+    mat.set_shader_parameter("enable_layered_splatting", enable_layered_splatting)
+    mat.set_shader_parameter("enable_dynamic_lighting", enable_dynamic_lighting)
     mat.set_shader_parameter("enable_waves", enable_waves)
     mat.set_shader_parameter("wave_speed", wave_speed)
     mat.set_shader_parameter("wave_amplitude", wave_amplitude)
@@ -716,9 +742,14 @@ func load_and_render_splats(camera_moved: bool = true) -> void:
     # Mettre à jour le cache des transforms originaux (pour FoveaClayDeformer)
     _original_transforms = decode_result.original_transforms
 
-    # Écriture en bloc dans le MultiMesh (un seul aller-retour GPU)
-    multimesh.transform_array   = decode_result.xf_array
-    multimesh.custom_data_array = decode_result.cd_array
+    # Écriture en bloc dans le buffer RenderingServer. Les propriétés
+    # transform_array/custom_data_array ne constituent pas un setter batch
+    # fiable sur Godot 4.7 : elles peuvent laisser les transforms à l'identité.
+    _upload_decoded_multimesh_batch(
+        decode_result.xf_array,
+        decode_result.cd_array,
+        surviving_splats_count
+    )
 
     print("FoveaEngine: %d splats injectés dans le MultiMesh (mode TRIANGLE, batch parallèle)." % surviving_splats_count)
 
@@ -755,15 +786,69 @@ func render_splats(splats: Array[GaussianSplat]) -> int:
     _original_splats = splats
     if enable_hlod and not splats.is_empty():
         # Générer et mettre en cache la base de données HLOD
-        hlod_levels = FoveaHLODGenerator.generate_hlod_levels(splats, hlod_voxel_sizes)
-        _current_hlod_level = -1 # Forcer la transition initiale
+        var source_signature: int = _hlod_source_signature
+        var source_changed: bool = (
+            hlod_levels.is_empty()
+            or splats.size() != _hlod_source_count
+            or asset_path != _hlod_asset_path
+        )
+        # Static assets are immutable by contract. Their expensive content
+        # signature is therefore needed only on first load/path change, while
+        # dynamic/procedural assets retain the full per-call mutation check.
+        if source_changed or not is_static:
+            source_signature = _compute_splat_signature(splats)
+            source_changed = (
+                source_changed or source_signature != _hlod_source_signature
+            )
+        var order_signature: int = _compute_splat_order_signature(splats)
+        var order_changed: bool = order_signature != _hlod_order_signature
+        if source_changed:
+            hlod_levels = FoveaHLODGenerator.generate_hlod_levels(splats, hlod_voxel_sizes)
+            _hlod_source_signature = source_signature
+            _hlod_order_signature = order_signature
+            _hlod_source_count = splats.size()
+            _hlod_asset_path = asset_path
+            _current_hlod_level = -1 # Force the initial transition only for new geometry.
+        elif order_changed:
+            # Keep the full-resolution level in the current back-to-front order
+            # without rebuilding the spatially aggregated HLOD levels.
+            hlod_levels[0] = splats.duplicate()
+            _hlod_order_signature = order_signature
         var camera: Camera3D = get_viewport().get_camera_3d()
         var cam_pos: Vector3 = camera.global_position if camera else Vector3.ZERO
-        _update_hlod_selection(cam_pos, true)
+        _update_hlod_selection(cam_pos, order_changed and _current_hlod_level == 0)
         return _original_splats.size()
     else:
         hlod_levels.clear()
+        _hlod_source_signature = 0
+        _hlod_order_signature = 0
+        _hlod_source_count = 0
+        _hlod_asset_path = ""
         return render_splats_internal(splats)
+
+func _compute_splat_signature(splats: Array[GaussianSplat]) -> int:
+    # Order-independent: depth sorting may reorder the same static set every
+    # frame, which must not trigger a full HLOD rebuild.
+    var signature: int = splats.size()
+    for splat: GaussianSplat in splats:
+        signature = signature ^ hash(splat.position)
+        signature = signature ^ hash(splat.scale)
+        signature = signature ^ hash(splat.rotation)
+        signature = signature ^ hash(splat.color)
+        signature = signature ^ hash(splat.opacity)
+    return signature
+
+func _compute_splat_order_signature(splats: Array[GaussianSplat]) -> int:
+    # A small deterministic sample catches camera-driven depth reordering while
+    # avoiding Array.hash(), whose value follows the transient array identity.
+    var signature: int = splats.size()
+    if splats.is_empty():
+        return signature
+    var stride: int = maxi(1, splats.size() / 32)
+    for index: int in range(0, splats.size(), stride):
+        signature = signature ^ hash(splats[index].position * float(index + 1))
+    signature = signature ^ hash(splats[-1].position * float(splats.size()))
+    return signature
 
 ## Exécution du rendu interne pour un ensemble de splats donné
 func render_splats_internal(splats: Array[GaussianSplat]) -> int:
@@ -790,37 +875,85 @@ func render_splats_internal(splats: Array[GaussianSplat]) -> int:
         mat.set_shader_parameter("aabb_min", aabb_min)
         mat.set_shader_parameter("aabb_max", aabb_max)
         mat.set_shader_parameter("use_palette", false)
+        mat.set_shader_parameter("custom_data_is_decoded", true)
+        mat.set_shader_parameter("enable_foveated_rendering", enable_foveated_rendering)
         mat.set_shader_parameter("enable_layered_splatting", enable_layered_splatting)
-
-    # Packer les splats en format 16-octets
-    var raw_bytes: PackedByteArray = pack_gaussian_splats(splats, aabb_min, aabb_max)
-
-    # Décoder les données de couleur en parallèle. Le format compact 16 octets
-    # ne contient pas la covariance complète des GaussianSplat non quantisés :
-    # leur rotation et leur échelle restent donc dans la transform d'instance.
-    var decode_result: FoveaThreadPool.DecodeResult = FoveaThreadPool.decode_parallel(raw_bytes, count, aabb_min, aabb_max)
 
     var transform_array: PackedVector3Array = PackedVector3Array()
     transform_array.resize(count * 4)
+    var direct_custom_data := PackedColorArray()
+    direct_custom_data.resize(count)
     var original_transforms: Array[Transform3D] = []
     original_transforms.resize(count)
     for i: int in range(count):
         var splat: GaussianSplat = splats[i]
-        var basis: Basis = Basis(splat.rotation).scaled(splat.scale)
+        # 3DGS covariance uses M = R * S: the anisotropic scale belongs to the
+        # splat's rotated local axes. Basis.scaled() applies scale in the parent
+        # frame, which shears/mis-orients elongated Gaussians after projection.
+        var basis: Basis = Basis(splat.rotation).scaled_local(splat.scale)
         var transform_offset: int = i * 4
         transform_array[transform_offset] = basis.x
         transform_array[transform_offset + 1] = basis.y
         transform_array[transform_offset + 2] = basis.z
         transform_array[transform_offset + 3] = splat.position
+        direct_custom_data[i] = Color(
+            splat.color.r,
+            splat.color.g,
+            splat.color.b,
+            splat.opacity
+        )
         original_transforms[i] = Transform3D(basis, splat.position)
 
-    # Assigner au MultiMesh en deux écritures batch, sans setter par instance.
-    multimesh.transform_array = transform_array
-    multimesh.custom_data_array = decode_result.cd_array
+    # Assigner au MultiMesh via son buffer intercalé RenderingServer.
+    _upload_decoded_multimesh_batch(transform_array, direct_custom_data, count)
 
     _original_transforms = original_transforms
 
     return count
+
+func _upload_decoded_multimesh_batch(
+    transforms: PackedVector3Array,
+    custom_data: PackedColorArray,
+    count: int
+) -> void:
+    if count <= 0:
+        return
+    if transforms.size() != count * 4:
+        push_error(
+            "FoveaCoreSplatRenderer: invalid transform batch size %d for %d splats." % [
+                transforms.size(), count
+            ]
+        )
+        return
+    if multimesh.use_custom_data and custom_data.size() != count:
+        push_error(
+            "FoveaCoreSplatRenderer: invalid custom-data batch size %d for %d splats." % [
+                custom_data.size(), count
+            ]
+        )
+        return
+
+    var stride: int = FoveaMultiMeshBulk.stride_of(multimesh)
+    var buffer := PackedFloat32Array()
+    buffer.resize(count * stride)
+    for i: int in range(count):
+        var transform_offset: int = i * 4
+        var transform := Transform3D(
+            Basis(
+                transforms[transform_offset],
+                transforms[transform_offset + 1],
+                transforms[transform_offset + 2]
+            ),
+            transforms[transform_offset + 3]
+        )
+        var buffer_offset: int = i * stride
+        FoveaMultiMeshBulk.write_transform(buffer, buffer_offset, transform)
+        if multimesh.use_custom_data:
+            var custom_offset: int = buffer_offset + 12
+            if multimesh.use_colors:
+                custom_offset += 4
+            FoveaMultiMeshBulk.write_color(buffer, custom_offset, custom_data[i])
+    multimesh.buffer = buffer
 
 ## Sélectionne et applique dynamiquement le niveau HLOD approprié
 func _update_hlod_selection(camera_pos: Vector3, force: bool = false) -> void:

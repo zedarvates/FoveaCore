@@ -62,7 +62,7 @@ This checklist separates implemented prototypes from evidence required before ch
 - [ ] Rerun `python tools/check_public_docs.py --external` immediately after changing visibility; only the private FoveaCore workflow URL and badge currently return 404.
 - [x] Validate the prepared index in isolation: all 197 GDScript classes load and the corrected `nogpu` group passes 57/57 suites while explicitly skipping 6 GPU/integration suites.
 - [x] Validate the prepared index C# and Rust surfaces: C# Release builds with 0 errors; Rust passes 5 tests, strict Clippy, and an optimized 32-crate build.
-- [ ] Add a real C# test project; the current `FoveaEngine.csproj` contains no test framework and `dotnet test` discovers no tests.
+- [x] Add a real C# test project; `tests/FoveaEngine.Tests` now covers the Godot-free Morton encoder with 3 passing xUnit tests, while `FoveaEngine.csproj` still excludes that project from the Godot assembly.
 - [x] Validate representative prepared-index GPU and visual paths: tile dispatch 10/10, instanced layout/readback 32/32 with no skips, and a recognizable auto-framed 12,473-splat PLY capture with exact-count CPU fallback when GPU sorting is incomplete.
 - [x] Validate all repository Python syntax, the four offset-field baker tests, a Godot-loaded generated resource, the portable validation tools, and the public-docs gate.
 - [ ] Run representative GPU/visual checks, Python validation, and the Botte checkup on the final clean branch.

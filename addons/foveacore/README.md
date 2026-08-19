@@ -26,13 +26,13 @@ FoveaCore exposes a small public Godot API through `FoveaSplat3D`, while advance
 
 | Surface | Evidence state | Current result |
 | --- | --- | --- |
-| `FoveaSplat3D` with `.ply` | **VALIDATED** | The checked-in 12,473-splat and 8,000-splat fixtures produced D3D12 captures without script, parse, or load errors. |
+| `FoveaSplat3D` / `FoveaSplattable` boundary | **VALIDATED** | The headless lifecycle/control contract passed 26/26 with a real one-splat PLY load; the 12,473-splat and 8,000-splat fixtures produced D3D12 captures. |
 | Desktop fallback without OpenXR | **VALIDATED** | PLY rendering completed without a connected headset. |
 | `.splat` parser and routing | **VALIDATED** | Godot 4.7.dev5 passed 14/14 assertions over a deterministic 256-splat round-trip and negative inputs. Rendering remains unbenchmarked. |
 | `.fovea` v2 structure | **VALIDATED** | Godot 4.7.dev5 passed 28 structural and corrupt-input assertions; Rust passed five tests and reproduced the checked-in 208-byte fixture exactly. |
-| Native `.fovea` rendering | **FAILED** | Live path registration is fixed and 12,473 splats reach the local MultiMesh, but compute-contract errors still produce a blank frame. |
+| Native `.fovea` rendering | **EXPERIMENTAL** | The default CPU passthrough produced a framed green/brown 800×600 D3D12 capture from 12,473 canonical records (11,808 after cleaning). Canonical palette, AABB, and linear covariance sections are exercised; image parity and instanced compute culling remain open. |
 | `.spz` decoder | **PROPOSED** | The planned format is rejected until a decoder exists and is no longer advertised by the public picker. |
-| GPU sorting and culling | **EXPERIMENTAL** | Invalid GPU permutations fail closed to the exact CPU sorter; representative hardware certification remains open. |
+| GPU sorting and culling | **EXPERIMENTAL** | The depth sorter passed 30/30 D3D12 Forward+ assertions, including a complete strict back-to-front permutation for the 17,013-splat video asset; invalid results still fail closed to the exact CPU sorter. Static reuse passed 7/7 and the settled RTX 5060 Ti demo capture reports 60 FPS. Compute culling, other hardware, XR, and portability remain open. |
 | OpenXR, eye tracking, and foveation | **EXPERIMENTAL** | Desktop fallbacks exist, but headset acceptance and performance gates remain open. |
 
 Evidence-state definitions and the complete record are maintained in the [Autowiki](../../docs/autowiki/README.md#evidence-policy).
@@ -51,6 +51,8 @@ add_child(splat)
 ```
 
 The public node exposes loading, quality, opacity, static/dynamic behavior, optional collision generation, and `.fovea` export. Call `get_advanced()` after the node is ready to reach the internal `FoveaSplattable` delegate.
+
+`QualityPreset.AUTO` restores neutral local density and culling priority after an explicit preset, so the manager's global settings can take precedence again.
 
 > [!WARNING]
 > Copying only `addons/foveacore/` into another project is not yet a certified installation path. Project settings, autoloads, rendering support, external tools, and the native artifact contract must be validated together before redistribution.
@@ -102,7 +104,7 @@ Heavy work must be deferred or threaded, bulk splat updates must avoid per-insta
 
 FoveaCore can operate in a GDScript-only mode when a native binary is unavailable. Release packaging currently treats the Rust GDExtension as the canonical native artifact.
 
-The C++ target is compile-only: it exports `foveacore_init`, while the active descriptor expects the Rust `gdext_rust_init` entry point at the same DLL path. See the [C++ build guide](gdextension/README_BUILD.md) before touching that artifact.
+The experimental C++ target is isolated as `foveacore_cpp_init` in `foveacore_cpp.dll`; it no longer shares the Rust symbol or binary path. Its explicit Windows load harness passes locally, but release packaging remains Rust-only. See the [C++ build guide](gdextension/README_BUILD.md) for the bounded contract and remaining gates.
 
 ## Native `.fovea` format
 
@@ -120,7 +122,7 @@ Incompatible compression experiments require a new versioned contract. The autho
 Run tests with the repository's Godot 4.7 baseline rather than an older system editor:
 
 ```bash
-godot --headless --path . -s res://addons/foveacore/test/run_all_tests.gd --group=nogpu
+godot --headless --path . -s res://addons/foveacore/test/run_all_tests.gd -- --group=nogpu
 godot --headless --xr-mode off --path . -s res://addons/foveacore/test/test_fovea_cli_bridge.gd
 python addons/tools/test_validation_tools.py
 ```

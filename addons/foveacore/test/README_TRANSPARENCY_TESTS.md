@@ -1,153 +1,134 @@
-# Tests de Transparence et Mélange de Splats - FoveaEngine
+<div align="center">
+  <img src="../../../icon.svg" alt="FoveaEngine logo" width="80" />
 
-## Vue d'ensemble
+  <h1>Transparency framebuffer harness</h1>
+  <p>Deterministic alpha-composition oracle plus experimental splat-like scene layouts.</p>
+  <p><a href="../../../README.md">Project overview</a> · <a href="../../../docs/feature-status.md">Feature status</a> · <a href="capture_render.gd">PLY capture harness</a></p>
+</div>
 
-Ce dossier contient les tests de validation pour le rendu des Gaussian Splats avec transparence et palette 8-bit.
+> [!IMPORTANT]
+> The framebuffer oracle is automated and fail-closed. The five 3D layouts remain visual fixtures: they are constructed deterministically, but their pixels are not yet compared with production splat output or golden images.
 
-## Fichiers de Test
+## Current result
 
-### 1. `transparency_blend_test.gd`
-Script principal de test automatisé. Valide 5 aspects critiques :
+| Capability | Current evidence |
+| --- | --- |
+| Five deterministic 3D layouts constructed | Yes |
+| Clean Godot scene load | Yes on the recorded D3D12 run |
+| Batched MultiMesh setup | Yes |
+| Framebuffer capture | Yes |
+| Numeric alpha-composition gate | Yes |
+| Non-zero exit on oracle failure | Yes |
+| Production splat-shader parity | No |
+| Golden-image / PSNR / SSIM gate | No |
+| Performance benchmark suitable for claims | No |
 
-#### Test 1: Superposition de splats semi-transparents
-- Crée 5 couches de splats avec alpha = 0.3
-- Valide l'accumulation correcte de la transparence
-- Teste le blending additif vs alpha blending
-- **Critère de succès**: Pas d'artefacts de z-fighting, alpha cumulé correct
+On 2026-08-15, Godot 4.7.dev5 Mono with Forward+, D3D12, and an NVIDIA RTX 5060 Ti produced these framebuffer samples over black:
 
-#### Test 2: Mélange de couleurs avec opacité variable
-- Dégradé rouge→bleu avec alpha croissant (0.2 → 1.0)
-- Mélange de couleurs complémentaires (RGB, CMY) avec alpha = 0.5-0.7
-- Rampe d'opacité sur même couleur (8 étapes)
-- **Critère de succès**: Transition douce, pas de banding
+| Sample | Measured red | Expected red | Tolerance |
+| --- | ---: | ---: | ---: |
+| One 50% red layer | 0.498 | 0.500 | ±0.080 |
+| Two overlapping 50% red layers | 0.749 | 0.750 | ±0.080 |
 
-#### Test 3: Effets de profondeur (z-ordering)
-- 7 splats à différentes profondeurs (z = -3 à +3)
-- Test de chevauchement complexe (4 splats entrelacés)
-- **Critère de succès**: Respect strict de l'ordre Z, pas de flickering
+The positive run exited `0` with zero `ERROR:`, script errors, parse errors, driver-initialization failures, or RID leak warnings. The forced negative control printed `TRANSPARENCY_ORACLE: FAIL` and exited `1`.
 
-#### Test 4: Artefacts de transparence avec palette limitée
-- Dégradé continu (32 étapes) vs palette 16 couleurs
-- Couleurs limites (noir/blanc purs avec alpha)
-- Test de banding artificiel (16 niveaux de gris)
-- **Critère de succès**: Banding minimal, respect des limites de palette
+![Two 50% red layers composed over black](../../../docs/images/transparency-framebuffer-oracle.png)
 
-#### Test 5: Comparaison visuelle RGB565 vs Palette 8-bit
-- 8 couleurs de test (primaires, secondaires, gris)
-- Comparaison RGB565 (5-6-5 bits) vs Palette (8-bit indexé)
-- Test avec transparence (4 niveaux d'alpha)
-- **Critère de succès**: Erreur de couleur acceptable (< 5%)
+<p align="center"><sub>Captured oracle output: the center is the two-layer sample; the black border is the background control.</sub></p>
 
-### 2. `transparency_blend_scene.tscn`
-Scène Godot prête à l'emploi pour exécution interactive.
+## What changed
 
-### 3. `color_format_benchmark.gd` (existant)
-Benchmark de performance RGB565 vs Palette.
-Mesure FPS, VRAM, bande passante, PSNR, SSIM.
+The historical harness allocated one `FoveaCoreSplatRenderer`—and therefore one local rendering device—for nearly every visual plane. The reproduced baseline emitted 627 `ERROR:` entries, including 208 driver-initialization failures, plus one script error.
 
-## Exécution
+The bounded harness now:
 
-### Mode Automatisé
-```gdscript
-# Depuis l'éditeur Godot
-var test = preload("res://addons/foveacore/test/transparency_blend_test.gd").new()
-add_child(test)
-# Les tests s'exécutent automatiquement au _ready()
+- uses ordinary `MultiMeshInstance3D` fixtures and one shared test shader;
+- writes transforms and custom colors through batch arrays;
+- seeds random placement with a fixed value;
+- removes the unrelated VR rig and invalid `AmbientLight3D` scene node;
+- labels the five layouts `constructed`, never unconditionally `passed`;
+- samples one-layer, two-layer, and background framebuffer pixels;
+- exits non-zero if capture, color, alpha, or forced-negative gates fail.
+
+This isolates the transparency question without claiming that a test shader proves the production Gaussian-splat path.
+
+## Files
+
+| File | Purpose | Maturity |
+| --- | --- | --- |
+| [`transparency_blend_scene.tscn`](transparency_blend_scene.tscn) | Minimal D3D12 scene and harness host | Automated bounded harness |
+| [`transparency_blend_test.gd`](transparency_blend_test.gd) | Builds five layouts and evaluates the framebuffer oracle | Oracle validated; layouts experimental |
+| [`color_format_benchmark.gd`](color_format_benchmark.gd) | Experimental RGB565/palette timing and image metrics | Separate benchmark scaffold; no committed baseline |
+| [`capture_render.gd`](capture_render.gd) | Deterministic PLY capture used by visual regression work | Validated capture path, not this oracle |
+
+## Constructed layouts
+
+The script still creates these arrangements for manual inspection:
+
+1. five semi-transparent blue layers and a second overlapping group;
+2. red-to-blue gradients, complementary colors, and an opacity ramp;
+3. seven depth positions plus four overlapping colors;
+4. continuous and stepped gradients intended to expose palette banding;
+5. simulated RGB565 and nearest-palette colors for a small color set.
+
+These layouts are inputs, not assertions. Only the isolated framebuffer oracle currently earns a `passed` result.
+
+## Reproduce the positive gate
+
+Run with a real rendering driver. The harness exits on its own:
+
+```bash
+godot --path . \
+  --rendering-driver d3d12 \
+  --resolution 1280x720 \
+  --log-file transparency-positive.log \
+  --scene res://addons/foveacore/test/transparency_blend_scene.tscn \
+  -- --capture=/absolute/path/transparency-framebuffer-oracle.png
 ```
 
-### Mode Scène Interactive
-1. Ouvrir `transparency_blend_scene.tscn`
-2. Exécuter la scène (F6)
-3. Observer les 5 zones de test
+Expected markers:
 
-### Mode Benchmark
-```gdscript
-var bench = preload("res://addons/foveacore/test/color_format_benchmark.gd").new()
-add_child(bench)
-bench.start_benchmark()
+```text
+TRANSPARENCY_ORACLE: PASS | one=0.498 two=0.749
+process exit code: 0
 ```
 
-## Résultats Attendus
+Inspect the complete log instead of trusting the summary alone:
 
-### Transparence (Test 1)
-- **Alpha blending**: `blend_mix` dans le shader
-- **Cumul alpha**: `alpha_total = 1 - (1 - alpha)^n`
-- **Profondeur**: `depth_draw_never` + tri CPU
+```bash
+rg -n "ERROR:|SCRIPT ERROR|Parse Error|Failed to initialize driver|RID allocations" transparency-positive.log
+```
 
-### Mélange de Couleurs (Test 2)
-- **Espace couleur**: Linéaire (non sRGB)
-- **Interpolation**: LERP dans l'espace RGB
-- **Précision**: 32-bit float interne → 8-bit final
+Headless or dummy renderers cannot validate blending. The harness now fails
+immediately with exit code `1` in that environment instead of waiting forever
+for a framebuffer signal or reporting a false success.
 
-### Z-Ordering (Test 3)
-- **Tri**: MultiMesh trié par profondeur (distance caméra)
-- **Stabilité**: Pas de flickering à ±0.001 unité
-- **Performance**: O(n log n) avec n = splat_count
+## Verify the fail-closed path
 
-### Artefacts Palette (Test 4)
-- **Dithering**: Floyd-Steinberg optionnel
-- **Banding**: Détection par gradient local
-- **Limite**: 16 couleurs = 4 bits par canal
+```bash
+godot --path . \
+  --rendering-driver d3d12 \
+  --log-file transparency-negative.log \
+  --scene res://addons/foveacore/test/transparency_blend_scene.tscn \
+  -- --force-oracle-failure
+```
 
-### RGB565 vs Palette (Test 5)
-| Format | Bits/Pixel | Canal R | Canal G | Canal B | Alpha |
-|--------|-----------|---------|---------|---------|-------|
-| RGB565 | 16 | 5 bits | 6 bits | 5 bits | Non |
-| Palette| 8+ | 8 bits* | 8 bits* | 8 bits* | 8 bits |
+Expected markers:
 
-*Via table de correspondance (256 entrées max)
+```text
+TRANSPARENCY_ORACLE: FAIL
+process exit code: 1
+```
 
-## Métriques de Qualité
+## Remaining promotion gates
 
-### PSNR (Peak Signal-to-Noise Ratio)
-- > 40 dB: Excellent (indiscernable)
-- 30-40 dB: Bon (léger bruit)
-- 20-30 dB: Acceptable (bruit visible)
-- < 20 dB: Mauvais (distorsion forte)
+Before documenting production splat transparency as validated, add:
 
-### SSIM (Structural Similarity)
-- > 0.98: Excellent
-- 0.95-0.98: Bon
-- 0.90-0.95: Acceptable
-- < 0.90: Mauvais
+1. captures of the same fixtures through the production packed-data shader path;
+2. declared per-scenario alpha, depth-order, and color-distance assertions;
+3. reference, RGB565, and palette images generated from identical inputs;
+4. calibrated golden-image, PSNR/SSIM, and banding thresholds;
+5. cross-driver and cross-GPU records with fixture provenance;
+6. a representative performance benchmark kept separate from correctness.
 
-### Banding Score
-- < 0.01: Aucun artefact
-- 0.01-0.05: Léger
-- 0.05-0.10: Modéré
-- > 0.10: Sévère
-
-## Optimisations
-
-### Shader (`splat_render_triangle.gdshader`)
-- `blend_mix`: Alpha blending standard
-- `depth_draw_never`: Pas d'écriture Z (tri CPU)
-- `cull_disabled`: Désactivé pour transparence
-- `unshaded`: Pas d'ombrage (couleurs pures)
-
-### Pipeline de Rendu
-1. Tri CPU des splats par profondeur
-2. Upload MultiMesh (GPU)
-3. Shader vertex: Étirement ellipse
-4. Shader fragment: Alpha + couleur
-5. Blending hardware
-
-## Problèmes Connus
-
-1. **Z-fighting**: À moins de 0.001 unité de profondeur
-   - Solution: Légère perturbation aléatoire
-
-2. **Banding 8-bit**: Sur gradients continus
-   - Solution: Dithering Floyd-Steinberg
-
-3. **Overdraw**: Multiples couches transparentes
-   - Solution: Limiter à ~10 couches
-
-4. **Précision RGB565**: Perte sur rouge/bleu
-   - Solution: Palette 8-bit pour qualité
-
-## Références
-
-- [Gaussian Splatting Paper](https://arxiv.org/abs/2303.00788)
-- Godot 4.x: Viewport, MultiMesh, ShaderMaterial
-- Floyd-Steinberg Dithering: [Wiki](https://en.wikipedia.org/wiki/Floyd%E2%80%93Steinberg_dithering)
+The current result validates deterministic framebuffer composition and failure propagation only. It does not certify Gaussian rendering fidelity, depth sorting, palette quality, VR, or performance.

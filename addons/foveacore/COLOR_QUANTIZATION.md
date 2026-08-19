@@ -51,7 +51,7 @@ pub struct FoveaPackedSplat {
     opacity: u8,       // 1 octet
     layer_id: u8,      // 1 octet
     dither_seed: u8,   // 1 octet (NOUVEAU)
-    padding2: u8,      // 1 octet
+    brush_type: u8,    // 1 octet, type de brosse/forme
 } // Total: 16 octets
 ```
 

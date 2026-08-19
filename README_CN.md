@@ -75,7 +75,7 @@ cd FoveaCore
 
 ```gdscript
 var splat := FoveaSplat3D.new()
-splat.source_path = "res://assets/garden.ply"
+splat.source_path = "res://test/demo_bonsai.ply"
 add_child(splat)
 ```
 
@@ -123,6 +123,7 @@ add_child(splat)
 
 ```bash
 dotnet build FoveaEngine.csproj --configuration Release --nologo
+dotnet test tests/FoveaEngine.Tests/FoveaEngine.Tests.csproj --configuration Release --nologo
 cargo test --manifest-path addons/foveacore/rust/Cargo.toml
 python addons/tools/test_validation_tools.py
 python tools/check_public_docs.py

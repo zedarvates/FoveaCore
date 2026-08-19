@@ -123,17 +123,21 @@ func _capture_snapshots(splattable: FoveaSplattable) -> Array[ViewSnapshot]:
 			up_vec = Vector3.FORWARD
 		camera.look_at(center, up_vec)
 		
-		# Wait for frame draw to capture Viewport texture
-		if not use_simulation:
+		var img: Image = null
+		if use_simulation:
+			# Simulation only needs camera metadata; never query a dummy/headless
+			# viewport texture because Godot reports a null rendering handle.
+			img = Image.create(resolution, resolution, false, Image.FORMAT_RGBA8)
+		else:
+			# Wait for frame draw to capture Viewport texture.
 			await tree.process_frame
 			if DisplayServer.get_name() != "headless":
 				await RenderingServer.frame_post_draw
-		
-		var img: Image = viewport.get_texture().get_image()
-		if img == null or img.is_empty():
-			if use_simulation:
-				img = Image.create(resolution, resolution, false, Image.FORMAT_RGBA8)
-			else:
+			var texture: ViewportTexture = viewport.get_texture()
+			if texture == null:
+				continue
+			img = texture.get_image()
+			if img == null or img.is_empty():
 				continue
 			
 		var snapshot: ViewSnapshot = ViewSnapshot.new()
@@ -149,6 +153,7 @@ func _capture_snapshots(splattable: FoveaSplattable) -> Array[ViewSnapshot]:
 		
 	# Cleanup viewport
 	viewport.queue_free()
+	await tree.process_frame
 	
 	print("FoveaSegmentationBridge: Captured ", snapshots.size(), " snapshots successfully.")
 	return snapshots

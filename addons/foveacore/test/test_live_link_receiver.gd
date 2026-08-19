@@ -1,6 +1,9 @@
 extends SceneTree
 
 # Unit test for FoveaLiveLinkReceiver (UDP Mocap Receiver)
+## Binds a real UDP port and can conflict with an external Live Link sender.
+## Keep it out of the deterministic headless `nogpu` CI group.
+const REQUIRES_INTEGRATION := true
 
 const ReceiverClass := preload("res://addons/foveacore/scripts/advanced/fovea_live_link_receiver.gd")
 

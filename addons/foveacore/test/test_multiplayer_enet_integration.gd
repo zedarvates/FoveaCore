@@ -1,5 +1,9 @@
 extends SceneTree
 
+## Starts independent ENet server/client processes and can wait for network I/O.
+## Keep it out of the deterministic headless `nogpu` CI group.
+const REQUIRES_INTEGRATION := true
+
 const PEER_SCRIPT := "res://addons/foveacore/test/multiplayer_enet_peer.gd"
 const TIMEOUT_MSEC := 30000
 

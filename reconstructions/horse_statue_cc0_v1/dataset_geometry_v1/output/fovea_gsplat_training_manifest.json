@@ -1,0 +1,30 @@
+{
+  "schema": "fovea.gsplat.training.v1",
+  "source": "F:\\foveaengine\\fovea-engine\\reconstructions\\horse_statue_cc0_v1\\dataset_geometry_v1",
+  "source_image_directory": "F:\\foveaengine\\fovea-engine\\reconstructions\\horse_statue_cc0_v1\\dataset_geometry_v1\\images",
+  "source_image_count": 60,
+  "colmap_sparse_directory": "F:\\foveaengine\\fovea-engine\\reconstructions\\horse_statue_cc0_v1\\dataset_geometry_v1\\sparse\\0",
+  "image_layout": "existing-images-directory",
+  "runtime": {
+    "python": "C:\\Users\\redga\\miniconda3\\envs\\fovea-3dgs\\python.exe",
+    "gsplat_root": "C:\\Users\\redga\\AppData\\Roaming\\Godot\\app_userdata\\FoveaEngine\\fovea_tools\\gsplat-1.5.3",
+    "gsplat_version": "1.5.3",
+    "torch_version": "2.8.0+cu129",
+    "gpu": "NVIDIA GeForce RTX 5060 Ti",
+    "cuda": true
+  },
+  "training": {
+    "iterations": 7000,
+    "pose_optimization": true,
+    "antialiased": true,
+    "sh_degree": 3,
+    "scale_regularization": 0.001
+  },
+  "artifact": {
+    "native_ply": "F:\\foveaengine\\fovea-engine\\reconstructions\\horse_statue_cc0_v1\\dataset_geometry_v1\\output\\ply\\point_cloud_6999.ply",
+    "published_ply": "F:\\foveaengine\\fovea-engine\\reconstructions\\horse_statue_cc0_v1\\dataset_geometry_v1\\output\\point_cloud\\iteration_7000\\point_cloud.ply",
+    "publication_method": "hardlink",
+    "vertex_count": 25971,
+    "sha256": "982eccab07af7817c70e5874e5079c66279590cef5cd9579993f9296eed42e0f"
+  }
+}

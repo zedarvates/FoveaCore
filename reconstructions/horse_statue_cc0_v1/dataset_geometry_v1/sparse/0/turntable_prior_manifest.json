@@ -1,0 +1,70 @@
+{
+  "schema": "fovea-turntable-prior-v1",
+  "method": "uniform-circular-pose-prior-plus-mask-visual-hull",
+  "pose_source": "chronological frames from one assumed uniform full revolution",
+  "metric_calibration": false,
+  "assumptions": [
+    "fixed camera and lighting",
+    "rigid subject on a centered turntable",
+    "uniform angular steps covering 360 degrees"
+  ],
+  "images_directory": "F:\\foveaengine\\fovea-engine\\reconstructions\\horse_statue_cc0_v1\\dataset_geometry_v1\\images",
+  "masks_directory": "F:\\foveaengine\\fovea-engine\\reconstructions\\horse_statue_cc0_v1\\dataset_geometry_v1\\masks",
+  "frame_count": 60,
+  "image_size": [
+    512,
+    512
+  ],
+  "camera_model": "PINHOLE",
+  "focal": 666.9,
+  "principal_point": [
+    256.0,
+    256.0
+  ],
+  "radius": 3.0,
+  "elevation": 0.15,
+  "target_z": 0.0,
+  "selected_rotation_direction": 1,
+  "direction_scores": {
+    "1": 80218,
+    "-1": 71179
+  },
+  "visual_hull": {
+    "grid_resolution": 128,
+    "grid_bounds": [
+      [
+        -0.9382591247558594,
+        -0.9382591247558594,
+        -1.534300446510315
+      ],
+      [
+        0.9382591247558594,
+        0.9382591247558594,
+        1.2531489133834839
+      ]
+    ],
+    "target_z_from_mask_centers": -0.1405757984705353,
+    "occupied_voxels": 80218,
+    "surface_voxels": 16814,
+    "min_supporting_views": 54
+  },
+  "point_count": 16814,
+  "random_seed": 20260818,
+  "files": [
+    {
+      "name": "cameras.bin",
+      "bytes": 64,
+      "sha256": "9e37420f3b10a279a595756e00f7d39a933c9455b663689d8784252987f03424"
+    },
+    {
+      "name": "images.bin",
+      "bytes": 5228,
+      "sha256": "5def4b5dbe17e8ca1a0d1605d8f468535ed7533ca053054c647d16a7c112ee5e"
+    },
+    {
+      "name": "points3D.bin",
+      "bytes": 857522,
+      "sha256": "926b5a6dc37279f714b9ae6e1c13c950c2a37a53ce82182eb4c23b924e25a2e7"
+    }
+  ]
+}

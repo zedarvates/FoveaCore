@@ -41,6 +41,9 @@ func _run_tests() -> void:
 
 	# 3. Setup FoveaCoreSplatRenderer
 	var core_renderer := FoveaCoreSplatRenderer.new()
+	# Baked 3DGS radiance is intentionally unlit by default. This suite tests
+	# the explicit dynamic-lighting opt-in, so enable it before _ready/_process.
+	core_renderer.enable_dynamic_lighting = true
 	root.add_child(core_renderer)
 	
 	# 4. Setup FoveaInstancedSplatRenderer

@@ -13,7 +13,7 @@ signal oom_detected(command: String, details: String)
 ## Path to external dependencies (can be configured in project settings)
 @export var colmap_path: String = "colmap"
 @export var python_path: String = "python"
-@export var gaussiantrain_script: String = "train.py"
+@export var gaussiantrain_script: String = "gsplat_bridge.py"
 @export var star_bridge_script: String = "star_bridge.py"
 ## Chemin vers les poids DA3 (.pth). Vide = repli heuristique (basse qualité, avertissement explicite).
 @export var star_da3_checkpoint: String = ""
@@ -68,14 +68,25 @@ func _run_colmap_features(session: ReconstructionSession) -> void:
 	_execute_command(colmap_path, args, "COLMAP: Full SfM Reconstruction", session)
 
 func _run_gaussian_training(session: ReconstructionSession) -> void:
+	var args: Array = build_gaussian_training_args(session)
+	_execute_command(python_path, args, "3DGS: Training Splats", session)
+
+
+func build_gaussian_training_args(session: ReconstructionSession) -> Array:
 	var abs_path: String = ProjectSettings.globalize_path(session.output_directory)
-	var args = [
-		gaussiantrain_script,
+	var training_script: String = gaussiantrain_script
+	if not training_script.is_absolute_path():
+		var bundled_script: String = ProjectSettings.globalize_path(
+			"res://addons/foveacore/scripts/reconstruction"
+		).path_join(training_script)
+		if FileAccess.file_exists(bundled_script):
+			training_script = bundled_script
+	return [
+		training_script,
 		"-s", abs_path,
 		"-m", abs_path + "/output",
-		"--iterations", "7000"
+		"--iterations", str(session.training_iterations)
 	]
-	_execute_command(python_path, args, "3DGS: Training Splats", session)
 
 func _run_worldmirror_path(session: ReconstructionSession) -> void:
 	var abs_path: String = ProjectSettings.globalize_path(session.output_directory)

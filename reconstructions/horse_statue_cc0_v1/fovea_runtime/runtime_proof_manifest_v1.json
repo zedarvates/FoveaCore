@@ -1,0 +1,228 @@
+{
+  "schema": "fovea.video_3dgs.runtime_proof.v1",
+  "claim": "synthetic_multiview_video_to_3dgs_to_ply_to_foveaengine_runtime",
+  "not_claimed": [
+    "single_image_to_3d",
+    "real_world_camera_capture_accuracy",
+    "native_fovea_compute_renderer",
+    "openxr_or_vr_validation"
+  ],
+  "source": {
+    "classification": "synthetic_multiview_video",
+    "video": "../source_video/horse_statue_cc0_turntable_60f.mp4",
+    "sha256": "4533cbd2e1ac76acdbd777df166d320cb0771426c594baa8c0051a263114de43",
+    "duration_seconds": 5.0,
+    "resolution": [800, 800],
+    "frame_rate": 12,
+    "decoded_frame_count": 60,
+    "codec": "H.264 yuv420p",
+    "render_script": "../render_turntable.gd",
+    "render_script_sha256": "6c1aaacd993e348557459b6a9f06bc6a7eacfcdf3eed7be9d25bc87dcca4eb47",
+    "source_model": {
+      "name": "Horse Statue 01",
+      "author": "Rico Cilliers",
+      "license": "CC0",
+      "provider": "Poly Haven",
+      "provider_credit": "Powered by Poly Haven",
+      "page": "https://polyhaven.com/a/horse_statue_01",
+      "files_hash": "1d826b7fbcaca3f5aaa48ea4b27a74b44e593971",
+      "files": [
+        {
+          "name": "horse_statue_01_1k.gltf",
+          "md5": "3cca65f1d964c30947ca3c473ddbadff",
+          "sha256": "64e33e68ef427d0e7e401808d605b7d24208ae72b63f97ddf6716bc423b374ba"
+        },
+        {
+          "name": "horse_statue_01.bin",
+          "md5": "f240dd187e04807481bc422b5a9596c3",
+          "sha256": "5099dc5709aa5935031c1e9121e590ba3b0c09f58eef64bcbe390bb46c1aa8f4"
+        },
+        {
+          "name": "horse_statue_01_diff_1k.jpg",
+          "md5": "a0aa4ddcc70e6223279cbbb4e031c1a6",
+          "sha256": "539eedfb40d73eaad8e719f928bf0af82622271bd58afd9f417e75fad4ebab82"
+        },
+        {
+          "name": "horse_statue_01_nor_gl_1k.jpg",
+          "md5": "5d39dedc6a58786c9d68f80037fb9513",
+          "sha256": "868a7226c7b2e1e09dd0f49a40e6ceb62a45fc644f50988d566af5da34eb7a2f"
+        },
+        {
+          "name": "horse_statue_01_arm_1k.jpg",
+          "md5": "5e5f6cfaa0d8c8b7394f82b31951f9ac",
+          "sha256": "80703e3f6455374fde4ca83e8d813b09a83856068b538d2154f7d5caacb4109e"
+        }
+      ]
+    }
+  },
+  "dataset": {
+    "source_class": "synthetic_multiview_video",
+    "view_count": 60,
+    "image_resolution": [512, 512],
+    "preprocess_manifest": "../dataset_geometry_v1/preprocess_manifest.json",
+    "preprocess_manifest_sha256": "aeafa8c653bea140f3ee24b9b6a3680ec088623585598466e3224d8c92b59148",
+    "method": "MP4-extracted colors paired with same-camera geometry ID masks",
+    "geometry_id_masks": true,
+    "mask_estimation_model": null,
+    "camera_poses_generated_during_preprocess": false,
+    "camera_model": "deterministic circular turntable prior plus mask visual-hull initialization",
+    "camera_manifest": "../dataset_geometry_v1/sparse/0/turntable_prior_manifest.json",
+    "camera_manifest_sha256": "3f8d3d26f9864e4af08c906f11412ff16e6f2012b85bfd6c071d5ba71143b7f2"
+  },
+  "training": {
+    "backend": "official gsplat simple_trainer.py",
+    "gsplat_version": "1.5.3",
+    "torch_version": "2.8.0+cu129",
+    "gpu": "NVIDIA GeForce RTX 5060 Ti",
+    "iterations": 7000,
+    "spherical_harmonics_degree": 3,
+    "pose_optimization": true,
+    "antialiased": true,
+    "config": "../dataset_geometry_v1/output/cfg.yml",
+    "config_sha256": "8eaa08428dcfa39cfd16cc93d93c37f1f61f35a49c935087d26cf2dbf870ef5d",
+    "training_manifest": "../dataset_geometry_v1/output/fovea_gsplat_training_manifest.json",
+    "training_manifest_sha256": "82341c8edeedfcc2e2df061a413bebee2a04233328760ed603c390e75d23e21c",
+    "validation_metrics": {
+      "step": 6999,
+      "psnr": 34.62394332885742,
+      "ssim": 0.9860999584197998,
+      "lpips": 0.021979663521051407,
+      "seconds_per_image": 0.003385394811630249,
+      "num_gaussians": 25971,
+      "artifact": "../dataset_geometry_v1/output/stats/val_step6999.json",
+      "sha256": "6b446db1fccea515b2d654b6dfd9309d0fed3615a631940c6063f8584f94dc2a"
+    }
+  },
+  "artifacts": {
+    "trained_ply": {
+      "path": "../dataset_geometry_v1/output/point_cloud/iteration_7000/point_cloud.ply",
+      "splats": 25971,
+      "properties_per_splat": 59,
+      "sha256": "982eccab07af7817c70e5874e5079c66279590cef5cd9579993f9296eed42e0f",
+      "required_in_repo": false
+    },
+    "runtime_ply": {
+      "path": "horse_statue_6999_runtime_v1.ply",
+      "splats": 25674,
+      "properties_per_splat": 59,
+      "sha256": "4392920074f41204ec900244da06505a8696312ea989340df88b1bd9c025806a",
+      "sanitize_manifest": "horse_statue_6999_runtime_v1.manifest.json",
+      "sanitize_manifest_sha256": "0ac2aff1595df51c225f6fa84efb49b59a756a2cb1ac339e75b78913a4e9de69"
+    }
+  },
+  "runtime": {
+    "engine": "Godot 4.7.dev5 Mono a8643700c",
+    "rendering_driver": "D3D12 Forward+",
+    "gpu": "NVIDIA GeForce RTX 5060 Ti",
+    "renderer_path": "FoveaSplat3D direct PLY",
+    "loaded_splats": 25674,
+    "depth_sort": "GPU sorter initialized; 25,674 splats submitted through the global renderer",
+    "up_axis": "y",
+    "openxr": "unavailable in desktop validation",
+    "demo_scene": "../../../demo/drop_a_ply.tscn",
+    "demo_interaction": "left-mouse orbit and wheel zoom"
+  },
+  "runtime_validation": {
+    "gpu_sort_test": "../../../addons/foveacore/test/test_gpu_splat_sorter.gd",
+    "gpu_sort_assertions": "35 passed, 0 failed",
+    "gpu_sort_counts": [3, 8, 256, 257, 1024, 17013, 25674],
+    "gpu_sort_25674_elapsed_ms": 2,
+    "default_demo_captured_fps": 61
+  },
+  "captures": [
+    {
+      "role": "default_demo",
+      "path": "demo_default_cc0_video_v1.png",
+      "sha256": "ee5f5ca7f0fcb75c61b8c99af4f7d5a639583ceec63a34a9274f92da113bc7a3",
+      "resolution": [1152, 648],
+      "captured_fps": 61,
+      "source_label": "SYNTHETIC VIDEO 3DGS · 25,674 splats · CC0 source"
+    },
+    {
+      "role": "side_a",
+      "path": "capture_az000.png",
+      "sha256": "e3ac7ca900dad7c75f8c4f5ed9e0785df277e59d7e7957fbd39ff60bb22cd174",
+      "resolution": [800, 800],
+      "runtime_camera": {
+        "mode": "auto_frame",
+        "azimuth_degrees": 0,
+        "elevation_degrees": 10,
+        "up_axis": "y",
+        "fov_degrees": 42,
+        "frame_margin": 1.35,
+        "global_position": [0.15477, 0.261986, 1.467803]
+      }
+    },
+    {
+      "role": "front",
+      "path": "capture_az090.png",
+      "sha256": "fbcfbb9fa8823310f1d6ccb3ef7b1bb6d1f8cdb4cb4351b0e179ef1e08266094",
+      "resolution": [800, 800],
+      "runtime_camera": {
+        "mode": "auto_frame",
+        "azimuth_degrees": 90,
+        "elevation_degrees": 10,
+        "up_axis": "y",
+        "fov_degrees": 42,
+        "frame_margin": 1.35,
+        "global_position": [1.614372, 0.261986, 0.008201]
+      }
+    },
+    {
+      "role": "side_b",
+      "path": "capture_az180.png",
+      "sha256": "32b4b00cbdd51e61a766c47ebe74ee7168e0a82da0cd606b8961f6e9566cf914",
+      "resolution": [800, 800],
+      "runtime_camera": {
+        "mode": "auto_frame",
+        "azimuth_degrees": 180,
+        "elevation_degrees": 10,
+        "up_axis": "y",
+        "fov_degrees": 42,
+        "frame_margin": 1.35,
+        "global_position": [0.15477, 0.261986, -1.451401]
+      }
+    },
+    {
+      "role": "rear",
+      "path": "capture_az270.png",
+      "sha256": "c83e117e5e573bdff2ef6ceefa48f9c588cd282796fa82a93cf82c9a6548e213",
+      "resolution": [800, 800],
+      "runtime_camera": {
+        "mode": "auto_frame",
+        "azimuth_degrees": -90,
+        "elevation_degrees": 10,
+        "up_axis": "y",
+        "fov_degrees": 42,
+        "frame_margin": 1.35,
+        "global_position": [-1.304832, 0.261986, 0.008201]
+      }
+    }
+  ],
+  "visual_limitations": [
+    "The source video is synthetic multi-view footage, not a real-world camera capture.",
+    "End-on views are naturally dominated by the round pedestal and contain less horse surface area.",
+    "Desktop D3D12 validation does not establish OpenXR, headset, or native compute-renderer support."
+  ],
+  "hashes": {
+    "../source_video/horse_statue_cc0_turntable_60f.mp4": "4533cbd2e1ac76acdbd777df166d320cb0771426c594baa8c0051a263114de43",
+    "../render_turntable.gd": "6c1aaacd993e348557459b6a9f06bc6a7eacfcdf3eed7be9d25bc87dcca4eb47",
+    "../prepare_geometry_masked_dataset.py": "03ccb59f8cf70d8608fd0612da6442e9e38d0a55a5454e2c48535fe4aad8abe1",
+    "../dataset_geometry_v1/preprocess_manifest.json": "aeafa8c653bea140f3ee24b9b6a3680ec088623585598466e3224d8c92b59148",
+    "../dataset_geometry_v1/sparse/0/turntable_prior_manifest.json": "3f8d3d26f9864e4af08c906f11412ff16e6f2012b85bfd6c071d5ba71143b7f2",
+    "../dataset_geometry_v1/output/cfg.yml": "8eaa08428dcfa39cfd16cc93d93c37f1f61f35a49c935087d26cf2dbf870ef5d",
+    "../dataset_geometry_v1/output/stats/val_step6999.json": "6b446db1fccea515b2d654b6dfd9309d0fed3615a631940c6063f8584f94dc2a",
+    "../dataset_geometry_v1/output/fovea_gsplat_training_manifest.json": "82341c8edeedfcc2e2df061a413bebee2a04233328760ed603c390e75d23e21c",
+    "horse_statue_6999_runtime_v1.ply": "4392920074f41204ec900244da06505a8696312ea989340df88b1bd9c025806a",
+    "horse_statue_6999_runtime_v1.manifest.json": "0ac2aff1595df51c225f6fa84efb49b59a756a2cb1ac339e75b78913a4e9de69",
+    "capture_az000.png": "e3ac7ca900dad7c75f8c4f5ed9e0785df277e59d7e7957fbd39ff60bb22cd174",
+    "capture_az090.png": "fbcfbb9fa8823310f1d6ccb3ef7b1bb6d1f8cdb4cb4351b0e179ef1e08266094",
+    "capture_az180.png": "32b4b00cbdd51e61a766c47ebe74ee7168e0a82da0cd606b8961f6e9566cf914",
+    "capture_az270.png": "c83e117e5e573bdff2ef6ceefa48f9c588cd282796fa82a93cf82c9a6548e213",
+    "demo_default_cc0_video_v1.png": "ee5f5ca7f0fcb75c61b8c99af4f7d5a639583ceec63a34a9274f92da113bc7a3",
+    "../../../addons/foveacore/test/test_gpu_splat_sorter.gd": "c3133a54e76b0df190e7f9f54cccabe3e706417b11b35083812638e96ab69f21",
+    "../../../addons/foveacore/test/capture_render.gd": "31102885639c355f5532a3f7781a618ed1c5e0eeee3fac737df67fa768388433",
+    "../../../demo/default_splat_demo.gd": "0fb2ca8cbfe69ede50500fa57c0d26bc1cbdbb98249d7bee28773e7fcc90bee4",
+    "../../../demo/drop_a_ply.tscn": "d7ae036042fc0554a669ceb393a8ad7aa1cdb9f306ed35a6bf9a46a6fe2a07be"
+  }
+}

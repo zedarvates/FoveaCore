@@ -1,7 +1,6 @@
-[gd_scene load_steps=12 format=3 uid="uid://transparency_blend_test"]
+[gd_scene load_steps=11 format=3 uid="uid://transparency_blend_test"]
 
 [ext_resource type="Script" path="res://addons/foveacore/test/transparency_blend_test.gd" id="1_script"]
-[ext_resource type="PackedScene" uid="uid://fovea_vr_rig" path="res://addons/foveacore/scenes/fovea_vr_rig.tscn" id="2_rig"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 sky_top_color = Color(0.08, 0.08, 0.12, 1)
@@ -36,17 +35,11 @@ transform = Transform3D(0.866, -0.433, 0.25, 0, 0.5, 0.866, -0.5, -0.75, 0.433, 
 shadow_enabled = true
 shadow_bias = 0.05
 
-[node name="FoveaVRRig" parent="." instance=ExtResource("2_rig")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
-
 [node name="TestFloor" type="MeshInstance3D" parent="."]
 mesh = SubResource("SphereMesh_1")
 scale = Vector3(20, 0.1, 20)
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
 material_override = SubResource("StandardMaterial3D_1")
-
-[node name="AmbientLight" type="AmbientLight3D" parent="."]
-light_energy = 0.3
 
 [node name="Camera3D" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 5)

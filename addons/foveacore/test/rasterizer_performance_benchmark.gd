@@ -1,6 +1,10 @@
 extends SceneTree
 
-# Benchmark script to compare MultiMesh rendering vs Tile-Based Rasterization (Task 242)
+# GPU benchmark script to compare a modeled MultiMesh baseline with tile rasterization (Task 242).
+# The MultiMesh figures are estimates; only the tile dispatch duration is measured.
+const REQUIRES_GPU := true
+const EXPECTED_CASES := 9
+const BYTES_PER_CANONICAL_SPLAT := 16
 
 const GPUCullerPipelineClass := preload("res://addons/foveacore/scripts/advanced/gpu_culler_pipeline.gd")
 const FoveaCompositorEffectClass := preload("res://addons/foveacore/scripts/advanced/fovea_compositor_effect.gd")
@@ -26,7 +30,11 @@ func _run_benchmark() -> void:
 	for res in resolutions:
 		for density in splat_densities:
 			_benchmark_combination(res, density)
-			
+
+	if _results.size() != EXPECTED_CASES:
+		push_error("Rasterizer benchmark aborted: %d/%d GPU cases completed." % [_results.size(), EXPECTED_CASES])
+		quit(1)
+		return
 	_generate_report()
 	quit(0)
 
@@ -35,7 +43,7 @@ func _benchmark_combination(res: Vector2i, density: int) -> void:
 	
 	var culler := GPUCullerPipelineClass.new()
 	if not culler.rd:
-		print("  [WARN] RenderingDevice not available, skipping GPU tests.")
+		push_error("Rasterizer benchmark requires a local RenderingDevice; no result is recorded.")
 		culler.cleanup()
 		return
 		
@@ -49,9 +57,20 @@ func _benchmark_combination(res: Vector2i, density: int) -> void:
 	format.usage_bits = RenderingDevice.TEXTURE_USAGE_STORAGE_BIT | RenderingDevice.TEXTURE_USAGE_SAMPLING_BIT
 	var color_tex := rd.texture_create(format, RDTextureView.new())
 	
+	# The rasterizer shader consumes canonical PackedSplat records (16 bytes each).
+	var output_bytes := density * BYTES_PER_CANONICAL_SPLAT
+	if output_bytes <= 0:
+		push_error("Rasterizer benchmark invalid output buffer size: %d" % output_bytes)
+		_cleanup_benchmark_resources(rd, RID(), color_tex, RID(), RID(), culler, camera)
+		return
+
 	var dummy_out_bytes := PackedByteArray()
-	dummy_out_bytes.resize(density * 20)
-	var output_buf := rd.storage_buffer_create(density * 20, dummy_out_bytes)
+	dummy_out_bytes.resize(output_bytes)
+	var output_buf := rd.storage_buffer_create(output_bytes, dummy_out_bytes)
+	if not output_buf.is_valid():
+		push_error("Rasterizer benchmark failed to create output storage buffer (%d bytes)." % output_bytes)
+		_cleanup_benchmark_resources(rd, RID(), color_tex, covar_tex, palette_tex, culler, camera)
+		return
 	
 	var covar_format := RDTextureFormat.new()
 	covar_format.format = RenderingDevice.DATA_FORMAT_R8G8B8A8_UNORM
@@ -113,23 +132,42 @@ func _benchmark_combination(res: Vector2i, density: int) -> void:
 	})
 	
 	# Clean up
-	rd.free_rid(output_buf)
-	rd.free_rid(color_tex)
-	rd.free_rid(covar_tex)
-	rd.free_rid(palette_tex)
-	rd.free_rid(culler.last_counter_buffer_rid)
-	camera.queue_free()
+	_cleanup_benchmark_resources(rd, output_buf, color_tex, covar_tex, palette_tex, culler, camera)
+
+func _cleanup_benchmark_resources(
+	rd: RenderingDevice,
+	output_buf: RID,
+	color_tex: RID,
+	covar_tex: RID,
+	palette_tex: RID,
+	culler: GPUCullerPipelineClass,
+	camera: Camera3D
+) -> void:
+	if not rd:
+		return
+	if output_buf.is_valid():
+		rd.free_rid(output_buf)
+	if color_tex.is_valid():
+		rd.free_rid(color_tex)
+	if covar_tex.is_valid():
+		rd.free_rid(covar_tex)
+	if palette_tex.is_valid():
+		rd.free_rid(palette_tex)
+	if culler.last_counter_buffer_rid.is_valid():
+		rd.free_rid(culler.last_counter_buffer_rid)
+	if camera:
+		camera.queue_free()
 	culler.cleanup()
 
 func _generate_report() -> void:
-	var report_path := "res://addons/foveacore/test/BENCHMARK_RASTERIZER_COMPARISON.md"
+	var report_path := "user://benchmark_rasterizer_comparison.md"
 	var file := FileAccess.open(report_path, FileAccess.WRITE)
 	if not file:
 		print("  [ERROR] Cannot write report to ", report_path)
 		return
 		
-	file.store_line("# Comparative Rendering Performance Report (Task 242)")
-	file.store_line("\nThis report compares the rendering performance and fillrate of **MultiMesh Standard Rasterization** vs. **Tile-Based Compute Shader Rasterizer (16x16)**.")
+	file.store_line("# Rasterizer GPU Dispatch Report (Task 242)")
+	file.store_line("\nTile dispatch time is measured with a local RenderingDevice. MultiMesh time is a model-derived estimate and is not a measured comparison.")
 	file.store_line("\n## Benchmark Results Table\n")
 	file.store_line("| Resolution | Splat Count | MultiMesh Time (ms) | MultiMesh FPS | Tile-Based GPU Time (ms) | Tile-Based FPS | Gain (%) |")
 	file.store_line("|---|---|---|---|---|---|---|")
@@ -139,9 +177,9 @@ func _generate_report() -> void:
 			r.resolution, r.density, r.mm_time_ms, r.mm_fps, r.tile_time_ms, r.tile_fps, r.gain
 		])
 		
-	file.store_line("\n## Key Insights")
-	file.store_line("- **Fillrate Coalescing**: The Tile-Based Rasterizer processes splats inside 16x16 tiles, sorting and accumulating color and alpha using GPU L1/L2 shared memory cache. This completely avoids global VRAM read/write overdraw, leading to significant performance gains at higher viewport resolutions and dense splat overlays.")
-	file.store_line("- **MultiMesh Bottleneck**: Standard MultiMesh rendering experiences severe transparent blending overhead (fillrate limits) when thousands of splats overlap, leading to frame time degradation.")
+	file.store_line("\n## Scope")
+	file.store_line("- Tile-Based GPU Time is a synchronized dispatch measurement, not a full rendered-frame measurement.")
+	file.store_line("- MultiMesh Time is an estimate and must not be used to claim a measured speedup.")
 	
 	file.close()
 	print("\nBenchmark completed. Report written to: ", report_path)

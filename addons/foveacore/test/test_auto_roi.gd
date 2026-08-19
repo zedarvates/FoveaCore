@@ -2,6 +2,9 @@ extends SceneTree
 
 ## Unit test for Auto-ROI detection (AI/heuristics)
 ## Validates: Python script execution, output JSON parsing, bounding box accuracy
+## Uses the user-configured Python runtime and optional rembg/OpenCV/Pillow packages.
+## Keep it out of the deterministic headless `nogpu` CI group.
+const REQUIRES_INTEGRATION := true
 
 var _passed := 0
 var _failed := 0

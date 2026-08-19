@@ -31,14 +31,16 @@ When sources disagree, use this precedence: implementation → current reproduci
 
 | Surface | State | Current evidence |
 | --- | --- | --- |
-| PLY runtime through `FoveaSplat3D` | **VALIDATED** | The 12,473-splat bonsai and 8,000-splat reference fixtures produced D3D12 captures without script, parse, or load errors. |
+| Public `FoveaSplat3D` / delegate lifecycle | **VALIDATED** | Property, preset, signal, runtime-ownership, and real one-splat-load behavior passed 26/26; the 12,473-splat and 8,000-splat PLY fixtures also produced D3D12 captures. |
 | `.splat` parser and router | **VALIDATED** | Godot 4.7.dev5 passed 14/14 assertions over a deterministic 256-splat round-trip and negative inputs. |
 | `.spz` decoder | **PROPOSED** | Planned input is rejected and no longer appears in the public file picker until a decoder and fixtures exist. |
 | `.fovea` v2 structure and packed records | **VALIDATED** | Godot 4.7.dev5 passed 28 canonical, packed-record, corrupt-input, and Rust-fixture assertions; Rust passed five tests and reproduced the 208-byte fixture exactly. |
 | Native `.fovea` runtime rendering | **EXPERIMENTAL** | A deterministic CPU passthrough produced a framed green/brown 800×600 D3D12 capture from 12,473 records (11,808 after cleaning). Palette, AABB, and linear covariance handling pass their source contract; a synthetic two-instance GPU layout/readback passes, while representative native parity and acceleration remain open. |
-| GPU depth sorter | **EXPERIMENTAL** | The prepared-index PLY capture detected an incomplete padded permutation and failed closed to an exact 12,473-splat CPU sort. |
-| C++ GDExtension | **CONFLICT** | CI compiles it, but its `foveacore_init` symbol and output filename conflict with the Rust runtime descriptor. |
-| Transparency visual harness | **FAILED** | It reaches its textual summary but records hundreds of errors and marks scenarios passed without an oracle. |
+| GPU depth sorter | **VALIDATED** | The historical incomplete-permutation failure is superseded on the recorded D3D12 Forward+ RTX 5060 Ti path: 30/30 assertions passed through 17,013 splats with a complete strict back-to-front permutation. Invalid results retain the exact CPU fallback; other hardware and APIs remain separate gates. |
+| C++ GDExtension | **EXPERIMENTAL** | Rust retains the canonical descriptor and `foveacore.dll`; C++ now exports `foveacore_cpp_init` to `foveacore_cpp.dll`. The ownership contract passed 14/14, the Windows release build succeeded, and Godot instantiated `FoveaRenderer`; CI and cross-platform gates remain open. |
+| Transparency visual harness | **EXPERIMENTAL** | A deterministic D3D12 framebuffer oracle measured one/two 50% red layers at 0.498/0.749 versus 0.500/0.750, exited `0` cleanly, and its forced negative control exited `1`. The five 3D layouts remain unvalidated against the production splat shader. |
+| Developer API reference | **VALIDATED** | Active stable-node, autoload-facade, and reconstruction methods/signals are source-extracted by a 35-assertion non-GPU drift guard. |
+| `FoveaCoreManager` facade | **VALIDATED** | Godot 4.7.dev5 passed 30/30 orchestration/control assertions and 4/4 dynamic-registration assertions in the headless desktop fallback. |
 | Experimental demo scenes | **PROPOSED** | Eight named `.tscn` files contain only empty `Node3D` roots; no selector hub is present. |
 
 ## Knowledge map
@@ -67,9 +69,9 @@ When sources disagree, use this precedence: implementation → current reproduci
 
 ## Initial compilation
 
-The initial compilation on 2026-07-16 found a working FoveaCore-oriented project structure and two high-value documentation conflicts:
+The initial compilation on 2026-07-16 found a working FoveaCore-oriented project structure and two high-value documentation conflicts, both now resolved:
 
 - **RESOLVED:** `.fovea` v2 is frozen as `FOVEA_3D`, a 72-byte header, and 16-byte splat records. `plans/gaussian_compression_spec.md` is now explicitly a future v3 research proposal.
-- **CONFLICT:** `docs/developer_reference.md` documents manager and reconstruction APIs that do not match the current method and signal signatures.
+- **RESOLVED:** `docs/developer_reference.md` now distinguishes autoload names from implementation classes and matches the active stable-node, manager, session, backend, and processor signatures. A source-extracted non-GPU guard fails on API drift.
 
-These conflicts are tracked in the [roadmap](roadmap.md) and are not treated as implemented capabilities.
+The [roadmap](roadmap.md) keeps broader generated-reference automation separate from these closed contract conflicts.

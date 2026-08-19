@@ -12,12 +12,9 @@ class_name FoveaFlowFieldAnimator
 ## Presets:
 ##   WIND    — pseudo-curl noise displacement (foliage, cloth, smoke)
 ##   BREATHE — radial sinusoidal pulse around the node's origin
-##
-## CURRENT (hand-painted flow field authored via SplatBrush) is deferred:
-## it requires rasterizing splat_brush_engine.gd strokes into a sampled 3D
-## field, which is a separate authoring-tool task (see roadmap Phase 7.1).
+##   CURRENT — advection along hand-painted flow direction (stored in splat.normal by SplatBrush)
 
-enum Preset { WIND, BREATHE }
+enum Preset { WIND, BREATHE, CURRENT }
 
 @export var preset: Preset = Preset.WIND
 @export_range(0.0, 2.0) var amplitude: float = 0.15
@@ -67,9 +64,17 @@ func _apply_to_splat(splat: GaussianSplat, time: float, global_intensity: float)
 	match preset:
 		Preset.BREATHE:
 			offset = _breathe_offset(splat.position, time)
+		Preset.CURRENT:
+			offset = _current_offset(splat, time)
 		_:
 			offset = _wind_offset(splat.position, time)
 	splat.position += offset * amplitude * weight * global_intensity
+
+func _current_offset(splat: GaussianSplat, time: float) -> Vector3:
+	if splat.normal.length_squared() < 0.001:
+		return Vector3.ZERO
+	var pulse := sin(time * frequency * TAU)
+	return splat.normal.normalized() * pulse
 
 func _wind_offset(pos: Vector3, time: float) -> Vector3:
 	# Pseudo-curl noise: FastNoiseLite has no 4D sampling in Godot 4, so time is

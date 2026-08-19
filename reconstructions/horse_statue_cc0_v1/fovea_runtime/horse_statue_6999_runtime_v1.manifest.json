@@ -1,0 +1,53 @@
+{
+  "bounds": {
+    "diagonal": 0.8491112589836121,
+    "max": [
+      0.4958910346031189,
+      0.2128608375787735,
+      0.16049619019031525
+    ],
+    "min": [
+      -0.17846503853797913,
+      -0.20362244546413422,
+      -0.14409437775611877
+    ]
+  },
+  "input_splats": 25971,
+  "observed": {
+    "max_anisotropy_ratio_after": 8.0,
+    "max_anisotropy_ratio_before": 14777.451171875,
+    "max_linear_scale_after": 0.010189334861934185,
+    "max_linear_scale_before": 0.05460791662335396,
+    "max_luma": 1.0,
+    "min_luma": 0.0
+  },
+  "output": "F:\\foveaengine\\fovea-engine\\reconstructions\\horse_statue_cc0_v1\\fovea_runtime\\horse_statue_6999_runtime_v1.ply",
+  "output_sha256": "4392920074f41204ec900244da06505a8696312ea989340df88b1bd9c025806a",
+  "output_splats": 25674,
+  "property_count": 59,
+  "removal_reasons": {
+    "background_outliers": 296,
+    "hard_scale_outliers": 1,
+    "overlap": 0
+  },
+  "removed_splats": 297,
+  "schema": "fovea.gaussian_ply_sanitize.v2",
+  "source": "F:\\foveaengine\\fovea-engine\\reconstructions\\horse_statue_cc0_v1\\dataset_geometry_v1\\output\\point_cloud\\iteration_7000\\point_cloud.ply",
+  "source_sha256": "982eccab07af7817c70e5874e5079c66279590cef5cd9579993f9296eed42e0f",
+  "thresholds": {
+    "background_luma_max": 0.03,
+    "background_min_linear_scale": 0.004245556294918061,
+    "background_min_scale_ratio": 0.005,
+    "max_linear_scale": 0.042455562949180604,
+    "max_scale_ratio": 0.05
+  },
+  "transformations": {
+    "anisotropy_clamped_splats": 11427,
+    "cap_linear_scale_ratio": 0.012,
+    "capped_linear_scale": 0.010189335107803345,
+    "force_isotropic_scale_ratio": null,
+    "forced_isotropic_linear_scale": null,
+    "max_anisotropy_ratio": 8.0,
+    "scale_capped_splats": 3074
+  }
+}

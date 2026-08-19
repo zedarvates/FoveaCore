@@ -363,25 +363,22 @@ func process_instanced_splats_ext(
 
     var uniform_set_depth := rd.uniform_set_create([uniform_depth, uniform_camera], shader_rid, 1)
 
-    # Deterministic 64-byte std430 contract: four uints followed by three vec4s.
-    # Avoid vec3/scalar packing here because backend layout rules have produced
-    # zero count fields on D3D12 despite an apparently correct total size.
+    # std430 contract: vec3+uint (16), uint+float+8-byte padding (16),
+    # vec3+uint (16), vec3+float (16) = 64 bytes.
     var push_bytes := PackedByteArray()
     push_bytes.resize(PUSH_CONSTANT_BYTE_SIZE)
-    push_bytes.encode_u32(0, asset_splat_count)
-    push_bytes.encode_u32(4, active_instances_count)
-    push_bytes.encode_u32(8, 1 if use_gpu_instance_culling else 0)
-    # Screen-space culling is disabled until a main-device depth import and
-    # projection parity test exist. CPU instance-AABB culling remains active.
-    push_bytes.encode_u32(12, 0)
-    push_bytes.encode_float(16, cam_pos.x)
-    push_bytes.encode_float(20, cam_pos.y)
-    push_bytes.encode_float(24, cam_pos.z)
-    push_bytes.encode_float(28, cull_threshold)
+    push_bytes.encode_float(0, cam_pos.x)
+    push_bytes.encode_float(4, cam_pos.y)
+    push_bytes.encode_float(8, cam_pos.z)
+    push_bytes.encode_u32(12, asset_splat_count)
+    push_bytes.encode_u32(16, active_instances_count)
+    push_bytes.encode_float(20, cull_threshold)
+    push_bytes.encode_float(24, 0.0)
+    push_bytes.encode_float(28, 0.0)
     push_bytes.encode_float(32, aabb_min.x)
     push_bytes.encode_float(36, aabb_min.y)
     push_bytes.encode_float(40, aabb_min.z)
-    push_bytes.encode_float(44, 0.0)
+    push_bytes.encode_u32(44, 1 if use_gpu_instance_culling else 0)
     push_bytes.encode_float(48, aabb_max.x)
     push_bytes.encode_float(52, aabb_max.y)
     push_bytes.encode_float(56, aabb_max.z)

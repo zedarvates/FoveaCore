@@ -7,6 +7,12 @@
 
 ## 🩹 v0.3.1 — Release pipeline and headless stability (proposed)
 
+### Added
+- Add the provider-neutral Fovea CLI contract v1 for bounded status, unsaved
+  `FoveaSplat3D` creation, and validation without a listener or file writes.
+- Add real Godot 4.7 bridge tests and an optional cross-repository CLI replay
+  using a temporary GDScript-only project and a one-splat PLY fixture.
+
 ### Fixes
 - Restore the tracked `godot-cpp` submodule declaration so clean checkouts and release builds can initialize it.
 - Make GDScript-only CI disable the native manifest before importing the project.
@@ -14,11 +20,32 @@
 - Fix DVLT export typing and COLMAP image metadata serialization.
 - Make cloud and lattice animation use a consistent bulk `MultiMesh` buffer in headless and Compatibility modes.
 - Mark GPU skinning as GPU-only and repair cloth, cloud, lattice, and animation stress fixtures.
+- Fix DeltaManager binary round-trips: the instance header is 16 bytes and
+  each indexed position/color record is 32 bytes, including alpha.
+- Make the master test runner reject semantic `[FAIL]` markers even when a
+  generic Node wrapper exits successfully.
+- Keep simulation-only segmentation away from null headless viewport textures,
+  and classify renderer-dependent demos/tests outside the non-GPU gate.
+- Load native flipbook frames through the canonical `.fovea` loader instead of
+  relying on global ResourceLoader registration.
+- Reset `FoveaSplat3D.QualityPreset.AUTO` to neutral local density and culling
+  priority after an explicit preset so global manager settings take precedence.
+- Reconcile stale core-specification evidence states with the validated public
+  node, manager facade, and subsystem wiring contracts.
+- Let the asset lifecycle smoke release `RefCounted` loaders naturally, and make
+  the master runner fail closed on script and parse errors.
 
 ### Validation
 - Godot compile check: 229 scripts loaded, 0 failed.
-- Non-GPU test gate: 52 suites passed, 0 failed, 3 GPU suites skipped.
-- Rust release check and .NET build pass locally.
+- Public-node/delegate contract: 26 assertions passed; CLI regression: 23 passed.
+- Core specification/reference guard: 40 assertions passed; lifecycle smoke and
+  runner semantic classifier passed 1/1 and 5/5 respectively.
+- Non-GPU test gate: 52 suites passed, 0 failed, 16 GPU/integration suites skipped.
+- Public documentation gate: 86 Markdown files and 184 local links passed;
+  validation-tool encoding regression passed and Botte Secrète reported no drift.
+- Rust fast-path gate: 5/5 locked workspace tests, local release build, Clippy
+  with warnings denied, and byte-identical reproduction of the 208-byte v2
+  fixture; .NET build also passes locally.
 
 > Do not reuse tag `v0.3.0`: it was created without a valid submodule declaration and still packaged `0.2.1` metadata.
 

@@ -10,11 +10,11 @@ var target_renderer: FoveaCoreSplatRenderer = null
 var cached_hlod_distances: Array = [8.0, 18.0, 30.0]
 var enable_tile_rasterizer: bool = false
 
-func _init():
+func _init(pipeline: GPUCullerPipeline = null) -> void:
 	# On s'insère JUSTE APRÈS la passe opaque de Godot.
 	# À ce moment précis, le Depth Buffer contient la profondeur de tous les murs/décors.
 	effect_callback_type = CompositorEffect.EFFECT_CALLBACK_TYPE_POST_OPAQUE
-	culler_pipeline = GPUCullerPipeline.new()
+	culler_pipeline = pipeline if pipeline != null else GPUCullerPipeline.new()
 
 ## Exécuté sur le Thread de Rendu (Rendering Thread) par le moteur Godot
 func _render_callback(effect_callback_type: int, render_data: RenderData):
