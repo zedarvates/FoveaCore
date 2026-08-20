@@ -1,3 +1,5 @@
+[![FoveaCore](docs/assets/banner.jpg)](https://github.com/zedarvates/FoveaCore)
+
 > **"Bienvenue dans la matrice! Tsukuyomi Infini (Infinite Tsukuyomi)" C'est tout ce que vous méritez**
 
 # FoveaCore 🔷 — Advanced 3DGS & Neural Reconstruction Engine
@@ -304,5 +306,4 @@ MIT
 
 
 ---
-
 
