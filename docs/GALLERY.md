@@ -31,9 +31,16 @@ _Official gsplat validation pair at step 6999 (PSNR 34.62, SSIM 0.986). Left: so
 
 ## Bonsai fixture
 
-![Bonsai Gaussian-splat fixture in Godot](gallery/bonsai-runtime.jpg)
+_Photorealistic reconstruction of Videos test/bonsaitree.mp4: 41 masked turntable views, official gsplat 7000 steps, 34,759 splats, then FoveaSplat3D desktop capture. Not OpenXR._
 
-_Checked-in demo_bonsai.ply loaded through FoveaSplat3D on desktop Forward+. This shows the current PLY runtime path, not a performance number._
+
+![Bonsai Gaussian-splat fixture in Godot](gallery/bonsai-runtime.png)
+
+_Fresh desktop recapture of demo_bonsai.ply through FoveaSplat3D: 12,473 splats, Godot 4.7.dev5, D3D12 Forward+. Not an OpenXR proof and not a benchmark._
+
+![Training versus reconstructed bonsai view](gallery/bonsai-training-compare.jpg)
+
+_Official gsplat validation pair at step 6999 (PSNR 18.61, SSIM 0.783). Left: source view. Right: reconstructed splat._
 
 ## StudioTo3D editor
 
