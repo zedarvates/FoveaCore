@@ -36,10 +36,10 @@ _CC0 horse statue reconstructed with gsplat, then loaded through FoveaSplat3D. D
 
 <p align="center">
   <img src="docs/gallery/horse-runtime-front.jpg" alt="Horse statue splat, front" width="48%" />
-  <img src="docs/gallery/bonsai-runtime.jpg" alt="Bonsai splat fixture" width="48%" />
+  <img src="docs/gallery/bonsai-runtime.png" alt="Bonsai splat fixture" width="48%" />
 </p>
 
-_Left: framed horse-statue PLY. Right: checked-in bonsai fixture._
+_Left: framed horse-statue PLY. Right: bonsaitree.mp4 reconstructed photorealistically (34,759 splats) and recaptured in Godot._
 
 ![StudioTo3D reconstruction dock](docs/gallery/studio-to-3d-editor.jpg)
 
