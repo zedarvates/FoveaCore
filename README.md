@@ -28,7 +28,22 @@
 
 ## Preview
 
-![FoveaEngine Screenshot](ScreenShot/Screenshot%202026-05-03%20163554.png)
+Real Gaussian-splat captures from the desktop runtime. More viewpoints and credits live in the [runtime gallery](docs/GALLERY.md).
+
+![Horse statue Gaussian splat in Godot](docs/gallery/horse-runtime-orbit.jpg)
+
+_CC0 horse statue reconstructed with gsplat, then loaded through FoveaSplat3D. Desktop Forward+, not an OpenXR proof._
+
+<p align="center">
+  <img src="docs/gallery/horse-runtime-front.jpg" alt="Horse statue splat, front" width="48%" />
+  <img src="docs/gallery/bonsai-runtime.jpg" alt="Bonsai splat fixture" width="48%" />
+</p>
+
+_Left: framed horse-statue PLY. Right: checked-in bonsai fixture._
+
+![StudioTo3D reconstruction dock](docs/gallery/studio-to-3d-editor.jpg)
+
+_StudioTo3D inside the Godot editor. Interface still evolving._
 
 ---
 
@@ -136,6 +151,7 @@ FoveaCore (Godot 4 Addon)
 ```
 ## 📚 Documentation Index
 
+- **Runtime gallery**: [GALLERY.md](docs/GALLERY.md)
 - **Setup & Installation**: [reconstruction_setup.md](tutorials/reconstruction_setup.md)
 - **First Steps**: [get_started.md](tutorials/get_started.md)
 - **3DGS Optimization & Editing**: [3dgs_training.md](tutorials/3dgs_training.md)
