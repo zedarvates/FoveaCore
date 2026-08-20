@@ -44,6 +44,16 @@ _CC0 horse statue reconstructed with gsplat, then loaded through FoveaSplat3D. D
 _Left: framed horse-statue PLY. Right: bonsaitree.mp4 reconstructed photorealistically (34,759 splats) and recaptured in Godot._
 
 
+![Stone gargoyle reconstructed from demo video](docs/gallery/gargoyle-runtime.png)
+
+_stone gargoyle statue.mp4 reconstructed photorealistically (31,236 splats, PSNR 33.2) and recaptured in Godot._
+
+![Steampunk treasure box reconstructed from demo video](docs/gallery/treasure-box-runtime.png)
+
+_steampunk treasure box.mp4 reconstructed photorealistically (65,505 splats) and recaptured in Godot._
+
+---
+
 ## Real-camera reference: Furby turntable
 
 FoveaEngine uses a Furby turntable capture as its primary local real-world
@@ -231,4 +241,3 @@ Run the project-policy audit portably with
 `python tools/botte_entrypoint.py checkup`.
 
 GPU, OpenXR, reconstruction, and visual checks must also run on representative hardware; headless success alone is not runtime certification.
-

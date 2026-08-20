@@ -53,3 +53,24 @@ _In-editor reconstruction dock: dependency setup, region controls, stages, and r
 - No Furby or other rights-restricted captures.
 - No OpenXR / eye-tracked captures.
 - No claim that WorldMirror 2.0 produced these particular images; the horse proof used official gsplat on a synthetic CC0 turntable.
+
+## Stone gargoyle
+
+![Stone gargoyle Gaussian splat in Godot](gallery/gargoyle-runtime.png)
+
+_Photorealistic reconstruction of Videos test/stone gargoyle statue.mp4: 40 masked turntable views, official gsplat 7000 steps, 31,236 splats, PSNR 33.22. Desktop Forward+ capture, not OpenXR._
+
+![Training versus reconstructed gargoyle view](gallery/gargoyle-training-compare.jpg)
+
+_Official gsplat validation pair at step 6999. Left: source view. Right: reconstructed splat._
+
+## Steampunk treasure box
+
+![Steampunk treasure box Gaussian splat in Godot](gallery/treasure-box-runtime.png)
+
+_Photorealistic reconstruction of Videos test/steampunk treasure box.mp4: 40 masked turntable views, official gsplat 7000 steps, 65,505 splats. Desktop Forward+ capture, not OpenXR._
+
+![Training versus reconstructed treasure box view](gallery/treasure-box-training-compare.jpg)
+
+_Official gsplat validation pair at step 6999. Left: source view. Right: reconstructed splat._
+
