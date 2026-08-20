@@ -45,6 +45,14 @@ _Left: framed horse-statue PLY. Right: bonsaitree.mp4 reconstructed photorealist
 
 _StudioTo3D inside the Godot editor. Interface still evolving._
 
+![Stone gargoyle reconstructed from demo video](docs/gallery/gargoyle-runtime.png)
+
+_stone gargoyle statue.mp4 reconstructed photorealistically (31,236 splats, PSNR 33.2) and recaptured in Godot._
+
+![Steampunk treasure box reconstructed from demo video](docs/gallery/treasure-box-runtime.png)
+
+_steampunk treasure box.mp4 reconstructed photorealistically (65,505 splats) and recaptured in Godot._
+
 ---
 
 ## Core Innovation Areas
