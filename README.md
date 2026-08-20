@@ -28,6 +28,22 @@
 
 <p align="center"><sub>StudioTo3D inside Godot: dependency setup, region controls, reconstruction stages, and render options. The interface is under active development.</sub></p>
 
+## Runtime gallery
+
+Real Gaussian-splat captures from the desktop runtime. More viewpoints and credits live in the [runtime gallery](docs/GALLERY.md).
+
+![Horse statue Gaussian splat in Godot](docs/gallery/horse-runtime-orbit.jpg)
+
+_CC0 horse statue reconstructed with gsplat, then loaded through FoveaSplat3D. Desktop Forward+, not an OpenXR proof._
+
+<p align="center">
+  <img src="docs/gallery/horse-runtime-front.jpg" alt="Horse statue splat, front" width="48%" />
+  <img src="docs/gallery/bonsai-runtime.jpg" alt="Bonsai splat fixture" width="48%" />
+</p>
+
+_Left: framed horse-statue PLY. Right: checked-in bonsai fixture._
+
+
 ## Real-camera reference: Furby turntable
 
 FoveaEngine uses a Furby turntable capture as its primary local real-world
@@ -178,6 +194,8 @@ The full, release-facing matrix lives in [`docs/feature-status.md`](docs/feature
 
 ## Documentation
 
+- **Runtime gallery** — [Captured desktop splat results](docs/GALLERY.md).
+
 - [Explore the FoveaCore Godot addon](addons/foveacore/README.md)
 - [Load your first Gaussian splat](tutorials/get_started.md)
 - [Configure reconstruction dependencies](tutorials/reconstruction_setup.md)
@@ -213,3 +231,4 @@ Run the project-policy audit portably with
 `python tools/botte_entrypoint.py checkup`.
 
 GPU, OpenXR, reconstruction, and visual checks must also run on representative hardware; headless success alone is not runtime certification.
+
