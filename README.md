@@ -1,3 +1,5 @@
+[![FoveaCore](docs/assets/banner.jpg)](https://github.com/zedarvates/FoveaCore)
+
 <div align="center">
   <img src="icon.svg" alt="FoveaEngine logo" width="104" />
 
