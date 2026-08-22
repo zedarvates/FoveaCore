@@ -12,6 +12,19 @@
   `FoveaSplat3D` creation, and validation without a listener or file writes.
 - Add real Godot 4.7 bridge tests and an optional cross-repository CLI replay
   using a temporary GDScript-only project and a one-splat PLY fixture.
+- Add a content-addressed `.fovea` asset registry with SHA-256 identities,
+  semantic schema versioning, ownership, biome, physics, and permission
+  metadata.
+- Add a transport-neutral Delta-Splat v1 codec and a revision-checked state
+  owned entirely by the Godot player client. Optional external synchronization
+  does not transfer splat rendering or GPU ownership away from Godot.
+- Add client-side renderer packing, dynamic VRAM admission, priority-aware LRU
+  eviction, and real Godot RID lifecycle management for Delta-Splat buffers.
+- Promote the local Furby turntable as FoveaEngine's real-camera object stress
+  case: 60 views, 18,774 trained Gaussians, and a sanitized 17,013-splat
+  D3D12 runtime proof. The README, translated README, demo record, and feature
+  matrix preserve its motion artifacts and non-redistributable media boundary;
+  public clones continue to use the checked-in CC0 synthetic-video fallback.
 
 ### Fixes
 - Restore the tracked `godot-cpp` submodule declaration so clean checkouts and release builds can initialize it.
@@ -36,12 +49,20 @@
   the master runner fail closed on script and parse errors.
 
 ### Validation
-- Godot compile check: 229 scripts loaded, 0 failed.
+- Godot compile check: 261 scripts loaded, 0 failed.
 - Public-node/delegate contract: 26 assertions passed; CLI regression: 23 passed.
 - Core specification/reference guard: 40 assertions passed; lifecycle smoke and
   runner semantic classifier passed 1/1 and 5/5 respectively.
-- Non-GPU test gate: 52 suites passed, 0 failed, 16 GPU/integration suites skipped.
-- Public documentation gate: 86 Markdown files and 184 local links passed;
+- Non-GPU test gate: 58 suites passed, 0 failed, 17 GPU/integration suites skipped.
+- Client MMO/Delta gates: asset registry 16/16, wire protocol 23/23,
+  revisioned client state 22/22, renderer bridge 12/12, and VRAM budget 20/20.
+- Focused D3D12 RID lifecycle: 17/17 on an NVIDIA GeForce RTX 5060 Ti,
+  including buffer readback, LRU eviction, explicit release, and cleanup.
+- The exhaustive GPU shader probe remains open: `gpu_culling_legacy.glsl`
+  exposes no SPIR-V and `splat_animate_advanced.glsl` reports a stage-4
+  diagnostic. These experimental shader gaps are not hidden by the focused
+  RID proof.
+- Public documentation gate: 86 Markdown files and 195 local links passed;
   validation-tool encoding regression passed and Botte Secrète reported no drift.
 - Rust fast-path gate: 5/5 locked workspace tests, local release build, Clippy
   with warnings denied, and byte-identical reproduction of the 208-byte v2
