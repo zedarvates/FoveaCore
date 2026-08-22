@@ -8,11 +8,11 @@ This checklist separates implemented prototypes from evidence required before ch
 - [x] Ignore local backup files such as `FoveaEngine.csproj.old*`.
 - [x] Remove generated `.kilocode`, Understand Anything, Botte report, and agent payload files from the public index while retaining ignored local copies.
 - [x] Initialize `botte-secrete`, verify its clean `9d184b5` checkout, and confirm that commit is reachable from the public submodule URL.
-- [ ] Rotate the OpenAI credential reported by Gitleaks in historical `.kilocode/task_history.json` at commit `c2e6095`.
+- [x] Rotate the OpenAI credential reported by Gitleaks in historical `.kilocode/task_history.json` at commit `c2e6095`; rotation was confirmed before the 0.3.1 publication workflow.
 - [x] Rehearse the `.kilocode` purge in a disposable mirror; the rewritten 136-commit history passes Gitleaks with no leaks.
 - [x] Purge `.kilocode` from the sanitized history and rerun Gitleaks; the clean public candidate scans 148 commits with no leaks and has zero reachable `.kilocode` objects.
 - [ ] Replace every public remote branch and tag with the sanitized refs, then verify a fresh remote clone; the current remotes still expose the old history.
-- [ ] Reconcile the current dirty worktree into a focused release branch without staging unrelated local changes.
+- [x] Reconcile the dirty source worktree into the isolated `release/v0.3.1` candidate without staging its local agent plan or ignored configuration.
 
 ## Feature evidence gates
 
@@ -59,11 +59,11 @@ This checklist separates implemented prototypes from evidence required before ch
 - [x] `README.md`, `README_CN.md`, `ROADMAP.md`, and `docs/feature-status.md` distinguish experimental paths from validated ones.
 - [x] Track both README screenshots and validate 86 Markdown files, 175 working-tree local links, the MIT license, dependency guide, and required workflows/assets.
 - [x] Run the same local documentation gate from a clean index export; 86 Markdown files, 122 index-snapshot local links, and all 9 required files pass.
-- [ ] Rerun `python tools/check_public_docs.py --external` immediately after changing visibility; only the private FoveaCore workflow URL and badge currently return 404.
-- [x] Validate the prepared index in isolation: all 197 GDScript classes load and the corrected `nogpu` group passes 57/57 suites while explicitly skipping 6 GPU/integration suites.
+- [x] Rerun `python tools/check_public_docs.py --external`: 90 Markdown files, 217 local links, 9 required files, and 18 external links pass with no access-limited warnings.
+- [x] Validate the prepared index in isolation: all 261 GDScript files load and the corrected `nogpu` group passes 58/58 suites while explicitly skipping 17 GPU/integration suites.
 - [x] Validate the prepared index C# and Rust surfaces: C# Release builds with 0 errors; Rust passes 5 tests, strict Clippy, and an optimized 32-crate build.
 - [x] Add a real C# test project; `tests/FoveaEngine.Tests` now covers the Godot-free Morton encoder with 3 passing xUnit tests, while `FoveaEngine.csproj` still excludes that project from the Godot assembly.
 - [x] Validate representative prepared-index GPU and visual paths: tile dispatch 10/10, instanced layout/readback 32/32 with no skips, and a recognizable auto-framed 12,473-splat PLY capture with exact-count CPU fallback when GPU sorting is incomplete.
 - [x] Validate all repository Python syntax, the four offset-field baker tests, a Godot-loaded generated resource, the portable validation tools, and the public-docs gate.
-- [ ] Run representative GPU/visual checks, Python validation, and the Botte checkup on the final clean branch.
+- [x] Run final-candidate validation: Python gates pass; D3D12 tile dispatch passes 10/10, instanced layout/readback passes 32/32, and client RID lifecycle passes 17/17 on RTX 5060 Ti. Botte reports policy compliance and only the expected absence of ignored worktree-local MCP wiring.
 - [ ] Verify GitHub Actions on the rewritten, clean remote before announcing the public release.

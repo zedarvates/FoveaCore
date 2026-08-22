@@ -5,7 +5,7 @@
 
 ---
 
-## 🩹 v0.3.1 — Release pipeline and headless stability (proposed)
+## 🩹 v0.3.1 — Release pipeline and client splat stability
 
 ### Added
 - Add the provider-neutral Fovea CLI contract v1 for bounded status, unsaved
@@ -62,7 +62,7 @@
   exposes no SPIR-V and `splat_animate_advanced.glsl` reports a stage-4
   diagnostic. These experimental shader gaps are not hidden by the focused
   RID proof.
-- Public documentation gate: 86 Markdown files and 195 local links passed;
+- Public documentation gate: 90 Markdown files and 217 local links passed;
   validation-tool encoding regression passed and Botte Secrète reported no drift.
 - Rust fast-path gate: 5/5 locked workspace tests, local release build, Clippy
   with warnings denied, and byte-identical reproduction of the 208-byte v2
