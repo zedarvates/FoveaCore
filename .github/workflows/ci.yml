@@ -414,9 +414,13 @@ jobs:
       - name: Verify C++ extension fails closed when the binary is unavailable
         shell: pwsh
         run: |
-          & $env:GODOT_CPP_SMOKE_BIN --headless --xr-mode off --path . `
-            -s res://addons/foveacore/gdextension/test_cpp_extension_load.gd -- --force-missing-binary
-          if ($LASTEXITCODE -ne 1) { throw "C++ missing-binary control exited with $LASTEXITCODE instead of 1." }
+          $control = Start-Process -FilePath $env:GODOT_CPP_SMOKE_BIN `
+            -ArgumentList @(
+              '--headless', '--xr-mode', 'off', '--path', '.',
+              '-s', 'res://addons/foveacore/gdextension/test_cpp_extension_load.gd',
+              '--', '--force-missing-binary'
+            ) -Wait -PassThru -NoNewWindow
+          if ($control.ExitCode -ne 1) { throw "C++ missing-binary control exited with $($control.ExitCode) instead of 1." }
       - name: Upload C++ extension
         uses: actions/upload-artifact@v4
         with:
