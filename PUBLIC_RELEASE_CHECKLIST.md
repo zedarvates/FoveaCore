@@ -11,7 +11,7 @@ This checklist separates implemented prototypes from evidence required before ch
 - [x] Rotate the OpenAI credential reported by Gitleaks in historical `.kilocode/task_history.json` at commit `c2e6095`; rotation was confirmed before the 0.3.1 publication workflow.
 - [x] Rehearse the `.kilocode` purge in a disposable mirror; the rewritten 136-commit history passes Gitleaks with no leaks.
 - [x] Purge `.kilocode` from the sanitized history and rerun Gitleaks; the clean public candidate scans 148 commits with no leaks and has zero reachable `.kilocode` objects.
-- [ ] Replace every public remote branch and tag with the sanitized refs, then verify a fresh remote clone; the current remotes still expose the old history.
+- [x] Replace every public remote branch and tag with sanitized refs; a fresh clone of rewritten `main` scans 161 commits with Gitleaks, has a clean worktree, and passes the public-docs gate.
 - [x] Reconcile the dirty source worktree into the isolated `release/v0.3.1` candidate without staging its local agent plan or ignored configuration.
 
 ## Feature evidence gates
@@ -66,4 +66,4 @@ This checklist separates implemented prototypes from evidence required before ch
 - [x] Validate representative prepared-index GPU and visual paths: tile dispatch 10/10, instanced layout/readback 32/32 with no skips, and a recognizable auto-framed 12,473-splat PLY capture with exact-count CPU fallback when GPU sorting is incomplete.
 - [x] Validate all repository Python syntax, the four offset-field baker tests, a Godot-loaded generated resource, the portable validation tools, and the public-docs gate.
 - [x] Run final-candidate validation: Python gates pass; D3D12 tile dispatch passes 10/10, instanced layout/readback passes 32/32, and client RID lifecycle passes 17/17 on RTX 5060 Ti. Botte reports policy compliance and only the expected absence of ignored worktree-local MCP wiring.
-- [ ] Verify GitHub Actions on the rewritten, clean remote before announcing the public release.
+- [x] Verify GitHub Actions on the rewritten, clean remote: run [32589868210](https://github.com/zedarvates/FoveaCore/actions/runs/32589868210) passes all 15 jobs on sanitized `main` commit `43b4133`.
