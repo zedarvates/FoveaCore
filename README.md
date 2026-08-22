@@ -26,6 +26,36 @@
 
 <p align="center"><sub>StudioTo3D inside Godot: dependency setup, region controls, reconstruction stages, and render options. The interface is under active development.</sub></p>
 
+## Real-camera reference: Furby turntable
+
+FoveaEngine uses a Furby turntable capture as its primary local real-world
+Gaussian-splat stress case. Small object turntables are a practical capture
+pattern for testing reconstruction pipelines, while this particular subject
+adds difficult fur, thin ears, glossy eyes, fine color transitions, and visible
+failure modes when the object moves between frames.
+
+```text
+real camera video -> 60 views -> COLMAP poses -> gsplat/CUDA
+                  -> 18,774 trained splats -> 17,013 runtime splats
+                  -> FoveaSplat3D in Godot
+```
+
+| Evidence | Recorded result |
+| --- | --- |
+| Source | Real 854x480 camera video, not an image-generated model |
+| Training | 7,000 iterations with gsplat, SH degree 3 |
+| Runtime | 17,013 sanitized splats loaded through `FoveaSplat3D` |
+| Desktop proof | D3D12 Forward+ on an RTX 5060 Ti, with a settled 58-60 FPS capture |
+| Known limitation | Subject motion produced blur and ghosted ears; this is preserved as useful failure evidence |
+
+This is a **FoveaEngine reference stress test**, not a claim that Furby is a
+standardized academic benchmark. The source footage, reconstructed asset, and
+captures remain local because the validation media is not redistributable. The
+demo therefore selects the Furby proof when it exists locally, then falls back
+to the checked-in CC0 synthetic-video reconstruction and finally to the parser
+fixture. See the [Drop a PLY demo record](demo/README.md) for that selection
+boundary.
+
 > [!WARNING]
 > FoveaEngine is pre-release software. Core addon and PLY workflows are available with validation; GPU, XR, and research reconstruction paths still require representative target-hardware testing. See the [feature status matrix](docs/feature-status.md) before adopting a subsystem.
 
@@ -36,7 +66,7 @@
 - **Performance-oriented architecture** — GPU sorting, hierarchical LOD, culling, and foveation are built into decoupled subsystems.
 - **Desktop and immersive targets** — develop on a standard Forward+ viewport, then validate experimental OpenXR and eye-tracked rendering on supported hardware.
 
-## Runtime snapshot
+## Redistributable runtime snapshot
 
 <p align="center">
   <img src="docs/images/foveaengine-bonsai-runtime.png" alt="Bonsai Gaussian-splat fixture rendered by FoveaEngine in Godot" width="720" />
@@ -78,7 +108,12 @@ git clone --recurse-submodules https://github.com/zedarvates/FoveaCore.git
 cd FoveaCore
 ```
 
-Open `project.godot`, then run [`demo/drop_a_ply.tscn`](demo/drop_a_ply.tscn). The demo loads the included reference fixture and adds an FPS overlay. FFmpeg, COLMAP, and VR hardware are not required to view an existing splat asset.
+Open `project.godot`, then run [`demo/drop_a_ply.tscn`](demo/drop_a_ply.tscn).
+The demo prefers the local Furby real-camera proof when available, otherwise it
+loads the included CC0 synthetic-video reconstruction; the small parser fixture
+is the final fail-closed fallback. An FPS overlay identifies the active source.
+FFmpeg, COLMAP, and VR hardware are not required to view an existing splat
+asset.
 
 ### 2. Add a splat to your scene
 

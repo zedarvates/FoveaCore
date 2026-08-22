@@ -7,7 +7,6 @@ const EXPECTED_CASES := 9
 const BYTES_PER_CANONICAL_SPLAT := 16
 
 const GPUCullerPipelineClass := preload("res://addons/foveacore/scripts/advanced/gpu_culler_pipeline.gd")
-const FoveaCompositorEffectClass := preload("res://addons/foveacore/scripts/advanced/fovea_compositor_effect.gd")
 
 var _results: Array[Dictionary] = []
 
@@ -48,6 +47,11 @@ func _benchmark_combination(res: Vector2i, density: int) -> void:
 		return
 		
 	var rd := culler.rd
+	var color_tex := RID()
+	var output_buf := RID()
+	var covar_tex := RID()
+	var palette_tex := RID()
+	var camera: Camera3D = null
 	
 	# Setup dummy textures and buffers
 	var format := RDTextureFormat.new()
@@ -55,21 +59,21 @@ func _benchmark_combination(res: Vector2i, density: int) -> void:
 	format.width = res.x
 	format.height = res.y
 	format.usage_bits = RenderingDevice.TEXTURE_USAGE_STORAGE_BIT | RenderingDevice.TEXTURE_USAGE_SAMPLING_BIT
-	var color_tex := rd.texture_create(format, RDTextureView.new())
+	color_tex = rd.texture_create(format, RDTextureView.new())
 	
 	# The rasterizer shader consumes canonical PackedSplat records (16 bytes each).
 	var output_bytes := density * BYTES_PER_CANONICAL_SPLAT
 	if output_bytes <= 0:
 		push_error("Rasterizer benchmark invalid output buffer size: %d" % output_bytes)
-		_cleanup_benchmark_resources(rd, RID(), color_tex, RID(), RID(), culler, camera)
+		_cleanup_benchmark_resources(rd, output_buf, color_tex, covar_tex, palette_tex, culler, camera)
 		return
 
 	var dummy_out_bytes := PackedByteArray()
 	dummy_out_bytes.resize(output_bytes)
-	var output_buf := rd.storage_buffer_create(output_bytes, dummy_out_bytes)
+	output_buf = rd.storage_buffer_create(output_bytes, dummy_out_bytes)
 	if not output_buf.is_valid():
 		push_error("Rasterizer benchmark failed to create output storage buffer (%d bytes)." % output_bytes)
-		_cleanup_benchmark_resources(rd, RID(), color_tex, covar_tex, palette_tex, culler, camera)
+		_cleanup_benchmark_resources(rd, output_buf, color_tex, covar_tex, palette_tex, culler, camera)
 		return
 	
 	var covar_format := RDTextureFormat.new()
@@ -77,17 +81,16 @@ func _benchmark_combination(res: Vector2i, density: int) -> void:
 	covar_format.width = 1
 	covar_format.height = 1
 	covar_format.usage_bits = RenderingDevice.TEXTURE_USAGE_SAMPLING_BIT
-	var covar_tex := rd.texture_create(covar_format, RDTextureView.new())
-	var palette_tex := rd.texture_create(covar_format, RDTextureView.new())
+	covar_tex = rd.texture_create(covar_format, RDTextureView.new())
+	palette_tex = rd.texture_create(covar_format, RDTextureView.new())
 	
 	culler.last_counter_buffer_rid = rd.storage_buffer_create(16)
 	culler.last_valid_splat_count = density
 	
-	var camera := Camera3D.new()
+	camera = Camera3D.new()
 	root.add_child(camera)
 	
 	# 1. Benchmark MultiMesh / Vertex Shader simulated dispatch or draw (dummy estimation)
-	var mm_base_fps := 60.0
 	var overdraw_factor := float(density) / 5000.0
 	var mm_frame_time_ms := 0.2 + (density * 0.0001) + (res.x * res.y * 0.000001 * overdraw_factor)
 	var mm_fps := 1000.0 / mm_frame_time_ms
@@ -141,23 +144,25 @@ func _cleanup_benchmark_resources(
 	covar_tex: RID,
 	palette_tex: RID,
 	culler: GPUCullerPipelineClass,
-	camera: Camera3D
+	camera: Camera3D = null
 ) -> void:
-	if not rd:
-		return
-	if output_buf.is_valid():
-		rd.free_rid(output_buf)
-	if color_tex.is_valid():
-		rd.free_rid(color_tex)
-	if covar_tex.is_valid():
-		rd.free_rid(covar_tex)
-	if palette_tex.is_valid():
-		rd.free_rid(palette_tex)
-	if culler.last_counter_buffer_rid.is_valid():
-		rd.free_rid(culler.last_counter_buffer_rid)
+	if rd:
+		if output_buf.is_valid():
+			rd.free_rid(output_buf)
+		if color_tex.is_valid():
+			rd.free_rid(color_tex)
+		if covar_tex.is_valid():
+			rd.free_rid(covar_tex)
+		if palette_tex.is_valid():
+			rd.free_rid(palette_tex)
+		# GPUCullerPipeline.cleanup() clears this RID but does not free it.
+		if culler and culler.last_counter_buffer_rid.is_valid():
+			rd.free_rid(culler.last_counter_buffer_rid)
+			culler.last_counter_buffer_rid = RID()
 	if camera:
 		camera.queue_free()
-	culler.cleanup()
+	if culler:
+		culler.cleanup()
 
 func _generate_report() -> void:
 	var report_path := "user://benchmark_rasterizer_comparison.md"
@@ -168,6 +173,7 @@ func _generate_report() -> void:
 		
 	file.store_line("# Rasterizer GPU Dispatch Report (Task 242)")
 	file.store_line("\nTile dispatch time is measured with a local RenderingDevice. MultiMesh time is a model-derived estimate and is not a measured comparison.")
+	file.store_line("Dummy splat storage uses the canonical PackedSplat stride: 16 bytes per splat.")
 	file.store_line("\n## Benchmark Results Table\n")
 	file.store_line("| Resolution | Splat Count | MultiMesh Time (ms) | MultiMesh FPS | Tile-Based GPU Time (ms) | Tile-Based FPS | Gain (%) |")
 	file.store_line("|---|---|---|---|---|---|---|")
@@ -180,6 +186,7 @@ func _generate_report() -> void:
 	file.store_line("\n## Scope")
 	file.store_line("- Tile-Based GPU Time is a synchronized dispatch measurement, not a full rendered-frame measurement.")
 	file.store_line("- MultiMesh Time is an estimate and must not be used to claim a measured speedup.")
+	file.store_line("- Dummy output buffers are sized as splat_count * 16 bytes to match PackedSplat.")
 	
 	file.close()
 	print("\nBenchmark completed. Report written to: ", report_path)

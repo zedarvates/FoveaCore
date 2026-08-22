@@ -130,6 +130,8 @@ The active GDScript and Rust implementations use this 72-byte header:
 
 The current GDScript stream order is header → RGB32F palette → 32-byte covariance entries → 16-byte splat records → optional style JSON → optional mesh → optional metadata JSON. The 16-byte splat record contains quantized position, projected normal, palette index, covariance index, opacity, layer, dither seed, and brush type.
 
+The tile rasterizer compute path consumes that same 16-byte PackedSplat stride. Dummy GPU buffers in rasterizer_performance_benchmark.gd must be sized as splat_count * 16; a 20-byte modeled density stride is not a valid rasterizer contract.
+
 The locked Rust workspace passes 5/5 tests, a local Windows release build, and
 Clippy with warnings denied. Its generator reproduces the tracked 208-byte
 fixture byte-for-byte, and Godot 4.7.dev5 accepts that fixture in the 28/28

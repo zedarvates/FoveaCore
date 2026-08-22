@@ -198,8 +198,10 @@ Representative FPS claims remain assigned to the windowed `fps_benchmark.gd`
 workflow on documented hardware.
 
 `rasterizer_performance_benchmark.gd` is GPU-only and fail-closed: all nine
-dispatch cases must complete before it writes a `user://` report. Its
-MultiMesh column is an estimate, while only the synchronized tile dispatch
+dispatch cases must complete before it writes a `user://` report. Dummy
+output buffers use the canonical PackedSplat stride of 16 bytes per splat
+(tile_rasterizer.glsl data0..data3 and GPUCullerPipeline.SPLAT_BYTE_SIZE).
+Its MultiMesh column is an estimate, while only the synchronized tile dispatch
 time is measured; it cannot support a measured renderer-speedup claim.
 
 `test_memory_leak.gd` is a lifecycle smoke gate, not a leak certification: it

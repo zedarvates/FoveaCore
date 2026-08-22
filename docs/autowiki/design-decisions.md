@@ -29,6 +29,7 @@
 - **Decision:** freeze `FOVEA_3D`, version 2, a 72-byte little-endian header, and a 16-byte splat record as the current contract.
 - **Decision:** reclassify the 8-byte design as a future v3 research proposal with a distinct identity.
 - **Evidence:** shared GDScript constants, GDScript reader/writer checks, Rust little-endian header tests, and the canonical format specification.
+- **Evidence:** tile rasterizer dummy buffers now use the same 16-byte PackedSplat stride as GPUCullerPipeline.SPLAT_BYTE_SIZE; this is a layout contract, not a GPU performance result.
 
 ### DD-006 — Native artifact ownership
 

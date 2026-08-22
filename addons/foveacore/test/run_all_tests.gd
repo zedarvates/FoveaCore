@@ -80,15 +80,18 @@ func _init() -> void:
 		
 		var output = []
 		var args := []
+		var child_headless: bool = _group != "gpu" or _has_cli_flag("--headless")
 		
 		# Chemin projet explicite : robuste quel que soit le cwd (CI, éditeur, terminal)
 		var project_path: String = ProjectSettings.globalize_path("res://")
 
 		if base_type == "SceneTree" or base_type == "MainLoop":
-			args = ["--path", project_path, "-s", test_path, "--headless"]
+			args = ["--path", project_path, "-s", test_path]
 		else:
 			# Use node runner for Node, RefCounted, etc.
-			args = ["--path", project_path, "-s", "res://addons/foveacore/test/test_node_runner.gd", test_path, "--headless"]
+			args = ["--path", project_path, "-s", "res://addons/foveacore/test/test_node_runner.gd", test_path]
+		if child_headless:
+			args.append("--headless")
 
 		# Propagate command line arguments if any (but not our own --group selector)
 		for arg in OS.get_cmdline_args():

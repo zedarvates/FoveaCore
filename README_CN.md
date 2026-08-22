@@ -25,6 +25,32 @@
 
 <p align="center"><sub>Godot 内的 StudioTo3D：依赖配置、区域控制、重建阶段和渲染选项。界面仍在持续开发。</sub></p>
 
+## 实机视频参考：Furby 转台
+
+FoveaEngine 将 Furby 转台拍摄作为主要的本地真实世界 Gaussian Splat
+压力测试。小物体转台是检验重建流程的实用采集方式；这个对象还同时包含
+难以重建的绒毛、薄耳朵、光亮眼睛、细微颜色变化，以及物体在帧间移动时
+产生的可见失败模式。
+
+```text
+实机视频 -> 60 个视角 -> COLMAP 位姿 -> gsplat/CUDA
+         -> 18,774 个训练 splat -> 17,013 个运行时 splat
+         -> Godot 中的 FoveaSplat3D
+```
+
+| 证据 | 记录结果 |
+| --- | --- |
+| 来源 | 真实的 854×480 相机视频，并非由单张图像生成的模型 |
+| 训练 | gsplat 训练 7,000 次迭代，球谐阶数为 3 |
+| 运行时 | `FoveaSplat3D` 加载 17,013 个清理后的 splat |
+| 桌面验证 | RTX 5060 Ti 上的 D3D12 Forward+，稳定捕获为 58–60 FPS |
+| 已知限制 | 对象移动造成模糊和耳朵重影；这些缺陷被保留为有效的失败证据 |
+
+这是 **FoveaEngine 自己的参考压力测试**，并不声称 Furby 是标准化的学术
+基准。由于验证媒体不可再分发，源视频、重建资产和捕获结果仅保留在本地。
+演示会优先选择本地 Furby 证据；若不存在，则回退到仓库内的 CC0 合成视频
+重建，最后才使用解析器测试资产。选择边界详见[“拖入 PLY”演示记录](demo/README.md)。
+
 > [!WARNING]
 > FoveaEngine 仍是预发布软件。核心插件和 PLY 工作流已有本地验证；GPU、XR 和研究型重建路径仍需在目标硬件上进行代表性测试。采用子系统前请先查看[功能状态矩阵](docs/feature-status.md)。
 
@@ -35,7 +61,7 @@
 - **面向性能的架构** — GPU 排序、分层 LOD、裁剪和注视点渲染由解耦子系统负责。
 - **桌面与沉浸式目标** — 先在标准 Forward+ 视口中开发，再在受支持硬件上验证实验性 OpenXR 和眼动追踪。
 
-## 运行时截图
+## 可再分发的运行时截图
 
 <p align="center">
   <img src="docs/images/foveaengine-bonsai-runtime.png" alt="FoveaEngine 在 Godot 中渲染盆景高斯泼溅测试资产" width="720" />
@@ -67,7 +93,10 @@ git clone --recurse-submodules https://github.com/zedarvates/FoveaCore.git
 cd FoveaCore
 ```
 
-打开 `project.godot`，然后运行 [`demo/drop_a_ply.tscn`](demo/drop_a_ply.tscn)。该演示会加载仓库内的参考资产并显示 FPS；查看已有高斯泼溅资产不需要 FFmpeg、COLMAP 或 VR 硬件。
+打开 `project.godot`，然后运行 [`demo/drop_a_ply.tscn`](demo/drop_a_ply.tscn)。
+如果本地 Furby 实机视频证据存在，演示会优先加载它；否则加载仓库内的 CC0
+合成视频重建，小型解析器测试资产是最终的故障安全回退。FPS 标签会明确标出
+当前来源。查看已有高斯泼溅资产不需要 FFmpeg、COLMAP 或 VR 硬件。
 
 ### 2. 在场景中添加高斯泼溅
 

@@ -43,6 +43,7 @@ Required future comparison metrics are file size, encode time, decode time, peak
 
 - Shader interfaces and buffer layouts must be versioned with the producer layout.
 - Compute paths must validate dispatch bounds.
+- tile_rasterizer.glsl PackedSplat is four uint words (16 bytes). GPU dummy buffers and GPUCullerPipeline.SPLAT_BYTE_SIZE must keep that stride.
 - Foveated and motion-adaptive effects must degrade safely without eye tracking.
 - Visual changes require golden renders or an explicit hardware-blocked result.
 

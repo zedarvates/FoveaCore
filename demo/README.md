@@ -17,6 +17,20 @@
 
 No FFmpeg, COLMAP, OpenXR runtime, or VR headset is required to open an existing PLY asset.
 
+### Why the Furby capture is useful
+
+The local Furby turntable is FoveaEngine's primary real-camera object stress
+case. Its fur tests dense soft detail, its ears test thin structures, its glossy
+eyes test view-dependent appearance, and the motion visible in the source tests
+whether the proof record preserves reconstruction failures instead of hiding
+them. It is a representative object-turntable test for this project, not a
+standardized academic benchmark.
+
+The complete recorded path is 60 extracted views, COLMAP-compatible poses,
+7,000 gsplat training iterations, 18,774 trained Gaussians, and a sanitized
+17,013-splat runtime PLY. The resulting blur and ghosted ears are attributed to
+subject movement during capture, not to image generation or PLY compression.
+
 On the validation workstation, the runtime default is
 `res://reconstructions/furby_real_60_v1/fovea_runtime/furby_6999_runtime_foreground_v1.ply`.
 It was reconstructed from 60 views extracted from a real-world camera video,
