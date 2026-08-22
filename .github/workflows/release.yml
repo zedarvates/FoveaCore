@@ -103,7 +103,7 @@ jobs:
           lipo -create -output staged/libfoveacore.dylib \
             artifacts/native-x86_64-apple-darwin/libfoveacore.dylib \
             artifacts/native-aarch64-apple-darwin/libfoveacore.dylib
-          lipo -verify_arch x86_64 arm64 staged/libfoveacore.dylib
+          lipo staged/libfoveacore.dylib -verify_arch x86_64 arm64
       - uses: actions/upload-artifact@v4
         with:
           name: native-macos-universal
