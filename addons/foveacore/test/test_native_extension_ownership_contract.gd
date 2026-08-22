@@ -4,6 +4,7 @@ extends SceneTree
 ## The C++ build must never overwrite the binary loaded by foveacore.gdextension.
 
 const CANONICAL_DESCRIPTOR_PATH: String = "res://addons/foveacore/foveacore.gdextension"
+const CI_DISABLED_DESCRIPTOR_PATH: String = "res://addons/foveacore/foveacore.gdextension.ci-disabled"
 const CPP_DESCRIPTOR_TEMPLATE_PATH: String = "res://addons/foveacore/gdextension/foveacore_cpp.gdextension.example"
 const CPP_SCONSTRUCT_PATH: String = "res://addons/foveacore/gdextension/SConstruct"
 const CPP_REGISTRATION_PATH: String = "res://addons/foveacore/gdextension/src/register_types.cpp"
@@ -14,7 +15,7 @@ var _failed: int = 0
 
 func _init() -> void:
 	print("\nNative Extension Ownership Contract Tests")
-	var canonical_descriptor: String = FileAccess.get_file_as_string(CANONICAL_DESCRIPTOR_PATH)
+	var canonical_descriptor: String = _read_canonical_descriptor()
 	var cpp_descriptor: String = FileAccess.get_file_as_string(CPP_DESCRIPTOR_TEMPLATE_PATH)
 	var sconstruct: String = FileAccess.get_file_as_string(CPP_SCONSTRUCT_PATH)
 	var registration_source: String = FileAccess.get_file_as_string(CPP_REGISTRATION_PATH)
@@ -38,6 +39,12 @@ func _init() -> void:
 
 	print("Native extension ownership contract: %d passed, %d failed" % [_passed, _failed])
 	quit(0 if _failed == 0 else 1)
+
+func _read_canonical_descriptor() -> String:
+	for path: String in [CANONICAL_DESCRIPTOR_PATH, CI_DISABLED_DESCRIPTOR_PATH]:
+		if FileAccess.file_exists(path):
+			return FileAccess.get_file_as_string(path)
+	return ""
 
 func _assert(name: String, condition: bool) -> void:
 	if condition:
