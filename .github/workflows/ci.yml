@@ -110,6 +110,8 @@ jobs:
             echo "::error::Godot emitted compile/load errors that the in-process loader could not count."
             exit 1
           fi
+      - name: Build C# scripts for the Godot runtime
+        run: dotnet build FoveaEngine.csproj --configuration Debug --nologo
       - name: Run C# Gaussian Splat runtime suite
         run: |
           set -o pipefail
