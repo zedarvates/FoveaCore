@@ -1,8 +1,9 @@
 # Ultimate Odycer Splat Delta Protocol v1
 
 `FoveaSplatDeltaProtocol` defines a CPU-only, transport-neutral contract for
-authoritative sparse changes to immutable `.fovea` assets. It is intended to be
-implemented byte-for-byte by Zig2 before the packet is connected to an RPC.
+client-owned sparse changes to immutable `.fovea` assets. Godot can create,
+persist, restore, and replay these packets locally. An optional transport may
+relay the same bytes, but it does not own the decoded splat state or renderer.
 
 ## Identity and authority
 
@@ -20,9 +21,9 @@ sha256:<digest>/<decimal splat index>
 ```
 
 The digest is stored once per batch; each record carries only a `u32` index.
-Clients must treat received batches as server-authoritative. A receiver applies
-a batch only when its local revision equals `base_revision`, then advances to
-`revision`. Snapshot requests and rollback remain transport-layer work.
+The Godot player client owns the mutable state. It applies a batch only when its
+local revision equals `base_revision`, then advances to `revision`. This rule
+also applies to locally authored, persisted, or externally relayed packets.
 
 ## Compressed envelope
 
@@ -98,6 +99,12 @@ responsible for loading, retaining, rendering, animating, and editing splats.
 A future renderer adapter may consume its sparse dictionaries without changing
 the wire format or transferring rendering ownership elsewhere.
 
+`export_sparse_snapshot()` produces a defensive local checkpoint.
+`restore_checkpoint()` validates asset identity, layout, revision, indices,
+types, and finite values before replacing live state. A sequence passed to
+`replay_packets_atomically()` either rebuilds the complete revision chain or
+restores the exact pre-replay checkpoint at the first invalid packet.
+
 `FoveaClientSplatRendererBridge` now performs that CPU boundary conversion. It
 exports a defensive sparse snapshot, then prepares the existing
 `FoveaDeltaManager` layout: one dense 24-byte FP16 record per splat, including
@@ -158,6 +165,6 @@ behavior only. It does not prove:
 
 - Zig2 byte compatibility;
 - RPC ordering, retransmission, interest management, or bandwidth budgets;
-- revision-gap recovery, snapshots, rollback, or reconciliation;
+- remote revision-gap recovery or checkpoint exchange between clients;
 - deterministic server-side sculpt/flow simulation;
 - multi-client, packet-loss, OpenXR, GPU, or MMO-scale behavior.

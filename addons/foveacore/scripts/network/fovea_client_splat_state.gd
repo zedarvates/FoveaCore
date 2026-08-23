@@ -124,6 +124,122 @@ func export_sparse_snapshot() -> Dictionary:
 	}
 
 
+## Restores a defensive local checkpoint for the currently configured asset.
+## Checkpoints from another immutable asset or containing malformed fields are
+## rejected before any live state is changed.
+func restore_checkpoint(checkpoint: Dictionary) -> Dictionary:
+	if asset_id.is_empty() or splat_count <= 0:
+		return _failure("client splat state is not configured")
+	if str(checkpoint.get("asset_id", "")) != asset_id:
+		return _failure("checkpoint targets another immutable asset")
+	if int(checkpoint.get("splat_count", 0)) != splat_count:
+		return _failure("checkpoint targets another asset layout")
+	var checkpoint_revision: int = int(checkpoint.get("revision", -1))
+	if checkpoint_revision < 0:
+		return _failure("checkpoint revision must not be negative")
+	for required_field: String in ["delta_positions", "delta_colors", "delta_normals"]:
+		if not checkpoint.has(required_field):
+			return _failure("checkpoint is missing required field: %s" % required_field)
+
+	var positions_result: Dictionary = _validated_checkpoint_field(
+		checkpoint.get("delta_positions", {}),
+		"position"
+	)
+	if not bool(positions_result.get("ok", false)):
+		return _failure(str(positions_result.get("error", "invalid checkpoint positions")))
+	var colors_result: Dictionary = _validated_checkpoint_field(
+		checkpoint.get("delta_colors", {}),
+		"color"
+	)
+	if not bool(colors_result.get("ok", false)):
+		return _failure(str(colors_result.get("error", "invalid checkpoint colors")))
+	var normals_result: Dictionary = _validated_checkpoint_field(
+		checkpoint.get("delta_normals", {}),
+		"normal"
+	)
+	if not bool(normals_result.get("ok", false)):
+		return _failure(str(normals_result.get("error", "invalid checkpoint normals")))
+
+	_position_deltas = (positions_result.get("values", {}) as Dictionary).duplicate(true)
+	_color_deltas = (colors_result.get("values", {}) as Dictionary).duplicate(true)
+	_normal_deltas = (normals_result.get("values", {}) as Dictionary).duplicate(true)
+	revision = checkpoint_revision
+	return {
+		"ok": true,
+		"error": "",
+		"revision": revision,
+		"applied_changes": 0,
+	}
+
+
+## Replays a packet sequence as one client-local transaction. If any packet is
+## corrupt or does not continue the revision chain, the complete pre-replay
+## checkpoint is restored before returning the error.
+func replay_packets_atomically(packets: Array) -> Dictionary:
+	if asset_id.is_empty() or splat_count <= 0:
+		return _failure("client splat state is not configured")
+	var original_snapshot: Dictionary = export_sparse_snapshot().get("snapshot", {})
+	var total_changes: int = 0
+	for packet_value: Variant in packets:
+		if not packet_value is PackedByteArray:
+			restore_checkpoint(original_snapshot)
+			return _failure("replay entries must be packed delta packets")
+		var apply_result: Dictionary = apply_packet(packet_value as PackedByteArray)
+		if not bool(apply_result.get("ok", false)):
+			restore_checkpoint(original_snapshot)
+			return _failure(str(apply_result.get("error", "delta replay failed")))
+		total_changes += int(apply_result.get("applied_changes", 0))
+	return {
+		"ok": true,
+		"error": "",
+		"revision": revision,
+		"applied_changes": total_changes,
+		"replayed_packets": packets.size(),
+	}
+
+
+func _validated_checkpoint_field(source: Variant, field_name: String) -> Dictionary:
+	if not source is Dictionary:
+		return {"ok": false, "error": "checkpoint %s deltas must be a dictionary" % field_name}
+	var values: Dictionary = source
+	var validated: Dictionary = {}
+	for index_value: Variant in values.keys():
+		if not index_value is int:
+			return {"ok": false, "error": "checkpoint splat indices must be integers"}
+		var splat_index: int = int(index_value)
+		if splat_index < 0 or splat_index >= splat_count:
+			return {"ok": false, "error": "checkpoint splat index is outside the immutable asset"}
+		var value: Variant = values[index_value]
+		if field_name == "position":
+			if not value is Vector3 or not _is_finite_vector3(value as Vector3):
+				return {"ok": false, "error": "checkpoint position delta is invalid"}
+		elif field_name == "color":
+			if not value is Color or not _is_finite_color(value as Color):
+				return {"ok": false, "error": "checkpoint color delta is invalid"}
+		elif field_name == "normal":
+			if not value is Vector2 or not _is_finite_vector2(value as Vector2):
+				return {"ok": false, "error": "checkpoint normal delta is invalid"}
+		validated[splat_index] = value
+	return {"ok": true, "error": "", "values": validated}
+
+
+static func _is_finite_vector3(value: Vector3) -> bool:
+	return is_finite(value.x) and is_finite(value.y) and is_finite(value.z)
+
+
+static func _is_finite_vector2(value: Vector2) -> bool:
+	return is_finite(value.x) and is_finite(value.y)
+
+
+static func _is_finite_color(value: Color) -> bool:
+	return (
+		is_finite(value.r)
+		and is_finite(value.g)
+		and is_finite(value.b)
+		and is_finite(value.a)
+	)
+
+
 static func _failure(message: String) -> Dictionary:
 	return {
 		"ok": false,

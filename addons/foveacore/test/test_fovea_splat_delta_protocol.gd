@@ -1,6 +1,6 @@
 extends SceneTree
 
-## CPU-only contract tests for authoritative per-splat delta batches.
+## CPU-only contract tests for client-owned per-splat delta batches.
 
 const ProtocolScript := preload(
 	"res://addons/foveacore/scripts/network/fovea_splat_delta_protocol.gd"
@@ -54,12 +54,17 @@ func _test_round_trip() -> void:
 		},
 	]
 	var encoded: Dictionary = ProtocolScript.encode_batch(ASSET_ID, 10, 7, 8, changes)
-	_assert("valid authoritative delta batch encodes", bool(encoded.get("ok", false)), str(encoded))
+	_assert("valid client-owned delta batch encodes", bool(encoded.get("ok", false)), str(encoded))
 	var packet: PackedByteArray = encoded.get("packet", PackedByteArray())
 	var decoded: Dictionary = ProtocolScript.decode_batch(packet)
 	_assert("encoded batch decodes", bool(decoded.get("ok", false)), str(decoded))
 
 	var batch: Dictionary = decoded.get("batch", {})
+	_assert(
+		"decoded delta contract declares Godot client ownership",
+		batch.get("authority_model", "") == "client_owned",
+		str(batch)
+	)
 	_assert("asset identity survives round-trip", batch.get("asset_id", "") == ASSET_ID, str(batch))
 	_assert("base revision survives round-trip", int(batch.get("base_revision", -1)) == 7, str(batch))
 	_assert("next revision survives round-trip", int(batch.get("revision", -1)) == 8, str(batch))

@@ -5,6 +5,20 @@
 
 ---
 
+## Unreleased
+
+### Added
+- Add defensive Godot-owned splat checkpoints plus atomic rollback and packet
+  replay. A corrupt or discontinuous replay restores the complete prior client
+  state instead of publishing a partial revision chain.
+
+### Changed
+- Declare the mutable Delta-Splat protocol as `client_owned`. Immutable registry
+  metadata can still be server-attested, but rendering, editing, checkpoints,
+  renderer payloads, and GPU residency remain inside the Godot player client.
+
+---
+
 ## 🩹 v0.3.1 — Release pipeline and client splat stability
 
 ### Added

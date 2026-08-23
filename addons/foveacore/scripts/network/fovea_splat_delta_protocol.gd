@@ -1,7 +1,7 @@
 extends RefCounted
 class_name FoveaSplatDeltaProtocol
 
-## Versioned, compressed wire contract for authoritative sparse splat deltas.
+## Versioned, compressed wire contract for client-owned sparse splat deltas.
 ##
 ## One immutable asset SHA-256 is stored per batch. Individual splats are
 ## addressed collision-free by `(asset_id, splat_index)` and encoded as fixed
@@ -14,6 +14,7 @@ const FoveaDeltaDataScript := preload(
 const OUTER_MAGIC: String = "FVZ1"
 const INNER_MAGIC: String = "FVND"
 const PROTOCOL_VERSION: int = 1
+const AUTHORITY_MODEL: String = "client_owned"
 const OUTER_HEADER_SIZE: int = 8
 const RAW_HEADER_SIZE: int = 64
 const RECORD_SIZE: int = 28
@@ -42,7 +43,7 @@ static func make_splat_id(asset_id: String, splat_index: int, splat_count: int) 
 	}
 
 
-## Encodes a validated authoritative revision transition into a ZSTD packet.
+## Encodes a validated client revision transition into a ZSTD packet.
 static func encode_batch(
 	asset_id: String,
 	splat_count: int,
@@ -178,7 +179,7 @@ static func decode_batch(packet: PackedByteArray) -> Dictionary:
 		"error": "",
 		"batch": {
 			"protocol_version": PROTOCOL_VERSION,
-			"authority_model": "server_authoritative",
+			"authority_model": AUTHORITY_MODEL,
 			"asset_id": asset_id,
 			"splat_count": splat_count,
 			"base_revision": base_revision,

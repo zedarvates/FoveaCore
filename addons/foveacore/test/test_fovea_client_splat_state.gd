@@ -53,6 +53,7 @@ func _init() -> void:
 		first_delta.get("splat_id", "") == "%s/2" % ASSET_ID,
 		str(first_delta)
 	)
+	var checkpoint_at_one: Dictionary = state.export_sparse_snapshot().get("snapshot", {})
 
 	var second_packet: PackedByteArray = _encode_packet(
 		ASSET_ID,
@@ -67,6 +68,82 @@ func _init() -> void:
 	_assert("partial update adds the normal", merged_delta.has("normal"), str(merged_delta))
 	_assert("partial update preserves position", merged_delta.has("position"), str(merged_delta))
 	_assert("partial update preserves color", merged_delta.has("color"), str(merged_delta))
+
+	var restore_result: Dictionary = {}
+	var has_restore_checkpoint: bool = state.has_method("restore_checkpoint")
+	if has_restore_checkpoint:
+		restore_result = state.call("restore_checkpoint", checkpoint_at_one)
+	_assert(
+		"client checkpoint restores revision one",
+		has_restore_checkpoint and bool(restore_result.get("ok", false)) and state.revision == 1,
+		str(restore_result)
+	)
+	var restored_delta: Dictionary = state.get_splat_delta(2)
+	_assert("restored checkpoint preserves position", restored_delta.has("position"), str(restored_delta))
+	_assert("restored checkpoint preserves color", restored_delta.has("color"), str(restored_delta))
+	_assert("restored checkpoint removes later normal", not restored_delta.has("normal"), str(restored_delta))
+
+	var replay_packets_result: Dictionary = {}
+	var has_atomic_replay: bool = state.has_method("replay_packets_atomically")
+	if has_atomic_replay:
+		replay_packets_result = state.call("replay_packets_atomically", [second_packet])
+	_assert(
+		"client replays the next packet from its checkpoint",
+		has_atomic_replay and bool(replay_packets_result.get("ok", false)) and state.revision == 2,
+		str(replay_packets_result)
+	)
+	_assert(
+		"checkpoint replay rebuilds the merged delta",
+		state.get_splat_delta(2) == merged_delta,
+		str(state.get_splat_delta(2))
+	)
+
+	var third_packet: PackedByteArray = _encode_packet(
+		ASSET_ID,
+		10,
+		2,
+		3,
+		[{"index": 4, "position": Vector3(1.0, 2.0, 3.0)}]
+	)
+	var corrupt_replay_packet: PackedByteArray = second_packet.duplicate()
+	corrupt_replay_packet[0] = corrupt_replay_packet[0] ^ 0xFF
+	var before_failed_replay: Dictionary = state.export_sparse_snapshot().get("snapshot", {})
+	var failed_replay_result: Dictionary = {}
+	if has_atomic_replay:
+		failed_replay_result = state.call(
+			"replay_packets_atomically",
+			[third_packet, corrupt_replay_packet]
+		)
+	_assert(
+		"corrupt replay batch is rejected",
+		has_atomic_replay and not bool(failed_replay_result.get("ok", true)),
+		str(failed_replay_result)
+	)
+	_assert(
+		"failed replay leaves the complete client checkpoint unchanged",
+		state.export_sparse_snapshot().get("snapshot", {}) == before_failed_replay,
+		str(state.export_sparse_snapshot())
+	)
+
+	var before_truncated_restore: Dictionary = state.export_sparse_snapshot().get("snapshot", {})
+	var truncated_checkpoint: Dictionary = {
+		"asset_id": ASSET_ID,
+		"splat_count": 10,
+		"revision": 1,
+	}
+	var truncated_restore_result: Dictionary = state.restore_checkpoint(truncated_checkpoint)
+	_assert(
+		"checkpoint missing sparse fields is rejected",
+		not bool(truncated_restore_result.get("ok", true)),
+		str(truncated_restore_result)
+	)
+	_assert(
+		"truncated checkpoint cannot erase live client deltas",
+		state.export_sparse_snapshot().get("snapshot", {}) == before_truncated_restore,
+		str(state.export_sparse_snapshot())
+	)
+	if state.export_sparse_snapshot().get("snapshot", {}) != before_truncated_restore:
+		state.restore_checkpoint(before_truncated_restore)
 
 	var before_replay: Dictionary = merged_delta.duplicate(true)
 	var replay_result: Dictionary = state.apply_packet(first_packet)

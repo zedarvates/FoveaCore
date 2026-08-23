@@ -28,6 +28,11 @@ distribution layer must additionally sign the registry or deliver it through
 an authenticated server channel. Client-provided registry metadata must never
 be trusted as an authorization decision.
 
+The registry authority applies only to the immutable catalog record. Once an
+asset is verified and loaded, `FoveaClientSplatState` owns its mutable sparse
+deltas, checkpoints, rollback, replay, renderer payload, and GPU residency in
+the Godot player client.
+
 ## Godot example
 
 ```gdscript
@@ -99,7 +104,7 @@ and `admin`. Unknown values fail closed.
 
 - Registry signatures and key rotation.
 - Zig2 storage, transport, interest management, and delta synchronization.
-- Per-splat network IDs, deterministic sculpting, rollback, and reconciliation.
+- Cross-client checkpoint exchange and deterministic conflict reconciliation.
 - GPU residency budgets and asynchronous render queues.
 - GPU, OpenXR headset, latency, packet-loss, or MMO-scale certification.
 

@@ -20,7 +20,9 @@ experimental HLOD, tile rasterizer, or multiplayer synchronization systems.
 - Restrict physics profiles to `none`, `static`, `kinematic`, `dynamic`, or
   `soft_body`.
 - Restrict permissions to `view`, `stream`, `interact`, `modify`, or `admin`.
-- Mark assets as server-authoritative by default.
+- Mark immutable registry records as server-authoritative by default. This
+  governs catalog metadata and download integrity, not mutable splat state,
+  which remains owned by the Godot player client.
 - Reject duplicate content-addressed IDs in one registry.
 - Save and load the registry as JSON, failing closed on malformed content.
 - Verify a downloaded file against both the recorded byte size and SHA-256.
@@ -29,5 +31,5 @@ experimental HLOD, tile rasterizer, or multiplayer synchronization systems.
 
 - Cryptographic signatures and key management.
 - Server-side reconstruction or Zig2 transport implementation.
-- Per-splat network IDs and rollback/reconciliation.
+- Cross-client checkpoint exchange and conflict reconciliation.
 - GPU, VR headset, latency, or packet-loss certification.
