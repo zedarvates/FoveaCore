@@ -11,6 +11,9 @@
 - Add defensive Godot-owned splat checkpoints plus atomic rollback and packet
   replay. A corrupt or discontinuous replay restores the complete prior client
   state instead of publishing a partial revision chain.
+- Enforce `FoveaStreamingManager.max_uploads_per_frame` as a deterministic
+  splat-count admission budget after distance/gaze prioritization. Chunks that
+  do not fit are deferred instead of all starting in the same frame.
 
 ### Changed
 - Declare the mutable Delta-Splat protocol as `client_owned`. Immutable registry

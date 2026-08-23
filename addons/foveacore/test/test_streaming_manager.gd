@@ -17,6 +17,7 @@ func _init() -> void:
 func _run_tests() -> void:
 	_test_morton_encoding()
 	_test_lru_eviction()
+	_test_frame_upload_budget()
 	_finish()
 
 func _assert(name: String, condition: bool) -> void:
@@ -101,6 +102,34 @@ func _test_lru_eviction() -> void:
 	_assert("Chunk 0 bytes cleared", c0.raw_bytes.is_empty())
 	_assert("Chunk 1 is still loaded", c1.is_loaded)
 	_assert("Chunk 2 is still loaded", c2.is_loaded)
+
+func _test_frame_upload_budget() -> void:
+	print("\n--- Test 3: Per-frame upload admission ---")
+	var manager := StreamingManagerClass.new()
+	manager.max_uploads_per_frame = 10
+	var candidates: Array[Dictionary] = [
+		{"key": "near", "priority": 1.0, "splat_count": 7},
+		{"key": "middle", "priority": 2.0, "splat_count": 4},
+		{"key": "far-small", "priority": 3.0, "splat_count": 3},
+	]
+	var selected: Array[Dictionary] = []
+	var has_selector: bool = manager.has_method("select_load_candidates_for_frame")
+	if has_selector:
+		selected = manager.call("select_load_candidates_for_frame", candidates)
+	var selected_keys: Array[String] = []
+	var selected_splats: int = 0
+	for item: Dictionary in selected:
+		selected_keys.append(str(item.get("key", "")))
+		selected_splats += int(item.get("splat_count", 0))
+	_assert(
+		"Streaming manager exposes frame-budgeted candidate selection",
+		has_selector
+	)
+	_assert(
+		"Closest candidate is admitted before lower-priority chunks",
+		selected_keys == ["near", "far-small"]
+	)
+	_assert("Selected uploads respect the 10-splat frame budget", selected_splats == 10)
 
 func _finish() -> void:
 	print("\n======================================================================")

@@ -20,6 +20,7 @@ This page is the release-facing status record for the current repository. A feat
 | Transparency framebuffer harness | Experimental | Godot 4.7.dev5/D3D12 measured one and two overlapping 50% red layers at 0.498 and 0.749 versus 0.500 and 0.750 expectations; the positive gate exited cleanly and the forced negative control exited non-zero. Production splat-shader and layout parity remain open. |
 | OpenXR, eye tracking, and foveation | Experimental | Requires supported runtime and hardware smoke tests. |
 | Multiplayer VR synchronization | Experimental | A loopback two-process ENet test validates pose convergence, authority-mediated brush replication, and disconnect cleanup. This does not prove a two-headset OpenXR session. |
+| Spatial chunk streaming | Experimental | Morton chunks are prioritized by camera distance and gaze, admitted under a deterministic splat-count budget per update, loaded asynchronously into bounded CPU RAM, and evicted by LRU. This is not direct SSD-to-VRAM transfer or a 90 FPS headset proof. |
 | ComfyUI image-to-splat bridge | Experimental | Configurable API workflows use upload, prompt, history, and view endpoints; supported splat artifacts are validated before being written and assigned to `FoveaSplat3D`. A loopback server proves the HTTP contract, not a real third-party 3DGS/Blender installation. |
 | Typed animation, editing, and mobile optimizer subsystems | Experimental | API and runtime behavior require Godot validation before release. |
 | DVLT bridge | Dry-run only | Inference calls are intentionally not wired. |

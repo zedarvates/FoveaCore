@@ -237,7 +237,8 @@ func update_streaming(camera: Camera3D, chunk_load_radius: float = 20.0) -> void
 						"asset": asset,
 						"chunk": chunk,
 						"key": key,
-						"priority": priority
+						"priority": priority,
+						"splat_count": _splat_count_in_slices(slices),
 					})
 				elif chunk.is_loaded:
 					# Mettre à jour LRU si déjà chargé
@@ -249,13 +250,44 @@ func update_streaming(camera: Camera3D, chunk_load_radius: float = 20.0) -> void
 	_lock.unlock()
 
 	# Trier les chunks par priorité (tri ascendant : plus petit en premier)
-	chunks_to_load.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return a.priority < b.priority
-	)
-
-	# Lancer le chargement des chunks prioritaires
-	for item: Dictionary in chunks_to_load:
+	for item: Dictionary in select_load_candidates_for_frame(chunks_to_load):
 		_request_chunk_load(item.asset as StreamingAsset, item.chunk as FoveaSpatialChunk, item.key as String)
+
+## Selects chunk requests deterministically without exceeding the configured
+## per-frame splat upload budget. A candidate that does not fit is deferred so
+## a smaller later candidate can use the remaining capacity.
+func select_load_candidates_for_frame(candidates: Array[Dictionary]) -> Array[Dictionary]:
+	if max_uploads_per_frame <= 0:
+		return []
+	var ordered: Array[Dictionary] = candidates.duplicate()
+	ordered.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var priority_a: float = float(a.get("priority", INF))
+		var priority_b: float = float(b.get("priority", INF))
+		if not is_equal_approx(priority_a, priority_b):
+			return priority_a < priority_b
+		return str(a.get("key", "")) < str(b.get("key", ""))
+	)
+	var selected: Array[Dictionary] = []
+	var remaining_splats: int = max_uploads_per_frame
+	for candidate: Dictionary in ordered:
+		var candidate_splats: int = int(candidate.get("splat_count", 0))
+		if candidate_splats <= 0 or candidate_splats > remaining_splats:
+			continue
+		selected.append(candidate)
+		remaining_splats -= candidate_splats
+		if remaining_splats == 0:
+			break
+	return selected
+
+static func _splat_count_in_slices(slices: Array) -> int:
+	var splat_count: int = 0
+	for slice_value: Variant in slices:
+		if not slice_value is Dictionary:
+			continue
+		var byte_size: int = int((slice_value as Dictionary).get("size", 0))
+		if byte_size > 0:
+			splat_count += byte_size / 16
+	return splat_count
 
 # Lancer une tâche asynchrone pour charger un chunk
 func _request_chunk_load(asset: StreamingAsset, chunk: FoveaSpatialChunk, key: String) -> void:
