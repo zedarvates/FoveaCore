@@ -44,6 +44,7 @@ python experiments/neural_splat_compression/neural_residual_experiment.py `
 | 10 | `1d2b060` | discard | - | Wider latent7 decoder still failed scale |
 | 11 | `51c3ce4` | keep | 156,972 | Preserve palette; learn covariance only |
 | 12 | `3963ef9` | keep | 156,972 | Serialized artifact and measured CPU decode |
+| 13 | `82c40f3` | discard | - | Multi-asset storage regressed on 2 of 3 assets |
 
 ## Best result
 
@@ -68,13 +69,31 @@ The binary artifact is decoded without a live PyTorch model. Unit tests cover
 round-trip decoding, corrupt magic rejection, dimensions, storage accounting,
 feature selection, and repeated decode measurement.
 
+## Multi-asset validation
+
+The same covariance-only configuration was trained and measured on three
+redistributable 3DGS assets. Static sizes come from the canonical Godot
+`.fovea` writer; neural sizes include fixed data, preserved color data, and
+the serialized decoder artifact.
+
+| Asset | Splats | Static bytes | Neural bytes | Size change | Rotation | Scale RMSE | Decode median |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Reference fixture | 8,000 | 163,912 | 156,972 | -4.23% | 1.302 deg | 0.000893 | 3.776 ms |
+| Bonsai | 12,473 | 235,480 | 241,959 | +2.75% | 2.059 deg | 0.000096 | 11.632 ms |
+| Horse statue | 25,674 | 446,696 | 492,778 | +10.32% | 1.582 deg | 0.000100 | 18.084 ms |
+
+All three assets pass the learned rotation and scale gates. The storage metric
+fails on bonsai and horse because the neural latent grows per splat while the
+static covariance codebook remains bounded.
+
 ## Decision
 
-**Research result: keep. Production integration: not yet approved.**
+**Single-fixture result: keep as evidence. Compression scheme: reject for
+production.**
 
-The 4.23% storage reduction is measurable and substantially better than the
-joint latent experiments. It is still insufficient evidence for replacing the
-current `.fovea` covariance codebook because:
+The 4.23% reference reduction is real, but it does not generalize. The
+multi-asset worst case is a 10.32% storage regression, so the current design
+must not replace the existing `.fovea` covariance codebook. Additional limits:
 
 - the experiment uses one 8,000-splat fixture;
 - color quality is inherited from the preserved baseline palette rather than
@@ -88,8 +107,10 @@ current `.fovea` covariance codebook because:
 
 ## Next research gates
 
-1. Evaluate at least three representative assets and report worst-case quality.
+1. Explore an adaptive per-asset decision that retains the static codebook when
+   neural storage is not smaller.
 2. Compare against the existing covariance codebook at equal byte budgets.
-3. Implement a read-only Rust decoder benchmark before any runtime integration.
+3. Implement a read-only Rust decoder benchmark only after storage improves on
+   every representative asset.
 4. Measure end-to-end Godot load time, CPU memory, and frame impact.
-5. Version the artifact formally only if it remains beneficial across assets.
+5. Version the artifact formally only if it becomes beneficial across assets.
