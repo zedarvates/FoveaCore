@@ -116,12 +116,14 @@ def estimate_storage_bytes(
     latent_dim: int,
     hidden_dim: int,
     latent_bits: int,
+    output_dim: int = 9,
+    preserve_color_palette: bool = False,
 ) -> dict[str, int]:
     if latent_bits not in (8, 16):
         raise ValueError("latent_bits must be 8 or 16")
     fixed_bytes = 72 + splat_count * 12
+    preserved_color_bytes = splat_count + 256 * 12 if preserve_color_palette else 0
     latent_bytes = splat_count * latent_dim * (latent_bits // 8)
-    output_dim = 9
     weight_bytes = latent_dim * hidden_dim + hidden_dim * output_dim
     output_channels = hidden_dim + output_dim
     bias_bytes = output_channels * 2
@@ -130,9 +132,10 @@ def estimate_storage_bytes(
     decoder_bytes = weight_bytes + bias_bytes + scale_bytes + metadata_bytes
     return {
         "fixed_bytes": fixed_bytes,
+        "preserved_color_bytes": preserved_color_bytes,
         "latent_bytes": latent_bytes,
         "decoder_bytes": decoder_bytes,
-        "total_bytes": fixed_bytes + latent_bytes + decoder_bytes,
+        "total_bytes": fixed_bytes + preserved_color_bytes + latent_bytes + decoder_bytes,
     }
 
 
@@ -140,13 +143,31 @@ def meets_quality_gate(metrics: dict[str, float]) -> bool:
     return all(float(metrics[name]) <= limit for name, limit in QUALITY_LIMITS.items())
 
 
-def build_feature_weights(config: dict) -> np.ndarray:
-    return np.asarray(
+def build_feature_weights(config: dict, feature_mode: str = "joint") -> np.ndarray:
+    weights = (
         [float(config.get("scale_weight", 1.0))] * 3
         + [float(config.get("rotation_weight", 1.0))] * 3
-        + [float(config.get("color_weight", 1.0))] * 3,
-        dtype=np.float32,
     )
+    if feature_mode == "joint":
+        weights += [float(config.get("color_weight", 1.0))] * 3
+    elif feature_mode != "covariance_only":
+        raise ValueError(f"unsupported feature_mode: {feature_mode}")
+    return np.asarray(weights, dtype=np.float32)
+
+
+def build_features(data: dict[str, np.ndarray], feature_mode: str) -> np.ndarray:
+    covariance = np.concatenate(
+        [
+            np.log(np.maximum(data["scale"], 1e-12)),
+            quaternion_to_rotation_vector(data["rotation"]),
+        ],
+        axis=1,
+    )
+    if feature_mode == "covariance_only":
+        return covariance.astype(np.float32)
+    if feature_mode == "joint":
+        return np.concatenate([covariance, data["color"]], axis=1).astype(np.float32)
+    raise ValueError(f"unsupported feature_mode: {feature_mode}")
 
 
 class Autoencoder(nn.Module):
@@ -202,19 +223,26 @@ def _quantized_decode(
     return hidden @ physical_weight.T + physical_bias
 
 
-def _quality_metrics(data: dict[str, np.ndarray], decoded_features: np.ndarray) -> dict[str, float]:
+def quality_metrics(
+    data: dict[str, np.ndarray],
+    decoded_features: np.ndarray,
+    preserve_color_palette: bool = False,
+) -> dict[str, float]:
     decoded_scale = np.exp(decoded_features[:, :3])
     decoded_rotation = rotation_vector_to_quaternion(decoded_features[:, 3:6])
-    decoded_color = np.clip(decoded_features[:, 6:9], 0.0, 1.0)
     rotation_dot = np.clip(
         np.abs(np.sum(data["rotation"] * decoded_rotation, axis=1)),
         0.0,
         1.0,
     )
+    color_rmse = QUALITY_LIMITS["color_rmse"]
+    if not preserve_color_palette:
+        decoded_color = np.clip(decoded_features[:, 6:9], 0.0, 1.0)
+        color_rmse = float(np.sqrt(np.mean(np.square(data["color"] - decoded_color))))
     return {
         "rotation_mean_degrees": float(np.mean(np.degrees(2.0 * np.arccos(rotation_dot)))),
         "scale_rmse": float(np.sqrt(np.mean(np.square(data["scale"] - decoded_scale)))),
-        "color_rmse": float(np.sqrt(np.mean(np.square(data["color"] - decoded_color)))),
+        "color_rmse": color_rmse,
     }
 
 
@@ -226,14 +254,8 @@ def run_experiment(config: dict, fixture: Path) -> dict:
     torch.set_num_threads(max(1, int(config.get("threads", 4))))
 
     data = load_3dgs_ply(fixture)
-    features = np.concatenate(
-        [
-            np.log(np.maximum(data["scale"], 1e-12)),
-            quaternion_to_rotation_vector(data["rotation"]),
-            data["color"],
-        ],
-        axis=1,
-    ).astype(np.float32)
+    feature_mode = str(config.get("feature_mode", "joint"))
+    features = build_features(data, feature_mode)
     feature_mean = features.mean(axis=0)
     feature_std = np.maximum(features.std(axis=0), 1e-6)
     standardized = torch.from_numpy((features - feature_mean) / feature_std)
@@ -244,7 +266,7 @@ def run_experiment(config: dict, fixture: Path) -> dict:
     model = Autoencoder(features.shape[1], hidden_dim, latent_dim)
     optimizer = torch.optim.Adam(model.parameters(), lr=float(config.get("learning_rate", 0.01)))
     epochs = int(config.get("epochs", 300))
-    feature_weights = torch.from_numpy(build_feature_weights(config))
+    feature_weights = torch.from_numpy(build_feature_weights(config, feature_mode))
     for _ in range(epochs):
         optimizer.zero_grad(set_to_none=True)
         reconstructed, latent = model(standardized)
@@ -257,11 +279,20 @@ def run_experiment(config: dict, fixture: Path) -> dict:
         optimizer.step()
 
     decoded = _quantized_decode(model, standardized, feature_mean, feature_std, latent_bits)
-    quality = _quality_metrics(data, decoded)
-    storage = estimate_storage_bytes(len(features), latent_dim, hidden_dim, latent_bits)
+    preserve_color_palette = feature_mode == "covariance_only"
+    quality = quality_metrics(data, decoded, preserve_color_palette)
+    storage = estimate_storage_bytes(
+        len(features),
+        latent_dim,
+        hidden_dim,
+        latent_bits,
+        output_dim=features.shape[1],
+        preserve_color_palette=preserve_color_palette,
+    )
     passed = meets_quality_gate(quality)
     return {
         "name": str(config.get("name", "unnamed")),
+        "feature_mode": feature_mode,
         "quality_pass": passed,
         "metric_bytes": storage["total_bytes"] if passed else 1_000_000_000,
         **storage,

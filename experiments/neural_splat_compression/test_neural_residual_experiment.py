@@ -100,6 +100,49 @@ end_header
         weights = experiment.build_feature_weights({"rotation_weight": 4.0})
         np.testing.assert_allclose(weights, [1.0, 1.0, 1.0, 4.0, 4.0, 4.0, 1.0, 1.0, 1.0])
 
+    def test_covariance_only_storage_counts_preserved_palette(self) -> None:
+        estimate = experiment.estimate_storage_bytes(
+            splat_count=8000,
+            latent_dim=6,
+            hidden_dim=96,
+            latent_bits=8,
+            output_dim=6,
+            preserve_color_palette=True,
+        )
+        self.assertEqual(estimate["fixed_bytes"], 96072)
+        self.assertEqual(estimate["preserved_color_bytes"], 11072)
+        self.assertEqual(estimate["latent_bytes"], 48000)
+        self.assertEqual(estimate["decoder_bytes"], 1828)
+        self.assertEqual(estimate["total_bytes"], 156972)
+
+    def test_covariance_only_features_exclude_rgb(self) -> None:
+        data = {
+            "scale": np.ones((2, 3), dtype=np.float32),
+            "rotation": np.asarray(
+                [[1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]],
+                dtype=np.float32,
+            ),
+            "color": np.asarray([[1.0, 0.2, 0.3], [0.1, 0.8, 0.4]], dtype=np.float32),
+        }
+        features = experiment.build_features(data, "covariance_only")
+        self.assertEqual(features.shape, (2, 6))
+        np.testing.assert_allclose(features, np.zeros((2, 6)), atol=1e-7)
+
+    def test_covariance_only_metrics_preserve_measured_palette_error(self) -> None:
+        data = {
+            "scale": np.ones((1, 3), dtype=np.float32),
+            "rotation": np.asarray([[1.0, 0.0, 0.0, 0.0]], dtype=np.float32),
+            "color": np.asarray([[0.9, 0.1, 0.5]], dtype=np.float32),
+        }
+        decoded = np.zeros((1, 6), dtype=np.float32)
+        metrics = experiment.quality_metrics(data, decoded, preserve_color_palette=True)
+        self.assertAlmostEqual(metrics["rotation_mean_degrees"], 0.0)
+        self.assertAlmostEqual(metrics["scale_rmse"], 0.0)
+        self.assertAlmostEqual(
+            metrics["color_rmse"],
+            experiment.QUALITY_LIMITS["color_rmse"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
