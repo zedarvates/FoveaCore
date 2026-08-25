@@ -96,6 +96,10 @@ end_header
         failing = dict(passing, rotation_mean_degrees=10.5)
         self.assertFalse(experiment.meets_quality_gate(failing))
 
+    def test_feature_weights_target_rotation_without_reweighting_other_groups(self) -> None:
+        weights = experiment.build_feature_weights({"rotation_weight": 4.0})
+        np.testing.assert_allclose(weights, [1.0, 1.0, 1.0, 4.0, 4.0, 4.0, 1.0, 1.0, 1.0])
+
 
 if __name__ == "__main__":
     unittest.main()

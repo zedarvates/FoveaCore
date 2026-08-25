@@ -140,6 +140,15 @@ def meets_quality_gate(metrics: dict[str, float]) -> bool:
     return all(float(metrics[name]) <= limit for name, limit in QUALITY_LIMITS.items())
 
 
+def build_feature_weights(config: dict) -> np.ndarray:
+    return np.asarray(
+        [float(config.get("scale_weight", 1.0))] * 3
+        + [float(config.get("rotation_weight", 1.0))] * 3
+        + [float(config.get("color_weight", 1.0))] * 3,
+        dtype=np.float32,
+    )
+
+
 class Autoencoder(nn.Module):
     def __init__(self, input_dim: int, hidden_dim: int, latent_dim: int) -> None:
         super().__init__()
@@ -235,10 +244,13 @@ def run_experiment(config: dict, fixture: Path) -> dict:
     model = Autoencoder(features.shape[1], hidden_dim, latent_dim)
     optimizer = torch.optim.Adam(model.parameters(), lr=float(config.get("learning_rate", 0.01)))
     epochs = int(config.get("epochs", 300))
+    feature_weights = torch.from_numpy(build_feature_weights(config))
     for _ in range(epochs):
         optimizer.zero_grad(set_to_none=True)
         reconstructed, latent = model(standardized)
-        reconstruction_loss = torch.mean(torch.square(reconstructed - standardized))
+        reconstruction_loss = torch.mean(
+            torch.square(reconstructed - standardized) * feature_weights
+        )
         latent_penalty = float(config.get("latent_penalty", 0.0001)) * torch.mean(torch.square(latent))
         loss = reconstruction_loss + latent_penalty
         loss.backward()
