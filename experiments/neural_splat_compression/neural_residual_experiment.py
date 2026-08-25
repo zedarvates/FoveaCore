@@ -2,6 +2,8 @@ import argparse
 import json
 import math
 import random
+import struct
+import time
 from pathlib import Path
 
 import numpy as np
@@ -14,6 +16,11 @@ QUALITY_LIMITS = {
     "scale_rmse": 0.0294672913316346,
     "color_rmse": 0.0378711942775849,
 }
+
+ARTIFACT_MAGIC = b"FVNC"
+ARTIFACT_VERSION = 1
+ARTIFACT_ACTIVATION_TANH = 1
+ARTIFACT_HEADER = struct.Struct("<4sHBBIHHHH11I")
 
 
 def load_3dgs_ply(path: Path) -> dict[str, np.ndarray]:
@@ -190,10 +197,204 @@ class Autoencoder(nn.Module):
         return self.decode(latent), latent
 
 
-def _quantize_per_row(weights: np.ndarray) -> np.ndarray:
+def _quantize_per_row_codes(weights: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     maximum = np.maximum(np.max(np.abs(weights), axis=1, keepdims=True), 1e-12)
     scale = maximum / 127.0
-    return np.round(weights / scale).clip(-127, 127).astype(np.int8).astype(np.float32) * scale
+    codes = np.round(weights / scale).clip(-127, 127).astype(np.int8)
+    return codes, scale[:, 0].astype(np.float32)
+
+
+def _quantize_per_row(weights: np.ndarray) -> np.ndarray:
+    codes, scales = _quantize_per_row_codes(weights)
+    return codes.astype(np.float32) * scales[:, None]
+
+
+def serialize_quantized_artifact(
+    *,
+    latent_codes: np.ndarray,
+    first_weight_codes: np.ndarray,
+    first_weight_scales: np.ndarray,
+    first_bias: np.ndarray,
+    second_weight_codes: np.ndarray,
+    second_weight_scales: np.ndarray,
+    second_bias: np.ndarray,
+    latent_bits: int,
+) -> bytes:
+    latent_dtype = np.int8 if latent_bits == 8 else np.int16
+    if latent_bits not in (8, 16):
+        raise ValueError("latent_bits must be 8 or 16")
+    latent_codes = np.asarray(latent_codes, dtype=latent_dtype)
+    first_weight_codes = np.asarray(first_weight_codes, dtype=np.int8)
+    second_weight_codes = np.asarray(second_weight_codes, dtype=np.int8)
+    if latent_codes.ndim != 2 or first_weight_codes.ndim != 2 or second_weight_codes.ndim != 2:
+        raise ValueError("latent and weight arrays must be two-dimensional")
+    splat_count, latent_dim = latent_codes.shape
+    hidden_dim, first_input_dim = first_weight_codes.shape
+    output_dim, second_input_dim = second_weight_codes.shape
+    if first_input_dim != latent_dim or second_input_dim != hidden_dim:
+        raise ValueError("decoder matrix dimensions do not match")
+    first_weight_scales = np.asarray(first_weight_scales, dtype="<f4")
+    first_bias = np.asarray(first_bias, dtype="<f2")
+    second_weight_scales = np.asarray(second_weight_scales, dtype="<f4")
+    second_bias = np.asarray(second_bias, dtype="<f2")
+    if first_weight_scales.shape != (hidden_dim,) or first_bias.shape != (hidden_dim,):
+        raise ValueError("first-layer scales or bias do not match hidden_dim")
+    if second_weight_scales.shape != (output_dim,) or second_bias.shape != (output_dim,):
+        raise ValueError("second-layer scales or bias do not match output_dim")
+
+    latent_payload = latent_codes.astype("i1" if latent_bits == 8 else "<i2").tobytes()
+    first_weight_payload = first_weight_codes.tobytes()
+    first_scale_payload = first_weight_scales.tobytes()
+    first_bias_payload = first_bias.tobytes()
+    second_weight_payload = second_weight_codes.tobytes()
+    second_scale_payload = second_weight_scales.tobytes()
+    second_bias_payload = second_bias.tobytes()
+    payloads = [
+        latent_payload,
+        first_weight_payload,
+        first_scale_payload,
+        first_bias_payload,
+        second_weight_payload,
+        second_scale_payload,
+        second_bias_payload,
+    ]
+    offsets: list[int] = []
+    cursor = ARTIFACT_HEADER.size
+    for payload in payloads:
+        offsets.append(cursor)
+        cursor += len(payload)
+    header = ARTIFACT_HEADER.pack(
+        ARTIFACT_MAGIC,
+        ARTIFACT_VERSION,
+        latent_bits,
+        ARTIFACT_ACTIVATION_TANH,
+        splat_count,
+        latent_dim,
+        hidden_dim,
+        output_dim,
+        0,
+        offsets[0],
+        len(latent_payload),
+        offsets[1],
+        len(first_weight_payload),
+        offsets[2],
+        offsets[3],
+        offsets[4],
+        len(second_weight_payload),
+        offsets[5],
+        offsets[6],
+        cursor,
+    )
+    return header + b"".join(payloads)
+
+
+def decode_quantized_artifact(artifact: bytes) -> np.ndarray:
+    if len(artifact) < ARTIFACT_HEADER.size:
+        raise ValueError("artifact is shorter than its header")
+    values = ARTIFACT_HEADER.unpack_from(artifact)
+    (
+        magic,
+        version,
+        latent_bits,
+        activation,
+        splat_count,
+        latent_dim,
+        hidden_dim,
+        output_dim,
+        reserved,
+        latent_offset,
+        latent_size,
+        first_weight_offset,
+        first_weight_size,
+        first_scale_offset,
+        first_bias_offset,
+        second_weight_offset,
+        second_weight_size,
+        second_scale_offset,
+        second_bias_offset,
+        total_size,
+    ) = values
+    if magic != ARTIFACT_MAGIC:
+        raise ValueError("invalid artifact magic")
+    if version != ARTIFACT_VERSION or activation != ARTIFACT_ACTIVATION_TANH or reserved != 0:
+        raise ValueError("unsupported artifact header")
+    if latent_bits not in (8, 16) or min(splat_count, latent_dim, hidden_dim, output_dim) <= 0:
+        raise ValueError("invalid artifact dimensions")
+    latent_item_bytes = latent_bits // 8
+    expected_sizes = [
+        splat_count * latent_dim * latent_item_bytes,
+        hidden_dim * latent_dim,
+        hidden_dim * 4,
+        hidden_dim * 2,
+        output_dim * hidden_dim,
+        output_dim * 4,
+        output_dim * 2,
+    ]
+    expected_offsets: list[int] = []
+    cursor = ARTIFACT_HEADER.size
+    for size in expected_sizes:
+        expected_offsets.append(cursor)
+        cursor += size
+    actual_offsets = [
+        latent_offset,
+        first_weight_offset,
+        first_scale_offset,
+        first_bias_offset,
+        second_weight_offset,
+        second_scale_offset,
+        second_bias_offset,
+    ]
+    if actual_offsets != expected_offsets or latent_size != expected_sizes[0]:
+        raise ValueError("artifact section layout is invalid")
+    if first_weight_size != expected_sizes[1] or second_weight_size != expected_sizes[4]:
+        raise ValueError("artifact weight sizes are invalid")
+    if total_size != cursor or len(artifact) != total_size:
+        raise ValueError("artifact total size is invalid")
+
+    latent_dtype = "i1" if latent_bits == 8 else "<i2"
+    latent = np.frombuffer(
+        artifact, dtype=latent_dtype, count=splat_count * latent_dim, offset=latent_offset
+    ).reshape(splat_count, latent_dim).astype(np.float32)
+    first_codes = np.frombuffer(
+        artifact, dtype="i1", count=hidden_dim * latent_dim, offset=first_weight_offset
+    ).reshape(hidden_dim, latent_dim).astype(np.float32)
+    first_scales = np.frombuffer(
+        artifact, dtype="<f4", count=hidden_dim, offset=first_scale_offset
+    )
+    first_bias = np.frombuffer(
+        artifact, dtype="<f2", count=hidden_dim, offset=first_bias_offset
+    ).astype(np.float32)
+    hidden = np.tanh(latent @ (first_codes * first_scales[:, None]).T + first_bias)
+    second_codes = np.frombuffer(
+        artifact, dtype="i1", count=output_dim * hidden_dim, offset=second_weight_offset
+    ).reshape(output_dim, hidden_dim).astype(np.float32)
+    second_scales = np.frombuffer(
+        artifact, dtype="<f4", count=output_dim, offset=second_scale_offset
+    )
+    second_bias = np.frombuffer(
+        artifact, dtype="<f2", count=output_dim, offset=second_bias_offset
+    ).astype(np.float32)
+    return hidden @ (second_codes * second_scales[:, None]).T + second_bias
+
+
+def benchmark_decode(artifact: bytes, *, warmup: int, repeats: int) -> dict[str, float | int]:
+    if warmup < 0 or repeats <= 0:
+        raise ValueError("warmup must be non-negative and repeats must be positive")
+    decoded = np.empty((0, 0), dtype=np.float32)
+    for _ in range(warmup):
+        decoded = decode_quantized_artifact(artifact)
+    timings_ms: list[float] = []
+    for _ in range(repeats):
+        start_ns = time.perf_counter_ns()
+        decoded = decode_quantized_artifact(artifact)
+        timings_ms.append((time.perf_counter_ns() - start_ns) / 1_000_000.0)
+    return {
+        "decode_repeats": repeats,
+        "decoded_splats": int(decoded.shape[0]),
+        "decoded_dimensions": int(decoded.shape[1]),
+        "decode_median_ms": float(np.median(timings_ms)),
+        "decode_p95_ms": float(np.percentile(timings_ms, 95)),
+    }
 
 
 def _quantized_decode(
@@ -202,25 +403,35 @@ def _quantized_decode(
     feature_mean: np.ndarray,
     feature_std: np.ndarray,
     latent_bits: int,
-) -> np.ndarray:
+) -> tuple[np.ndarray, bytes]:
     with torch.no_grad():
         latent = model.encoder(standardized).cpu().numpy()
     maximum_code = 127 if latent_bits == 8 else 32767
     latent_scale = np.maximum(np.max(np.abs(latent), axis=0), 1e-12) / maximum_code
-    latent_codes = np.round(latent / latent_scale).clip(-maximum_code, maximum_code)
+    latent_dtype = np.int8 if latent_bits == 8 else np.int16
+    latent_codes = np.round(latent / latent_scale).clip(-maximum_code, maximum_code).astype(latent_dtype)
 
     first_weight = model.decoder_first.weight.detach().cpu().numpy() * latent_scale[None, :]
-    first_weight = _quantize_per_row(first_weight)
-    first_bias = model.decoder_first.bias.detach().cpu().numpy().astype(np.float16).astype(np.float32)
-    hidden = np.tanh(latent_codes @ first_weight.T + first_bias)
+    first_weight_codes, first_weight_scales = _quantize_per_row_codes(first_weight)
+    first_bias = model.decoder_first.bias.detach().cpu().numpy().astype(np.float16)
 
     second_weight = model.decoder_second.weight.detach().cpu().numpy()
     second_bias = model.decoder_second.bias.detach().cpu().numpy()
     physical_weight = feature_std[:, None] * second_weight
     physical_bias = feature_std * second_bias + feature_mean
-    physical_weight = _quantize_per_row(physical_weight)
-    physical_bias = physical_bias.astype(np.float16).astype(np.float32)
-    return hidden @ physical_weight.T + physical_bias
+    second_weight_codes, second_weight_scales = _quantize_per_row_codes(physical_weight)
+    physical_bias = physical_bias.astype(np.float16)
+    artifact = serialize_quantized_artifact(
+        latent_codes=latent_codes,
+        first_weight_codes=first_weight_codes,
+        first_weight_scales=first_weight_scales,
+        first_bias=first_bias,
+        second_weight_codes=second_weight_codes,
+        second_weight_scales=second_weight_scales,
+        second_bias=physical_bias,
+        latent_bits=latent_bits,
+    )
+    return decode_quantized_artifact(artifact), artifact
 
 
 def quality_metrics(
@@ -246,7 +457,7 @@ def quality_metrics(
     }
 
 
-def run_experiment(config: dict, fixture: Path) -> dict:
+def run_experiment(config: dict, fixture: Path, artifact_out: Path | None = None) -> dict:
     seed = int(config.get("seed", 20260825))
     random.seed(seed)
     np.random.seed(seed)
@@ -278,7 +489,9 @@ def run_experiment(config: dict, fixture: Path) -> dict:
         loss.backward()
         optimizer.step()
 
-    decoded = _quantized_decode(model, standardized, feature_mean, feature_std, latent_bits)
+    decoded, artifact = _quantized_decode(
+        model, standardized, feature_mean, feature_std, latent_bits
+    )
     preserve_color_palette = feature_mode == "covariance_only"
     quality = quality_metrics(data, decoded, preserve_color_palette)
     storage = estimate_storage_bytes(
@@ -289,14 +502,26 @@ def run_experiment(config: dict, fixture: Path) -> dict:
         output_dim=features.shape[1],
         preserve_color_palette=preserve_color_palette,
     )
+    if len(artifact) != storage["latent_bytes"] + storage["decoder_bytes"]:
+        raise RuntimeError("serialized neural artifact size does not match the estimator")
+    if artifact_out is not None:
+        artifact_out.parent.mkdir(parents=True, exist_ok=True)
+        artifact_out.write_bytes(artifact)
+    decode_performance = benchmark_decode(
+        artifact,
+        warmup=int(config.get("decode_warmup", 5)),
+        repeats=int(config.get("decode_repeats", 50)),
+    )
     passed = meets_quality_gate(quality)
     return {
         "name": str(config.get("name", "unnamed")),
         "feature_mode": feature_mode,
+        "artifact_bytes": len(artifact),
         "quality_pass": passed,
         "metric_bytes": storage["total_bytes"] if passed else 1_000_000_000,
         **storage,
         **quality,
+        **decode_performance,
         "epochs": epochs,
         "seed": seed,
     }
@@ -306,9 +531,10 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--fixture", type=Path, required=True)
+    parser.add_argument("--artifact-out", type=Path)
     args = parser.parse_args()
     config = json.loads(args.config.read_text(encoding="utf-8"))
-    result = run_experiment(config, args.fixture)
+    result = run_experiment(config, args.fixture, args.artifact_out)
     print(f"NEURAL_COMPRESSION_RESULT={json.dumps(result, sort_keys=True)}")
     return 0
 

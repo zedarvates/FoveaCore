@@ -143,6 +143,56 @@ end_header
             experiment.QUALITY_LIMITS["color_rmse"],
         )
 
+    def test_binary_artifact_round_trip_decodes_without_model(self) -> None:
+        artifact = experiment.serialize_quantized_artifact(
+            latent_codes=np.asarray([[1], [2]], dtype=np.int8),
+            first_weight_codes=np.asarray([[2]], dtype=np.int8),
+            first_weight_scales=np.asarray([0.5], dtype=np.float32),
+            first_bias=np.asarray([0.0], dtype=np.float16),
+            second_weight_codes=np.asarray([[4]], dtype=np.int8),
+            second_weight_scales=np.asarray([0.25], dtype=np.float32),
+            second_bias=np.asarray([0.0], dtype=np.float16),
+            latent_bits=8,
+        )
+        self.assertEqual(len(artifact), 80)
+        decoded = experiment.decode_quantized_artifact(artifact)
+        np.testing.assert_allclose(decoded[:, 0], np.tanh([1.0, 2.0]), atol=1e-6)
+
+    def test_binary_artifact_rejects_corrupt_magic(self) -> None:
+        artifact = bytearray(
+            experiment.serialize_quantized_artifact(
+                latent_codes=np.asarray([[0]], dtype=np.int8),
+                first_weight_codes=np.asarray([[1]], dtype=np.int8),
+                first_weight_scales=np.asarray([1.0], dtype=np.float32),
+                first_bias=np.asarray([0.0], dtype=np.float16),
+                second_weight_codes=np.asarray([[1]], dtype=np.int8),
+                second_weight_scales=np.asarray([1.0], dtype=np.float32),
+                second_bias=np.asarray([0.0], dtype=np.float16),
+                latent_bits=8,
+            )
+        )
+        artifact[0:4] = b"NOPE"
+        with self.assertRaisesRegex(ValueError, "magic"):
+            experiment.decode_quantized_artifact(bytes(artifact))
+
+    def test_decode_benchmark_reports_real_repeated_decodes(self) -> None:
+        artifact = experiment.serialize_quantized_artifact(
+            latent_codes=np.asarray([[1], [2]], dtype=np.int8),
+            first_weight_codes=np.asarray([[2]], dtype=np.int8),
+            first_weight_scales=np.asarray([0.5], dtype=np.float32),
+            first_bias=np.asarray([0.0], dtype=np.float16),
+            second_weight_codes=np.asarray([[4]], dtype=np.int8),
+            second_weight_scales=np.asarray([0.25], dtype=np.float32),
+            second_bias=np.asarray([0.0], dtype=np.float16),
+            latent_bits=8,
+        )
+        report = experiment.benchmark_decode(artifact, warmup=1, repeats=5)
+        self.assertEqual(report["decode_repeats"], 5)
+        self.assertEqual(report["decoded_splats"], 2)
+        self.assertEqual(report["decoded_dimensions"], 1)
+        self.assertGreater(report["decode_median_ms"], 0.0)
+        self.assertGreaterEqual(report["decode_p95_ms"], report["decode_median_ms"])
+
 
 if __name__ == "__main__":
     unittest.main()
