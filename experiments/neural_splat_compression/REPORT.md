@@ -105,6 +105,32 @@ must not replace the existing `.fovea` covariance codebook. Additional limits:
 - the `.fvnc` artifact is experimental and is not part of the public
   `.fovea` v2 contract.
 
+## Rigid-motion reference gate
+
+The reference fixture was decoded once, then transformed through a closed
+600-frame rigid-motion loop. Each frame carries one object transform
+(translation, quaternion, and uniform scale) rather than per-splat latent
+updates.
+
+| Measurement | Result |
+|---|---:|
+| Splats | 8,000 |
+| Frames | 600 |
+| Initial latent decodes | 1 |
+| Per-frame transform payload | 32 bytes |
+| Per-frame latent payload | 0 bytes |
+| Total motion payload | 19,200 bytes |
+| CPU reference transform median | 0.620 ms/frame |
+| CPU reference transform p95 | 0.963 ms/frame |
+| Loop position RMSE | 0.0 |
+| Loop rotation closure | 0.0081 degrees |
+| Loop scale RMSE | 0.0 |
+
+The bounded motion gate passed, but this is a vectorized NumPy reference. It
+does not prove Godot frame cost, GPU shader transforms, rendering quality,
+sorting under motion, XR behavior, or deforming/independent splats. It also
+does not reverse the multi-asset storage rejection above.
+
 ## Next research gates
 
 1. Explore an adaptive per-asset decision that retains the static codebook when
@@ -112,5 +138,8 @@ must not replace the existing `.fovea` covariance codebook. Additional limits:
 2. Compare against the existing covariance codebook at equal byte budgets.
 3. Implement a read-only Rust decoder benchmark only after storage improves on
    every representative asset.
-4. Measure end-to-end Godot load time, CPU memory, and frame impact.
-5. Version the artifact formally only if it becomes beneficial across assets.
+4. Measure end-to-end Godot load time, CPU memory, and rigid-transform frame
+   impact without changing the public `.fovea` contract.
+5. Test bounded deformation only after a representative cross-asset storage
+   strategy passes.
+6. Version the artifact formally only if it becomes beneficial across assets.
