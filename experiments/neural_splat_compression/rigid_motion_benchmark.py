@@ -148,6 +148,12 @@ def run_rigid_motion_benchmark(
         1.0,
     )
     rotation_degrees = float(np.mean(np.degrees(2.0 * np.arccos(rotation_dot))))
+    motion_pass = (
+        all_finite
+        and position_rmse <= 1e-6
+        and rotation_degrees <= 0.01
+        and scale_rmse <= 1e-6
+    )
     return {
         "splats": int(positions.shape[0]),
         "frames": frames,
@@ -162,6 +168,7 @@ def run_rigid_motion_benchmark(
         "loop_closure_rotation_degrees": rotation_degrees,
         "loop_closure_scale_rmse": scale_rmse,
         "all_finite": bool(all_finite),
+        "motion_pass": bool(motion_pass),
     }
 
 

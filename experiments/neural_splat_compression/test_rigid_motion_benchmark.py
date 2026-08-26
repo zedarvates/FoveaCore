@@ -52,6 +52,7 @@ class RigidMotionBenchmarkTests(unittest.TestCase):
         self.assertLess(report["loop_closure_rotation_degrees"], 1e-4)
         self.assertLess(report["loop_closure_scale_rmse"], 1e-6)
         self.assertTrue(report["all_finite"])
+        self.assertTrue(report["motion_pass"])
         self.assertGreater(report["motion_frame_median_ms"], 0.0)
 
 
