@@ -139,6 +139,11 @@ The base splat buffer remains unchanged so disabling or rejecting animation is
 fully reversible. The node or instance transform is applied after the local
 displacement and is not encoded in the sidecar.
 
+At load time, the resource derives component-wise displacement minima and
+maxima across every grid sample. It combines those extrema with the immutable
+base AABB to produce a conservative animated AABB. Trilinear and temporal
+interpolation cannot exceed the sampled component extrema.
+
 ## 9. Runtime architecture
 
 ### Loader
@@ -167,6 +172,12 @@ before culling and depth sorting. The immutable base buffer is never rewritten.
 The asset is treated as dynamic and is sorted from the animated positions each
 frame.
 
+The shader decodes input positions with the base AABB, adds the sampled local
+displacement, and re-quantizes positions with the derived animated AABB.
+Downstream culling, sorting, publishing, and rendering use that animated AABB
+for the transient buffer. Disabling 4D motion restores the base AABB. This
+prevents silent clamping when motion leaves the static bounds.
+
 V1 4D motion is mutually exclusive with other position-changing modifiers on
 the same asset, including delta positions, clay, cloth, skeletal deformation,
 and procedural position animation. Enabling 4D motion while one of those paths
@@ -192,6 +203,7 @@ fails:
 - sample rate is non-finite or outside `0.1..240.0` Hz;
 - bounds or displacement scales contain non-finite values;
 - bounds are inverted or any displacement scale is not positive;
+- the derived animated AABB is non-finite or inverted;
 - payload offset is not 128;
 - payload multiplication overflows or exceeds 256 MiB;
 - recorded payload size differs from the exact computed size;
@@ -229,6 +241,7 @@ research problems and must not be presented as implemented by this format.
 - loop interpolation from the last keyframe to the first;
 - negative time and seek behavior;
 - immutable base positions after repeated playback;
+- deformations outside the base AABB remain representable in the animated AABB;
 - rejection when another position-changing modifier is active;
 - CPU/GPU output agreement on a deterministic fixture.
 
