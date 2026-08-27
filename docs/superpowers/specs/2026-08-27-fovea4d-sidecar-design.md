@@ -164,6 +164,15 @@ field. It controls time, playback rate, looping, pause, and seek without adding
 The packed field is uploaded once to a storage buffer. A compute pass samples
 the field and writes animated positions into the transient animated-splat buffer
 before culling and depth sorting. The immutable base buffer is never rewritten.
+The asset is treated as dynamic and is sorted from the animated positions each
+frame.
+
+V1 4D motion is mutually exclusive with other position-changing modifiers on
+the same asset, including delta positions, clay, cloth, skeletal deformation,
+and procedural position animation. Enabling 4D motion while one of those paths
+is active fails closed and leaves the static base asset visible. Color and
+opacity-only overrides may coexist because they do not change sampled
+positions.
 
 ### CPU reference path
 
@@ -220,6 +229,7 @@ research problems and must not be presented as implemented by this format.
 - loop interpolation from the last keyframe to the first;
 - negative time and seek behavior;
 - immutable base positions after repeated playback;
+- rejection when another position-changing modifier is active;
 - CPU/GPU output agreement on a deterministic fixture.
 
 ### Performance and quality gates
