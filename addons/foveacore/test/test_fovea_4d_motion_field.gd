@@ -18,6 +18,10 @@ func _init() -> void:
 	_assert_vec("last-to-first loop", field.sample(Vector3(0.5, 0.5, 0.5), 1.5), Vector3(1.5, 1.5, 1.5))
 	_assert_vec("negative time wraps", field.sample(Vector3(0.5, 0.5, 0.5), -0.5), Vector3(1.5, 1.5, 1.5))
 	_assert_vec("loop closes", field.sample(Vector3(0.5, 0.5, 0.5), 2.0), Vector3(0.5, 0.5, 0.5))
+	var cpu_cache: Dictionary = field.build_cpu_sample_cache(PackedVector3Array([Vector3.ZERO, Vector3(0.5, 0.5, 0.5)]))
+	_assert("CPU batch cache builds", bool(cpu_cache.get("ok", false)), str(cpu_cache))
+	var cached_samples: PackedVector3Array = field.sample_cpu_cache(cpu_cache, 0.5)
+	_assert("CPU batch matches scalar samples", cached_samples.size() == 2 and cached_samples[0].is_equal_approx(field.sample(Vector3.ZERO, 0.5)) and cached_samples[1].is_equal_approx(field.sample(Vector3(0.5, 0.5, 0.5), 0.5)), str(cached_samples))
 
 	var bounds: AABB = field.animated_bounds(AABB(Vector3.ZERO, Vector3.ONE))
 	_assert_vec("animated bounds minimum", bounds.position, Vector3.ZERO)
