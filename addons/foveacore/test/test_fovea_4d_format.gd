@@ -1,6 +1,8 @@
 extends SceneTree
 
 const FormatScript := preload("res://addons/foveacore/scripts/fovea_4d_format.gd")
+const GDSCRIPT_FIXTURE_PATH: String = "res://test/fixtures/gdscript_fovea4d_v1_fixture.fovea4d"
+const RUST_FIXTURE_PATH: String = "res://test/fixtures/rust_fovea4d_v1_fixture.fovea4d"
 
 var _passed: int = 0
 var _failed: int = 0
@@ -18,6 +20,10 @@ func _init() -> void:
 	_assert("grid round-trip", header.get("grid_dims", Vector3i.ZERO) == Vector3i(2, 2, 2), str(header))
 	_assert("payload exact", (parsed.get("payload", PackedByteArray()) as PackedByteArray).size() == 96, str(parsed))
 	_assert("digest hex", str(header.get("base_sha256", "")) == "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", str(header))
+	var gdscript_fixture: PackedByteArray = FileAccess.get_file_as_bytes(GDSCRIPT_FIXTURE_PATH)
+	var rust_fixture: PackedByteArray = FileAccess.get_file_as_bytes(RUST_FIXTURE_PATH)
+	_assert("Rust fixture parses", bool(FormatScript.parse_bytes(rust_fixture).get("ok", false)), str(FormatScript.parse_bytes(rust_fixture)))
+	_assert("Rust and GDScript fixtures are identical", rust_fixture == gdscript_fixture, "fixture bytes differ")
 	_expect_rejected("invalid magic", _mutate_byte(valid, 0, 0x58))
 	_expect_rejected("unsupported version", _mutate_u32(valid, 8, 2))
 	_expect_rejected("wrong header size", _mutate_u32(valid, 12, 64))
