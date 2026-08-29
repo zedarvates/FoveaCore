@@ -33,6 +33,8 @@ func _init() -> void:
 	_assert("player loads matching sidecar", player.load_motion_now() == OK, player.last_error)
 	_assert("delegate receives field", delegate.motion_4d_field != null, "missing field")
 	_assert("4D target becomes dynamic", not delegate.is_static, "still static")
+	_assert("4D disables shared instancing", not delegate.enable_instancing, "instancing retained")
+	_assert("4D owns a local renderer", delegate.get_node_or_null("FoveaCoreSplatRenderer") != null, "local renderer missing")
 	player.seek(0.25)
 	_assert("seek forwards time", is_equal_approx(delegate.motion_4d_time_seconds, 0.25), str(delegate.motion_4d_time_seconds))
 	player.play()
@@ -48,6 +50,8 @@ func _init() -> void:
 	await process_frame
 	_assert("player cleanup clears field", delegate.motion_4d_field == null, "field retained")
 	_assert("player cleanup restores static state", delegate.is_static, "dynamic retained")
+	_assert("player cleanup restores instancing", delegate.enable_instancing, "instancing not restored")
+	_assert("player cleanup removes owned renderer", delegate.get_node_or_null("FoveaCoreSplatRenderer") == null, "local renderer retained")
 
 	var field_result: Dictionary = LoaderScript.load_sidecar(SIDECAR_PATH, BASE_PATH)
 	var field: Fovea4DMotionField = field_result.get("field")
@@ -89,6 +93,16 @@ func _init() -> void:
 	_assert("deferred ready load succeeds", deferred_player.last_error.is_empty(), deferred_player.last_error)
 	_assert("autoplay starts after deferred load", deferred_player.playing and delegate.motion_4d_field != null, "autoplay inactive")
 	deferred_player.queue_free()
+	await process_frame
+	delegate.enable_instancing = false
+	var failing_player: Node = PlayerScript.new()
+	failing_player.target_path = NodePath("../Splat")
+	failing_player.sidecar_path = "res://test/fixtures/missing.fovea4d"
+	failing_player.autoplay = false
+	root.add_child(failing_player)
+	_assert("missing sidecar fails closed", failing_player.load_motion_now() != OK, "missing sidecar accepted")
+	_assert("failed load preserves render route", not delegate.enable_instancing and delegate.motion_4d_field == null, "target state changed")
+	failing_player.queue_free()
 	await process_frame
 	splat.queue_free()
 

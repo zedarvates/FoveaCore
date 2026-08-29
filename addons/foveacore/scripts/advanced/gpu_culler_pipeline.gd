@@ -37,6 +37,8 @@ var publish_pipeline_rid: RID
 
 var delta_shader_rid: RID
 var delta_pipeline_rid: RID
+var motion_4d_shader_rid: RID
+var motion_4d_pipeline_rid: RID
 var animate_shader_rid: RID
 var animate_pipeline_rid: RID
 var animate_adv_shader_rid: RID
@@ -109,6 +111,15 @@ var max_dynamic_splats_ratio: float = 0.5
 ## Cache pour eviter d'acceder au disque ou de recalculer a chaque frame
 var _cached_bytes: Dictionary = {}
 var _cached_blocks: Dictionary = {}
+
+## Experimental position-only Fovea4D state. The field and parameter buffers
+## are shared by the per-asset uniform set created on first dispatch.
+var motion_4d_field: Fovea4DMotionField = null
+var motion_4d_time_seconds: float = 0.0
+var motion_4d_base_bounds: AABB = AABB()
+var motion_4d_animated_bounds: AABB = AABB()
+var motion_4d_field_buffer: RID
+var motion_4d_params_buffer: RID
 
 func _init() -> void:
     streaming_manager = load("res://addons/foveacore/scripts/advanced/fovea_streaming_manager.gd").new()
@@ -209,6 +220,18 @@ func _load_compute_shader() -> void:
     else:
         push_error("GPU Culler: Failed to create delta_shader_rid")
 
+    # Experimental Fovea4D motion-field pass.
+    var motion_4d_file: RDShaderFile = load("res://addons/foveacore/shaders/fovea_4d_motion.glsl")
+    var motion_4d_spirv: RDShaderSPIRV = motion_4d_file.get_spirv()
+    var motion_4d_error: String = motion_4d_spirv.get_stage_compile_error(RenderingDevice.SHADER_STAGE_COMPUTE)
+    if not motion_4d_error.is_empty():
+        push_error("GPU Culler: Error compiling fovea_4d_motion.glsl: " + motion_4d_error)
+    motion_4d_shader_rid = rd.shader_create_from_spirv(motion_4d_spirv)
+    if motion_4d_shader_rid.is_valid():
+        motion_4d_pipeline_rid = rd.compute_pipeline_create(motion_4d_shader_rid)
+    else:
+        push_error("GPU Culler: Failed to create motion_4d_shader_rid")
+
     # Shader d'Instance Culling
     var inst_file: RDShaderFile = load("res://addons/foveacore/shaders/instance_culling.glsl")
     var inst_spirv := inst_file.get_spirv()
@@ -234,6 +257,88 @@ func _load_compute_shader() -> void:
         push_error("GPU Culler: Failed to create indirect_shader_rid")
 
 ## Charge le fichier via Rust et exécute le Culling sur le GPU
+func configure_4d_motion(field: Fovea4DMotionField, base_bounds: AABB) -> Error:
+    if field == null or not field.validate().is_empty() or not _valid_motion_bounds(base_bounds):
+        return ERR_INVALID_DATA
+    if rd == null or not motion_4d_pipeline_rid.is_valid():
+        return ERR_UNAVAILABLE
+    var gpu_bytes: PackedByteArray = field.to_gpu_bytes()
+    if gpu_bytes.is_empty():
+        return ERR_INVALID_DATA
+
+    clear_4d_motion()
+    var field_buffer: RID = rd.storage_buffer_create(gpu_bytes.size(), gpu_bytes)
+    var params_buffer: RID = rd.storage_buffer_create(128)
+    if not field_buffer.is_valid() or not params_buffer.is_valid():
+        if field_buffer.is_valid():
+            rd.free_rid(field_buffer)
+        if params_buffer.is_valid():
+            rd.free_rid(params_buffer)
+        return ERR_CANT_CREATE
+
+    motion_4d_field = field
+    motion_4d_time_seconds = 0.0
+    motion_4d_field_buffer = field_buffer
+    motion_4d_params_buffer = params_buffer
+    _set_4d_bounds(base_bounds)
+    return OK
+
+
+func set_4d_motion_time(time_seconds: float) -> void:
+    if motion_4d_field != null and is_finite(time_seconds):
+        motion_4d_time_seconds = time_seconds
+
+
+func clear_4d_motion() -> void:
+    _free_4d_uniform_sets()
+    _free_4d_buffers()
+    motion_4d_field = null
+    motion_4d_time_seconds = 0.0
+    motion_4d_base_bounds = AABB()
+    motion_4d_animated_bounds = AABB()
+
+
+func _set_4d_bounds(base_bounds: AABB) -> void:
+    motion_4d_base_bounds = base_bounds
+    motion_4d_animated_bounds = motion_4d_field.animated_bounds(base_bounds)
+
+
+func _valid_motion_bounds(bounds: AABB) -> bool:
+    return (
+        _finite_vector3(bounds.position)
+        and _finite_vector3(bounds.end)
+        and bounds.size.x >= 0.0
+        and bounds.size.y >= 0.0
+        and bounds.size.z >= 0.0
+    )
+
+
+func _finite_vector3(value: Vector3) -> bool:
+    return is_finite(value.x) and is_finite(value.y) and is_finite(value.z)
+
+
+func _free_4d_uniform_sets() -> void:
+    if rd == null:
+        return
+    for cache_value: Variant in _gpu_buffers.values():
+        var cache: Dictionary = cache_value as Dictionary
+        var uniform_set: RID = cache.get("motion_4d_uniform_set", RID())
+        if uniform_set.is_valid():
+            rd.free_rid(uniform_set)
+        cache.erase("motion_4d_uniform_set")
+        cache.erase("motion_4d_base_input")
+
+
+func _free_4d_buffers() -> void:
+    if rd != null:
+        if motion_4d_params_buffer.is_valid():
+            rd.free_rid(motion_4d_params_buffer)
+        if motion_4d_field_buffer.is_valid():
+            rd.free_rid(motion_4d_field_buffer)
+    motion_4d_params_buffer = RID()
+    motion_4d_field_buffer = RID()
+
+
 func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_texture: RID, cull_threshold: float = 0.0,
     aabb_min: Vector3 = Vector3(-5, -5, -5), aabb_max: Vector3 = Vector3(5, 5, 5),
     render_scene_data: Object = null, hlod_distances: Array = [8.0, 18.0, 30.0],
@@ -241,6 +346,20 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
     palette_size: int = 16, model_transform: Transform3D = Transform3D.IDENTITY,
     delta_buffer: RID = RID(), delta_weight: float = 0.0,
     is_static: bool = true, camera_moved: bool = true) -> RID:
+    var base_aabb_min: Vector3 = aabb_min
+    var base_aabb_max: Vector3 = aabb_max
+    var motion_4d_active: bool = (
+        motion_4d_field != null
+        and motion_4d_field_buffer.is_valid()
+        and motion_4d_params_buffer.is_valid()
+        and motion_4d_pipeline_rid.is_valid()
+    )
+    if motion_4d_active:
+        var current_base_bounds := AABB(base_aabb_min, base_aabb_max - base_aabb_min)
+        if current_base_bounds != motion_4d_base_bounds:
+            _set_4d_bounds(current_base_bounds)
+        aabb_min = motion_4d_animated_bounds.position
+        aabb_max = motion_4d_animated_bounds.end
     if covar_texture.is_valid():
         last_covar_texture_rid = covar_texture
     if palette_texture.is_valid():
@@ -260,7 +379,7 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
         return RID()
     
     # 1. Enregistrement de l'asset auprès du FoveaStreamingManager
-    var streaming_asset: FoveaStreamingManager.StreamingAsset = streaming_manager.register_asset(fovea_path, aabb_min, aabb_max)
+    var streaming_asset: FoveaStreamingManager.StreamingAsset = streaming_manager.register_asset(fovea_path, base_aabb_min, base_aabb_max)
     if streaming_asset == null:
         push_error("FoveaEngine: Échec de l'enregistrement de l'asset de streaming.")
         return RID()
@@ -320,14 +439,15 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
     var visible_bytes := PackedByteArray()
     var total_splats: int = 0
     
-    if is_static:
+    var use_static_source: bool = is_static or motion_4d_active
+    if use_static_source:
         if not _baked_octrees.has(fovea_path):
             var bytes := _load_fovea_bytes(fovea_path)
             var loader: Object = streaming_manager.get("loader")
             if loader == null:
                 if ClassDB.class_exists("FoveaAssetLoader") and ClassDB.can_instantiate("FoveaAssetLoader"):
                     loader = ClassDB.instantiate("FoveaAssetLoader")
-            var result = FoveaOctreeBakerClass.bake_octree_from_bytes(bytes, aabb_min, aabb_max, loader)
+            var result = FoveaOctreeBakerClass.bake_octree_from_bytes(bytes, base_aabb_min, base_aabb_max, loader)
             _baked_octrees[fovea_path] = result["root"]
             
             var sorted_bytes: PackedByteArray = result["sorted_bytes"]
@@ -336,13 +456,14 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
             
         var root = _baked_octrees[fovea_path]
         var visible_leaves: Array = []
-        _cull_octree(root, frustum, visible_leaves)
+        _cull_octree(root, frustum, visible_leaves, motion_4d_active)
         
         var max_chunks_limit: int = 256
         for leaf in visible_leaves:
             if active_chunks_count >= max_chunks_limit:
                 break
-            _append_chunk_metadata(active_chunks_metadata, leaf.aabb, leaf.splat_start, 1.0, leaf.splat_count)
+            var metadata_bounds: AABB = _motion_expanded_aabb(leaf.aabb) if motion_4d_active else leaf.aabb
+            _append_chunk_metadata(active_chunks_metadata, metadata_bounds, leaf.splat_start, 1.0, leaf.splat_count)
             active_chunks_count += 1
             
         if active_chunks_count == 0:
@@ -556,7 +677,7 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
         var uniform_input: RDUniform = RDUniform.new()
         uniform_input.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
         uniform_input.binding = 0
-        uniform_input.add_id(_static_input_buffers[fovea_path] if is_static else _vram_pool_buffer)
+        uniform_input.add_id(_static_input_buffers[fovea_path] if use_static_source else _vram_pool_buffer)
         
         var uniform_output: RDUniform = RDUniform.new()
         uniform_output.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
@@ -655,16 +776,30 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
         }
         _gpu_buffers[fovea_path] = cache
 
-    var input_buffer: RID = cache["input"]
-    var output_buffer: RID = cache["output"] if is_static else cache["dynamic_output"]
+    var input_buffer: RID = _static_input_buffers[fovea_path] if use_static_source else cache["input"]
+    # Fovea4D reuses the canonical output buffer because all persistent depth,
+    # sort, and publish sets are bound to it. It is still sorted every frame.
+    var output_buffer: RID = cache["output"] if is_static or motion_4d_active else cache["dynamic_output"]
     var counter_buffer: RID = cache["counter"]
     var camera_ubo: RID = cache["camera_ubo"]
     var uniform_set: RID = cache["uniform_set"]
     last_counter_buffer_rid = counter_buffer
 
     # Mettre à jour les buffers persistants pour cette frame
-    if not is_static:
+    if not use_static_source:
         rd.buffer_update(input_buffer, 0, visible_bytes.size(), visible_bytes)
+
+    var effective_asset_bytes := PackedByteArray()
+    effective_asset_bytes.resize(32)
+    effective_asset_bytes.encode_float(0, aabb_min.x)
+    effective_asset_bytes.encode_float(4, aabb_min.y)
+    effective_asset_bytes.encode_float(8, aabb_min.z)
+    effective_asset_bytes.encode_float(12, 0.0)
+    effective_asset_bytes.encode_float(16, aabb_max.x)
+    effective_asset_bytes.encode_float(20, aabb_max.y)
+    effective_asset_bytes.encode_float(24, aabb_max.z)
+    effective_asset_bytes.encode_float(28, 0.0)
+    rd.buffer_update(cache["asset_data"], 0, effective_asset_bytes.size(), effective_asset_bytes)
     
     var zero_bytes := PackedByteArray([0,0,0,0])
     rd.buffer_update(counter_buffer, 0, 4, zero_bytes)
@@ -748,9 +883,109 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
     push_bytes.encode_float(48, aabb_max.z)
     push_bytes.encode_float(52, 0.0) # pad2
     
-    # --- RUN DELTA ANIMATION COMPUTE SHADER PASS (Task 244) ---
+    # 4D_MOTION_DISPATCH_BEFORE_CULLING
+    # Exactly one position-changing source may feed the culler. Fovea4D uses
+    # the immutable full static buffer so octree splat offsets remain valid.
     var culler_uniform_set: RID = uniform_set
-    if delta_buffer.is_valid() and delta_weight > 0.0 and delta_pipeline_rid.is_valid():
+    var temporary_culler_uniform_set: bool = false
+    if motion_4d_active:
+        var source_splat_count: int = streaming_asset.total_splats
+        var motion_params := PackedByteArray()
+        motion_params.resize(128)
+        motion_params.encode_u32(0, source_splat_count)
+        motion_params.encode_u32(4, motion_4d_field.grid_dims.x)
+        motion_params.encode_u32(8, motion_4d_field.grid_dims.y)
+        motion_params.encode_u32(12, motion_4d_field.grid_dims.z)
+        motion_params.encode_float(16, base_aabb_min.x)
+        motion_params.encode_float(20, base_aabb_min.y)
+        motion_params.encode_float(24, base_aabb_min.z)
+        motion_params.encode_float(28, float(motion_4d_field.keyframe_count))
+        motion_params.encode_float(32, base_aabb_max.x)
+        motion_params.encode_float(36, base_aabb_max.y)
+        motion_params.encode_float(40, base_aabb_max.z)
+        motion_params.encode_float(44, motion_4d_field.sample_rate_hz)
+        motion_params.encode_float(48, aabb_min.x)
+        motion_params.encode_float(52, aabb_min.y)
+        motion_params.encode_float(56, aabb_min.z)
+        motion_params.encode_float(60, 1.0 if motion_4d_field.loop else 0.0)
+        motion_params.encode_float(64, aabb_max.x)
+        motion_params.encode_float(68, aabb_max.y)
+        motion_params.encode_float(72, aabb_max.z)
+        motion_params.encode_float(76, 0.0)
+        motion_params.encode_float(80, motion_4d_field.displacement_scale.x)
+        motion_params.encode_float(84, motion_4d_field.displacement_scale.y)
+        motion_params.encode_float(88, motion_4d_field.displacement_scale.z)
+        motion_params.encode_float(92, motion_4d_time_seconds)
+        motion_params.encode_float(96, motion_4d_field.bounds_min.x)
+        motion_params.encode_float(100, motion_4d_field.bounds_min.y)
+        motion_params.encode_float(104, motion_4d_field.bounds_min.z)
+        motion_params.encode_float(108, 0.0)
+        motion_params.encode_float(112, motion_4d_field.bounds_max.x)
+        motion_params.encode_float(116, motion_4d_field.bounds_max.y)
+        motion_params.encode_float(120, motion_4d_field.bounds_max.z)
+        motion_params.encode_float(124, 0.0)
+        rd.buffer_update(motion_4d_params_buffer, 0, motion_params.size(), motion_params)
+
+        var motion_uniform_set: RID = cache.get("motion_4d_uniform_set", RID())
+        var cached_base_input: RID = cache.get("motion_4d_base_input", RID())
+        if not motion_uniform_set.is_valid() or cached_base_input != input_buffer:
+            if motion_uniform_set.is_valid():
+                rd.free_rid(motion_uniform_set)
+            var u_motion_base := RDUniform.new()
+            u_motion_base.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+            u_motion_base.binding = 0
+            u_motion_base.add_id(input_buffer)
+            var u_motion_animated := RDUniform.new()
+            u_motion_animated.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+            u_motion_animated.binding = 1
+            u_motion_animated.add_id(cache["animated"])
+            var u_motion_field := RDUniform.new()
+            u_motion_field.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+            u_motion_field.binding = 2
+            u_motion_field.add_id(motion_4d_field_buffer)
+            var u_motion_params := RDUniform.new()
+            u_motion_params.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+            u_motion_params.binding = 3
+            u_motion_params.add_id(motion_4d_params_buffer)
+            motion_uniform_set = rd.uniform_set_create(
+                [u_motion_base, u_motion_animated, u_motion_field, u_motion_params],
+                motion_4d_shader_rid,
+                0
+            )
+            cache["motion_4d_uniform_set"] = motion_uniform_set
+            cache["motion_4d_base_input"] = input_buffer
+
+        var motion_compute_list: int = rd.compute_list_begin()
+        rd.compute_list_bind_compute_pipeline(motion_compute_list, motion_4d_pipeline_rid)
+        rd.compute_list_bind_uniform_set(motion_compute_list, motion_uniform_set, 0)
+        rd.compute_list_dispatch(motion_compute_list, ceili(source_splat_count / 256.0), 1, 1)
+        rd.compute_list_end()
+
+        var u_motion_cull_in := RDUniform.new()
+        u_motion_cull_in.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+        u_motion_cull_in.binding = 0
+        u_motion_cull_in.add_id(cache["animated"])
+        var u_motion_cull_out := RDUniform.new()
+        u_motion_cull_out.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+        u_motion_cull_out.binding = 1
+        u_motion_cull_out.add_id(output_buffer)
+        var u_motion_cull_counter := RDUniform.new()
+        u_motion_cull_counter.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+        u_motion_cull_counter.binding = 2
+        u_motion_cull_counter.add_id(counter_buffer)
+        var u_motion_cull_chunks := RDUniform.new()
+        u_motion_cull_chunks.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
+        u_motion_cull_chunks.binding = 3
+        u_motion_cull_chunks.add_id(_vram_metadata_buffer)
+        culler_uniform_set = rd.uniform_set_create(
+            [u_motion_cull_in, u_motion_cull_out, u_motion_cull_counter, u_motion_cull_chunks],
+            shader_rid,
+            0
+        )
+        temporary_culler_uniform_set = true
+
+    # --- RUN DELTA ANIMATION COMPUTE SHADER PASS (Task 244) ---
+    if motion_4d_field == null and delta_buffer.is_valid() and delta_weight > 0.0 and delta_pipeline_rid.is_valid():
         var u_in := RDUniform.new()
         u_in.uniform_type = RenderingDevice.UNIFORM_TYPE_STORAGE_BUFFER
         u_in.binding = 0
@@ -812,6 +1047,7 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
         u_cull_chunks.add_id(_vram_metadata_buffer)
         
         culler_uniform_set = rd.uniform_set_create([u_cull_in, u_cull_out, u_cull_cnt, u_cull_chunks], shader_rid, 0)
+        temporary_culler_uniform_set = true
 
     # 6. Exécution du Compute Shader
     var compute_list: int = rd.compute_list_begin()
@@ -891,6 +1127,8 @@ func process_splats_from_file(fovea_path: String, camera: Camera3D, depth_textur
     rd.free_rid(sampler_rid)
     if uniform_set_depth.is_valid():
         rd.free_rid(uniform_set_depth)
+    if temporary_culler_uniform_set and culler_uniform_set.is_valid():
+        rd.free_rid(culler_uniform_set)
 
     last_output_buffer_rid = output_buffer
     return output_buffer
@@ -1098,6 +1336,7 @@ func _free_gpu_cache_resources(cache: Dictionary) -> void:
         "depth_uniform_set",
         "sort_uniform_set",
         "publish_uniform_set",
+        "motion_4d_uniform_set",
     ])
     var resource_keys: PackedStringArray = PackedStringArray([
         "output_texture",
@@ -1126,6 +1365,8 @@ func cleanup() -> void:
         # command lists. This is a shutdown-only synchronization point.
         rd.submit()
         rd.sync()
+
+        clear_4d_motion()
 
         for cache_value: Variant in _gpu_buffers.values():
             _free_gpu_cache_resources(cache_value as Dictionary)
@@ -1191,6 +1432,13 @@ func cleanup() -> void:
         if delta_shader_rid.is_valid():
             rd.free_rid(delta_shader_rid)
             delta_shader_rid = RID()
+
+        if motion_4d_pipeline_rid.is_valid():
+            rd.free_rid(motion_4d_pipeline_rid)
+            motion_4d_pipeline_rid = RID()
+        if motion_4d_shader_rid.is_valid():
+            rd.free_rid(motion_4d_shader_rid)
+            motion_4d_shader_rid = RID()
 
         if animate_pipeline_rid.is_valid():
             rd.free_rid(animate_pipeline_rid)
@@ -1794,14 +2042,23 @@ func generate_indirect_draw_command(counter_buffer: RID, count_per_splat: int, i
     
     return draw_indirect_buffer
 
-func _cull_octree(node: RefCounted, frustum: Object, visible_leaves: Array) -> void:
+func _motion_expanded_aabb(base_bounds: AABB) -> AABB:
+    if motion_4d_field == null:
+        return base_bounds
+    var minimum: Vector3 = base_bounds.position + motion_4d_field.displacement_min
+    var maximum: Vector3 = base_bounds.end + motion_4d_field.displacement_max
+    return AABB(minimum, maximum - minimum)
+
+
+func _cull_octree(node: RefCounted, frustum: Object, visible_leaves: Array, expand_for_4d: bool = false) -> void:
     if node == null:
         return
-    if not frustum.contains_aabb(node.aabb):
+    var node_bounds: AABB = _motion_expanded_aabb(node.aabb) if expand_for_4d else node.aabb
+    if not frustum.contains_aabb(node_bounds):
         return
     if node.is_leaf:
         if node.splat_count > 0:
             visible_leaves.append(node)
     else:
         for child in node.children:
-            _cull_octree(child, frustum, visible_leaves)
+            _cull_octree(child, frustum, visible_leaves, expand_for_4d)

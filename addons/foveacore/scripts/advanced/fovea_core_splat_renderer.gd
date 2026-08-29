@@ -226,11 +226,9 @@ func configure_4d_motion(field: Fovea4DMotionField) -> Error:
     motion_4d_field = field
     motion_4d_time_seconds = 0.0
     is_static = false
-    if culler_pipeline != null and culler_pipeline.has_method("configure_4d_motion"):
-        var pipeline_error: Error = culler_pipeline.configure_4d_motion(
-            field,
-            AABB(field.bounds_min, field.bounds_max - field.bounds_min)
-        )
+    if culler_pipeline != null and culler_pipeline.rd != null and culler_pipeline.has_method("configure_4d_motion"):
+        var fallback_bounds := AABB(field.bounds_min, field.bounds_max - field.bounds_min)
+        var pipeline_error: Error = culler_pipeline.configure_4d_motion(field, _resolve_asset_bounds(fallback_bounds))
         if pipeline_error != OK:
             motion_4d_field = null
             motion_4d_time_seconds = 0.0
@@ -253,6 +251,20 @@ func clear_4d_motion() -> void:
     motion_4d_field = null
     motion_4d_time_seconds = 0.0
     is_static = _motion_4d_previous_static
+
+
+func _resolve_asset_bounds(fallback: AABB) -> AABB:
+    if asset_path.is_empty():
+        return fallback
+    if ClassDB.class_exists("FoveaAssetLoader") and ClassDB.can_instantiate("FoveaAssetLoader"):
+        var loader: Object = ClassDB.instantiate("FoveaAssetLoader")
+        if loader != null and loader.has_method("get_asset_aabb"):
+            var value: Variant = loader.get_asset_aabb(asset_path)
+            if value is AABB:
+                var resolved_bounds: AABB = value
+                if resolved_bounds.size.length_squared() > 0.001:
+                    return resolved_bounds
+    return fallback
 
 func _update_performance_profile_budget() -> void:
     if not culler_pipeline:
@@ -308,11 +320,18 @@ func _update_performance_profile_budget() -> void:
     _set_default_covar_texture()
 
     if asset_path != "":
+        call_deferred("_load_initial_asset_deferred")
+
+
+func _load_initial_asset_deferred() -> void:
+    if not is_inside_tree() or asset_path.is_empty():
+        return
+    if get_viewport().get_camera_3d() != null:
         load_and_render_splats()
-        if enable_palette:
-            load_palette_from_fovea()
-        update_material_shader()
-        call_deferred("_upload_covar_codebook")
+    if enable_palette:
+        load_palette_from_fovea()
+    update_material_shader()
+    call_deferred("_upload_covar_codebook")
 
 func _process(_delta: float) -> void:
     var camera := get_viewport().get_camera_3d()
@@ -671,15 +690,15 @@ func load_and_render_splats(camera_moved: bool = true) -> void:
     # 2. Récupérer l'AABB depuis le fichier .fovea si possible
     var aabb_min := Vector3(-5, -5, -5)
     var aabb_max := Vector3(5, 5, 5)
-    if ClassDB.class_exists("FoveaAssetLoader") and ClassDB.can_instantiate("FoveaAssetLoader"):
-        var loader: Object = ClassDB.instantiate("FoveaAssetLoader")
-        if loader and loader.has_method("get_asset_aabb"):
-            var aabb_val: Variant = loader.get_asset_aabb(asset_path)
-            if aabb_val is AABB:
-                var aabb: AABB = aabb_val
-                if aabb.size.length_squared() > 0.001:
-                    aabb_min = aabb.position
-                    aabb_max = aabb.end
+    var base_bounds: AABB = _resolve_asset_bounds(AABB(aabb_min, aabb_max - aabb_min))
+    aabb_min = base_bounds.position
+    aabb_max = base_bounds.end
+    if motion_4d_field != null and culler_pipeline.rd != null:
+        if culler_pipeline.motion_4d_field != motion_4d_field or culler_pipeline.motion_4d_base_bounds != base_bounds:
+            var motion_error: Error = culler_pipeline.configure_4d_motion(motion_4d_field, base_bounds)
+            if motion_error != OK:
+                push_warning("FoveaCoreSplatRenderer: 4D motion unavailable; rendering static base (%s)." % error_string(motion_error))
+                clear_4d_motion()
 
     # Injecter l'AABB dans le shader material pour la dé-quantisation
     var mat := material_override as ShaderMaterial
@@ -701,6 +720,9 @@ func load_and_render_splats(camera_moved: bool = true) -> void:
         RID(), RID(), false, 16, Transform3D.IDENTITY, RID(), 0.0, is_static, camera_moved)
     if not output_buffer_rid.is_valid():
         return
+    if mat:
+        mat.set_shader_parameter("aabb_min", culler_pipeline.last_aabb_min)
+        mat.set_shader_parameter("aabb_max", culler_pipeline.last_aabb_max)
         
     if enable_gpu_driven:
         var cache: Dictionary = culler_pipeline._gpu_buffers.get(asset_path, {})
