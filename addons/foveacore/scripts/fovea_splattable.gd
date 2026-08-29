@@ -155,6 +155,12 @@ var delta_colors: Dictionary = {}
 ## Delta positions (deform offsets per splat index: local_idx -> Vector3)
 var delta_positions: Dictionary = {}
 
+## Optional experimental 4D motion field. It is transient and never serialized
+## into the stable FoveaSplat3D scene surface.
+var motion_4d_field: Fovea4DMotionField = null
+var motion_4d_time_seconds: float = 0.0
+var _motion_4d_previous_static: bool = true
+
 func save_delta_file(path: String) -> void:
 	if loaded_splats.is_empty():
 		return
@@ -191,6 +197,53 @@ func set_delta_color(local_idx: int, color: Color) -> void:
 ## Sets a delta position deformation offset on a specific splat index.
 func set_delta_position(local_idx: int, offset: Vector3) -> void:
 	delta_positions[local_idx] = offset
+
+
+func configure_4d_motion(field: Fovea4DMotionField) -> Error:
+	if field == null or not field.validate().is_empty():
+		return ERR_INVALID_DATA
+	if motion_4d_field == null and not is_static:
+		return ERR_ALREADY_IN_USE
+	if not delta_positions.is_empty() or delta_weight > 0.0:
+		return ERR_ALREADY_IN_USE
+	if morph_type != "None" and morph_weight > 0.0:
+		return ERR_ALREADY_IN_USE
+	var renderer: Node = get_node_or_null("FoveaCoreSplatRenderer")
+	if renderer != null and renderer.get("deformer") != null:
+		return ERR_ALREADY_IN_USE
+	for node: Node in find_children("*", "", true, false):
+		if node.is_in_group("fovea_position_modifiers"):
+			return ERR_ALREADY_IN_USE
+	if motion_4d_field == null:
+		_motion_4d_previous_static = is_static
+	motion_4d_field = field
+	motion_4d_time_seconds = 0.0
+	is_static = false
+	if renderer != null and renderer.has_method("configure_4d_motion"):
+		var renderer_error: Error = renderer.configure_4d_motion(field)
+		if renderer_error != OK:
+			motion_4d_field = null
+			is_static = _motion_4d_previous_static
+			return renderer_error
+	return OK
+
+
+func update_4d_motion_time(time_seconds: float) -> void:
+	if motion_4d_field == null or not is_finite(time_seconds):
+		return
+	motion_4d_time_seconds = time_seconds
+	var renderer: Node = get_node_or_null("FoveaCoreSplatRenderer")
+	if renderer != null and renderer.has_method("set_4d_motion_time"):
+		renderer.set_4d_motion_time(time_seconds)
+
+
+func clear_4d_motion() -> void:
+	var renderer: Node = get_node_or_null("FoveaCoreSplatRenderer")
+	if renderer != null and renderer.has_method("clear_4d_motion"):
+		renderer.clear_4d_motion()
+	motion_4d_field = null
+	motion_4d_time_seconds = 0.0
+	is_static = _motion_4d_previous_static
 
 
 func _enter_tree() -> void:

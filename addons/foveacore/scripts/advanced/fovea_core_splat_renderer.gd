@@ -185,6 +185,9 @@ var _compositor_effect_added := false
 var _compositor_effect: FoveaCompositorEffect = null
 
 var culler_pipeline: GPUCullerPipeline
+var motion_4d_field: Fovea4DMotionField = null
+var motion_4d_time_seconds: float = 0.0
+var _motion_4d_previous_static: bool = true
 var splat_mesh: ArrayMesh
 var triangle_mesh_generator
 
@@ -211,6 +214,45 @@ func _ready() -> void:
     culler_pipeline.interleave_factor = sort_interleave_factor
     _propagate_cleaning_parameters()
     _update_performance_profile_budget()
+    if motion_4d_field != null:
+        configure_4d_motion(motion_4d_field)
+
+
+func configure_4d_motion(field: Fovea4DMotionField) -> Error:
+    if field == null or not field.validate().is_empty():
+        return ERR_INVALID_DATA
+    if motion_4d_field == null:
+        _motion_4d_previous_static = is_static
+    motion_4d_field = field
+    motion_4d_time_seconds = 0.0
+    is_static = false
+    if culler_pipeline != null and culler_pipeline.has_method("configure_4d_motion"):
+        var pipeline_error: Error = culler_pipeline.configure_4d_motion(
+            field,
+            AABB(field.bounds_min, field.bounds_max - field.bounds_min)
+        )
+        if pipeline_error != OK:
+            motion_4d_field = null
+            motion_4d_time_seconds = 0.0
+            is_static = _motion_4d_previous_static
+            return pipeline_error
+    return OK
+
+
+func set_4d_motion_time(time_seconds: float) -> void:
+    if motion_4d_field == null or not is_finite(time_seconds):
+        return
+    motion_4d_time_seconds = time_seconds
+    if culler_pipeline != null and culler_pipeline.has_method("set_4d_motion_time"):
+        culler_pipeline.set_4d_motion_time(time_seconds)
+
+
+func clear_4d_motion() -> void:
+    if culler_pipeline != null and culler_pipeline.has_method("clear_4d_motion"):
+        culler_pipeline.clear_4d_motion()
+    motion_4d_field = null
+    motion_4d_time_seconds = 0.0
+    is_static = _motion_4d_previous_static
 
 func _update_performance_profile_budget() -> void:
     if not culler_pipeline:
