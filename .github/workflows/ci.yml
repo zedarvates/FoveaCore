@@ -2,7 +2,7 @@ name: FoveaEngine CI
 
 on:
   push:
-    branches: [main, feat/*, codex/**, autoresearch/**]
+    branches: [main, feat/*, autoresearch/**]
   pull_request:
     branches: [main, autoresearch/**]
 
@@ -417,6 +417,9 @@ jobs:
           & $env:GODOT_CPP_SMOKE_BIN --headless --xr-mode off --path . `
             -s res://addons/foveacore/gdextension/test_cpp_extension_load.gd -- --force-missing-binary
           if ($LASTEXITCODE -ne 1) { throw "C++ missing-binary control exited with $LASTEXITCODE instead of 1." }
+          # The expected native exit code remains in $LASTEXITCODE even after
+          # the assertion succeeds; reset the step result explicitly.
+          exit 0
       - name: Upload C++ extension
         uses: actions/upload-artifact@v4
         with:
