@@ -110,6 +110,8 @@ jobs:
             echo "::error::Godot emitted compile/load errors that the in-process loader could not count."
             exit 1
           fi
+      - name: Build C# scripts for the Godot runtime
+        run: dotnet build FoveaEngine.csproj --configuration Debug --nologo
       - name: Run C# Gaussian Splat runtime suite
         run: |
           set -o pipefail
@@ -414,12 +416,13 @@ jobs:
       - name: Verify C++ extension fails closed when the binary is unavailable
         shell: pwsh
         run: |
-          & $env:GODOT_CPP_SMOKE_BIN --headless --xr-mode off --path . `
-            -s res://addons/foveacore/gdextension/test_cpp_extension_load.gd -- --force-missing-binary
-          if ($LASTEXITCODE -ne 1) { throw "C++ missing-binary control exited with $LASTEXITCODE instead of 1." }
-          # The expected native exit code remains in $LASTEXITCODE even after
-          # the assertion succeeds; reset the step result explicitly.
-          exit 0
+          $control = Start-Process -FilePath $env:GODOT_CPP_SMOKE_BIN `
+            -ArgumentList @(
+              '--headless', '--xr-mode', 'off', '--path', '.',
+              '-s', 'res://addons/foveacore/gdextension/test_cpp_extension_load.gd',
+              '--', '--force-missing-binary'
+            ) -Wait -PassThru -NoNewWindow
+          if ($control.ExitCode -ne 1) { throw "C++ missing-binary control exited with $($control.ExitCode) instead of 1." }
       - name: Upload C++ extension
         uses: actions/upload-artifact@v4
         with:
