@@ -131,6 +131,35 @@ does not prove Godot frame cost, GPU shader transforms, rendering quality,
 sorting under motion, XR behavior, or deforming/independent splats. It also
 does not reverse the multi-asset storage rejection above.
 
+## Fovea4D motion-sidecar acceptance
+
+The approved position-only sidecar was rerun in Godot with 16 unique loop
+keyframes; unlike the earlier feasibility spike, the first keyframe was not
+duplicated at the end. The deterministic test uses the committed 8,000-splat
+`.fovea` fixture, an 8x8x8 int16 motion grid, and 120 proxy frames.
+
+| Measurement | Result |
+|---|---:|
+| Base plus `.fovea4d` bytes | 213,288 |
+| Normalized position RMSE | 0.011233% |
+| Normalized loop-closure RMSE | 0.0 |
+| One-time CPU spatial-cache build | 492.128 ms |
+| Cached CPU sampling median | 0.322 ms/frame |
+| D3D12 shader/readback assertions | 13/13 passed |
+
+The first scalar implementation measured 212.242 ms/frame because it decoded
+and interpolated every grid cell for every splat. Caching decoded cells reduced
+that to 90.688 ms/frame but still failed the 16.67 ms gate. The accepted CPU
+reference precomputes spatial interpolation for every unique key and performs
+only temporal interpolation per frame. Cache construction is reported
+separately and is not included in the frame median.
+
+The D3D12 check ran on an NVIDIA RTX 5060 Ti. It verified CPU/GPU position
+agreement within one animated-AABB quantization unit and preserved packed
+normal, color/covariance, opacity, and flag fields. This remains synthetic
+evidence. It does not prove a real captured sequence, rendered-image quality,
+million-splat throughput, mobile portability, or OpenXR/headset behavior.
+
 ## Next research gates
 
 1. Explore an adaptive per-asset decision that retains the static codebook when
