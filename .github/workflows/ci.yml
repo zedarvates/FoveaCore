@@ -2,9 +2,9 @@ name: FoveaEngine CI
 
 on:
   push:
-    branches: [main, feat/*]
+    branches: [main, feat/*, autoresearch/**]
   pull_request:
-    branches: [main]
+    branches: [main, autoresearch/**]
 
 env:
   GODOT_VERSION: "4.7-dev5"

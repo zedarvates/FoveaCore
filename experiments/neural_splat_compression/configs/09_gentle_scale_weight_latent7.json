@@ -1,0 +1,14 @@
+{
+  "name": "gentle_scale_weight_latent7",
+  "latent_dim": 7,
+  "hidden_dim": 112,
+  "latent_bits": 8,
+  "epochs": 1800,
+  "learning_rate": 0.0045,
+  "latent_penalty": 0.00001,
+  "scale_weight": 1.25,
+  "rotation_weight": 4.0,
+  "color_weight": 4.0,
+  "seed": 20260825,
+  "threads": 4
+}
