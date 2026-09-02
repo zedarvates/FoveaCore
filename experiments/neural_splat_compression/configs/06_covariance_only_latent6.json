@@ -1,0 +1,14 @@
+{
+  "name": "covariance_only_latent6",
+  "feature_mode": "covariance_only",
+  "latent_dim": 6,
+  "hidden_dim": 96,
+  "latent_bits": 8,
+  "epochs": 1000,
+  "learning_rate": 0.006,
+  "latent_penalty": 0.00001,
+  "decode_warmup": 10,
+  "decode_repeats": 100,
+  "seed": 20260825,
+  "threads": 4
+}
