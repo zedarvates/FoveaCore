@@ -2,7 +2,7 @@
 
 ## Build & Test Commands
 - **GDExtension**: `scons target=template_debug platform=windows` (if source available)
-- **Godot Project**: Open in Godot 4.7.dev5 Mono Official (or later 4.7 versions)
+- **Godot Project**: Open in Godot 4.7.2 stable Mono. Evidence records that name 4.7.dev5 remain historical and must not be relabeled without a new run.
 - **Test Scene**: `godot --scene res://demo/drop_a_ply.tscn`
 - **Reconstruction Tools**:
   - `python addons/foveacore/scripts/reconstruction/diffsynth_bridge.py`: Unified DiffSynth bridge (WorldMirror/DVLT/Vista4D).
@@ -18,7 +18,7 @@
 - **Depth-Anything-3**: Model weights for precise monocular depth.
 
 ## Code Style & Architecture
-- **GDScript**: Use Godot 4.6+ features (typed arrays, lambdas). Avoid chaining void methods.
+- **GDScript**: Use features supported by the Godot 4.7.2 stable baseline (typed arrays, lambdas). Avoid chaining void methods.
 - **C++/GDExtension**: Core performance logic (Splat sorting, Foveation).
 - **StudioTo3D**: Modular pipeline (Extraction -> Geometry -> Training).
 - **STAR Architecture**: Causal temporal cache + DA3 Depth Maps for 4D consistency.
