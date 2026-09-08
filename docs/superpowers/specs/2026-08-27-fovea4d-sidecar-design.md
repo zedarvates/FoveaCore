@@ -1,7 +1,11 @@
 # FoveaEngine 4D Motion Sidecar Design
 
 **Date:** 2026-08-27  
-**Status:** Proposed design approved for specification; implementation not started.
+**Status as of 2026-09-08:** Experimental implementation merged in
+[PR #21](https://github.com/zedarvates/FoveaCore/pull/21), merge commit
+`ff6ee1050e9a05721b2575093a31e65432cc6830`. The original design below remains
+the format contract. Synthetic CPU and focused D3D12 evidence do not close
+the real-sequence, visual-parity, million-splat, mobile or XR gates.
 
 ## 1. Purpose
 
@@ -32,8 +36,9 @@ The selected v1 baseline is an 8x8x8 field with 16 unique loop keyframes. A
 16x16x16 field remains a high-quality authoring option.
 
 The spike included one duplicated closure sample. V1 removes that duplicate;
-the synthetic quality gate must therefore be rerun with the unique-keyframe
-loop convention before the format is promoted to experimental.
+the implemented [synthetic quality gate](../../../addons/foveacore/test/test_fovea_4d_quality_gate.gd)
+uses the unique-keyframe loop convention. Each new revision still needs its
+own successful run before inheriting this evidence.
 
 ## 3. Compatibility boundary
 
@@ -193,8 +198,10 @@ performance claim for production scenes.
 
 ## 10. Validation and fail-closed limits
 
-A loader rejects the sidecar before allocating the payload when any condition
-fails:
+The format parsers reject invalid metadata before returning a decoded payload.
+The current loader reads the entire sidecar into memory before parsing; it
+does not yet impose a streaming or pre-read size limit. Validation rejects a
+sidecar when any of the following conditions fails:
 
 - magic, version, header size, codec, flags, or reserved bytes are invalid;
 - the base SHA-256 does not match the loaded `.fovea`;

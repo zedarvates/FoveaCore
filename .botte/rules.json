@@ -1,0 +1,128 @@
+{
+  "schema": "botte.rules-manifest/v1",
+  "rules": [
+    {
+      "id": "fovea4d.exact-base-binding",
+      "action": "load-motion-sidecar",
+      "effect": "REQUIRE",
+      "scope": [
+        "fovea4d.loader"
+      ],
+      "statement": "A sidecar binds to the exact SHA-256 digest of its base `.fovea` bytes.",
+      "source_ref": "docs/superpowers/specs/2026-08-27-fovea4d-sidecar-design.md#A sidecar binds to the exact SHA-256",
+      "owner_only": false,
+      "enforced": true,
+      "enforcement_refs": [
+        "addons/foveacore/scripts/fovea_4d_loader.gd#if str(header.get(\"base_sha256\", \"\")) != observed_digest:"
+      ],
+      "probes": [
+        {
+          "id": "base.allow",
+          "polarity": "allow",
+          "evidence_ref": "addons/foveacore/test/test_fovea_4d_loader.gd#\"matching base loads\""
+        },
+        {
+          "id": "base.deny",
+          "polarity": "deny",
+          "evidence_ref": "addons/foveacore/test/test_fovea_4d_loader.gd#\"different valid base fails hash binding\""
+        }
+      ],
+      "supersedes": [],
+      "last_verified": {
+        "at": "2026-09-08T08:45:24+00:00",
+        "content_sha256": "3550c11676229b4a180f1e2fe1d17eb6400e82ec98bb191cb220d87ce58e7c6b",
+        "evidence_ref": ".botte/engine.md#Verification boundary"
+      }
+    },
+    {
+      "id": "fovea4d.exact-file-envelope",
+      "action": "parse-motion-file",
+      "effect": "REQUIRE",
+      "scope": [
+        "fovea4d.format.v1"
+      ],
+      "statement": "No padding, compression wrapper, optional section, or trailing data is allowed\nin v1.",
+      "source_ref": "docs/superpowers/specs/2026-08-27-fovea4d-sidecar-design.md#No padding, compression wrapper",
+      "owner_only": false,
+      "enforced": true,
+      "enforcement_refs": [
+        "addons/foveacore/scripts/fovea_4d_format.gd#if total_size < payload_offset or total_size != bytes.size():",
+        "addons/foveacore/rust/src/fovea_4d_format.rs#if bytes.len() != total_size {"
+      ],
+      "probes": [
+        {
+          "id": "format.gd.allow",
+          "polarity": "allow",
+          "evidence_ref": "addons/foveacore/test/test_fovea_4d_format.gd#\"valid fixture parses\""
+        },
+        {
+          "id": "format.gd.deny",
+          "polarity": "deny",
+          "evidence_ref": "addons/foveacore/test/test_fovea_4d_format.gd#\"trailing bytes\""
+        },
+        {
+          "id": "format.rust.allow",
+          "polarity": "allow",
+          "evidence_ref": "addons/foveacore/rust/src/fovea_4d_format.rs#fn gdscript_fixture_is_accepted()"
+        },
+        {
+          "id": "format.rust.deny",
+          "polarity": "deny",
+          "evidence_ref": "addons/foveacore/rust/src/fovea_4d_format.rs#fn structural_corruption_is_rejected()"
+        }
+      ],
+      "supersedes": [],
+      "last_verified": {
+        "at": "2026-09-08T08:45:24+00:00",
+        "content_sha256": "4a09b9c6728bbaebf0ee36fddd1e224d2dc9e4d2e8bcd09f86343b67cc5b0cfa",
+        "evidence_ref": ".botte/engine.md#Verification boundary"
+      }
+    },
+    {
+      "id": "fovea4d.exclusive-position-modifiers",
+      "action": "configure-motion-playback",
+      "effect": "REQUIRE",
+      "scope": [
+        "fovea4d.player"
+      ],
+      "statement": "V1 4D motion is mutually exclusive with other position-changing modifiers on\nthe same asset, including delta positions, clay, cloth, skeletal deformation,\nand procedural position animation.",
+      "source_ref": "docs/superpowers/specs/2026-08-27-fovea4d-sidecar-design.md#V1 4D motion is mutually exclusive",
+      "owner_only": false,
+      "enforced": true,
+      "enforcement_refs": [
+        "addons/foveacore/scripts/fovea_splattable.gd#if not delta_positions.is_empty() or delta_weight > 0.0:",
+        "addons/foveacore/scripts/fovea_splattable.gd#if morph_type != \"None\" and morph_weight > 0.0:",
+        "addons/foveacore/scripts/fovea_splattable.gd#if renderer != null and renderer.get(\"deformer\") != null:",
+        "addons/foveacore/scripts/fovea_splattable.gd#if node.is_in_group(\"fovea_position_modifiers\"):"
+      ],
+      "probes": [
+        {
+          "id": "modifiers.allow",
+          "polarity": "allow",
+          "evidence_ref": "addons/foveacore/test/test_fovea_4d_player.gd#\"player loads matching sidecar\""
+        },
+        {
+          "id": "modifiers.deny",
+          "polarity": "deny",
+          "evidence_ref": "addons/foveacore/test/test_fovea_4d_player.gd#\"delta positions block 4D\""
+        },
+        {
+          "id": "modifiers.deformer.deny",
+          "polarity": "deny",
+          "evidence_ref": "addons/foveacore/test/test_fovea_4d_player.gd#\"active renderer deformer blocks 4D\""
+        },
+        {
+          "id": "modifiers.child.deny",
+          "polarity": "deny",
+          "evidence_ref": "addons/foveacore/test/test_fovea_4d_player.gd#\"position-modifier child blocks 4D\""
+        }
+      ],
+      "supersedes": [],
+      "last_verified": {
+        "at": "2026-09-08T08:45:24+00:00",
+        "content_sha256": "d1ec58fefbd6ad0947e031cf51c2241926f84da45c256d8d04305f244c0f744d",
+        "evidence_ref": ".botte/engine.md#Verification boundary"
+      }
+    }
+  ]
+}

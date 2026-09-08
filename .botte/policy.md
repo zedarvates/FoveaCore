@@ -22,3 +22,18 @@ Shared rules for all agents and developers on this project. Keep cheap, keep loc
 
 ## Budget
 - Daily token budget: 50000 (auto_router downgrades when exceeded).
+
+## Deterministic rule audit
+- The initial `.botte/rules.json` covers Fovea4D base-file binding, the exact
+  file envelope and exclusion of competing position modifiers. Canonical
+  wording remains in the Fovea4D design specification.
+- Run `PYTHONPATH=. python -m skills.directives_audit.rules_cli audit . --json`.
+  The auditor is data-only: probe references are checked but never executed.
+- Probe execution is separate: the existing non-GPU Godot suite and Rust
+  format tests exercise the referenced accept/reject cases. Their CI jobs
+  must check out and print the exact PR head SHA.
+- `owner_only: false` describes local parsing/playback operations. These rules
+  grant no merge, publication, deployment, asset-rights or release authority.
+- A clean report covers only the registered rules. Missing exact-SHA execution
+  evidence remains BLOCKED; it cannot be replaced by another revision's CI.
+- See [engine provenance](engine.md) for the pinned auditor and its limits.
