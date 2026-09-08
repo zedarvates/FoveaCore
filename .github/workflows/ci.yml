@@ -25,6 +25,7 @@ jobs:
           ref: ${{ env.EXPECTED_SOURCE_SHA }}
           persist-credentials: false
       - name: Verify exact source revision
+        shell: bash
         run: |
           actual_source_sha="$(git rev-parse HEAD)"
           test "$actual_source_sha" = "$EXPECTED_SOURCE_SHA"
@@ -56,6 +57,7 @@ jobs:
           ref: ${{ env.EXPECTED_SOURCE_SHA }}
           persist-credentials: false
       - name: Verify exact source revision
+        shell: bash
         run: |
           actual_source_sha="$(git rev-parse HEAD)"
           test "$actual_source_sha" = "$EXPECTED_SOURCE_SHA"
@@ -81,6 +83,7 @@ jobs:
           ref: ${{ env.EXPECTED_SOURCE_SHA }}
           persist-credentials: false
       - name: Verify exact source revision
+        shell: bash
         run: |
           actual_source_sha="$(git rev-parse HEAD)"
           test "$actual_source_sha" = "$EXPECTED_SOURCE_SHA"
@@ -109,6 +112,7 @@ jobs:
           ref: ${{ env.EXPECTED_SOURCE_SHA }}
           persist-credentials: false
       - name: Verify exact source revision
+        shell: bash
         run: |
           actual_source_sha="$(git rev-parse HEAD)"
           test "$actual_source_sha" = "$EXPECTED_SOURCE_SHA"
@@ -137,6 +141,7 @@ jobs:
           ref: ${{ env.EXPECTED_SOURCE_SHA }}
           persist-credentials: false
       - name: Verify exact source revision
+        shell: bash
         run: |
           actual_source_sha="$(git rev-parse HEAD)"
           test "$actual_source_sha" = "$EXPECTED_SOURCE_SHA"
@@ -205,6 +210,7 @@ jobs:
           ref: ${{ env.EXPECTED_SOURCE_SHA }}
           persist-credentials: false
       - name: Verify exact source revision
+        shell: bash
         run: |
           actual_source_sha="$(git rev-parse HEAD)"
           test "$actual_source_sha" = "$EXPECTED_SOURCE_SHA"
@@ -259,6 +265,7 @@ jobs:
           ref: ${{ env.EXPECTED_SOURCE_SHA }}
           persist-credentials: false
       - name: Verify exact source revision
+        shell: bash
         run: |
           actual_source_sha="$(git rev-parse HEAD)"
           test "$actual_source_sha" = "$EXPECTED_SOURCE_SHA"
@@ -304,6 +311,7 @@ jobs:
           ref: ${{ env.EXPECTED_SOURCE_SHA }}
           persist-credentials: false
       - name: Verify exact source revision
+        shell: bash
         run: |
           actual_source_sha="$(git rev-parse HEAD)"
           test "$actual_source_sha" = "$EXPECTED_SOURCE_SHA"
@@ -352,6 +360,7 @@ jobs:
           ref: ${{ env.EXPECTED_SOURCE_SHA }}
           persist-credentials: false
       - name: Verify exact source revision
+        shell: bash
         run: |
           actual_source_sha="$(git rev-parse HEAD)"
           test "$actual_source_sha" = "$EXPECTED_SOURCE_SHA"
@@ -436,6 +445,7 @@ jobs:
           ref: ${{ env.EXPECTED_SOURCE_SHA }}
           persist-credentials: false
       - name: Verify exact source revision
+        shell: bash
         run: |
           actual_source_sha="$(git rev-parse HEAD)"
           test "$actual_source_sha" = "$EXPECTED_SOURCE_SHA"
@@ -475,6 +485,7 @@ jobs:
           ref: ${{ env.EXPECTED_SOURCE_SHA }}
           persist-credentials: false
       - name: Verify exact source revision
+        shell: bash
         run: |
           actual_source_sha="$(git rev-parse HEAD)"
           test "$actual_source_sha" = "$EXPECTED_SOURCE_SHA"
@@ -502,6 +513,7 @@ jobs:
           persist-credentials: false
           submodules: recursive
       - name: Verify exact source revision
+        shell: bash
         run: |
           actual_source_sha="$(git rev-parse HEAD)"
           test "$actual_source_sha" = "$EXPECTED_SOURCE_SHA"
