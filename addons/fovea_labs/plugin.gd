@@ -22,6 +22,7 @@ const CUSTOM_TYPES: Array[Array] = [
 	["SplatInteractionController", "Node", "res://addons/foveacore/scripts/advanced/splat_interaction_controller.gd", ""],
 	["FoveaMultiplayerSync", "Node", "res://addons/foveacore/scripts/vr/fovea_multiplayer_sync.gd", ""],
 	["SplatDecalTool", "Node3D", "res://addons/foveacore/scripts/advanced/splat_decal_tool.gd", ""],
+	["Fovea4DPlayer", "Node", "res://addons/foveacore/scripts/advanced/fovea_4d_player.gd", ""],
 ]
 
 

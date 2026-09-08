@@ -10,7 +10,7 @@
 
   <p>
     <a href="https://github.com/zedarvates/FoveaCore/actions/workflows/ci.yml"><img src="https://github.com/zedarvates/FoveaCore/actions/workflows/ci.yml/badge.svg" alt="FoveaEngine CI" /></a>
-    <a href="https://godotengine.org/"><img src="https://img.shields.io/badge/Godot-4.7.dev5-478CBF?logo=godot-engine&amp;logoColor=white" alt="Godot 4.7.dev5" /></a>
+    <a href="https://godotengine.org/"><img src="https://img.shields.io/badge/Godot-4.7.2_stable-478CBF?logo=godot-engine&amp;logoColor=white" alt="Godot 4.7.2 stable" /></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2ea44f" alt="MIT license" /></a>
     <img src="https://img.shields.io/badge/status-pre--release-f59e0b" alt="Pre-release status" />
   </p>
@@ -129,7 +129,7 @@ flowchart LR
 
 ### 1. Open the demo
 
-You need **Godot 4.7.dev5 Mono** (or a compatible later 4.7 build) and a Forward+ capable GPU.
+You need **Godot 4.7.2 stable Mono** and a Forward+ capable GPU. Repository CI targets this stable baseline; evidence entries that explicitly name `4.7.dev5` remain historical records of those earlier runs.
 
 ```bash
 git clone --recurse-submodules https://github.com/zedarvates/FoveaCore.git

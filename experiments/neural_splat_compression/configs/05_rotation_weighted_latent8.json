@@ -1,0 +1,12 @@
+{
+  "name": "rotation_weighted_latent8",
+  "latent_dim": 8,
+  "hidden_dim": 128,
+  "latent_bits": 8,
+  "epochs": 1400,
+  "learning_rate": 0.005,
+  "latent_penalty": 0.00001,
+  "rotation_weight": 4.0,
+  "seed": 20260825,
+  "threads": 4
+}

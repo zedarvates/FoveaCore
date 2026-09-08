@@ -1,0 +1,13 @@
+{
+  "name": "wide_decoder_latent7",
+  "latent_dim": 7,
+  "hidden_dim": 128,
+  "latent_bits": 8,
+  "epochs": 2000,
+  "learning_rate": 0.0045,
+  "latent_penalty": 0.00001,
+  "rotation_weight": 4.0,
+  "color_weight": 4.0,
+  "seed": 20260825,
+  "threads": 4
+}

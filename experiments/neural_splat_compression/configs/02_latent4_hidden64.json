@@ -1,0 +1,11 @@
+{
+  "name": "latent4_hidden64",
+  "latent_dim": 4,
+  "hidden_dim": 64,
+  "latent_bits": 8,
+  "epochs": 500,
+  "learning_rate": 0.01,
+  "latent_penalty": 0.00005,
+  "seed": 20260825,
+  "threads": 4
+}

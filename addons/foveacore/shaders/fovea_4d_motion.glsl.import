@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://11h8ufay3o7a"
+path="res://.godot/imported/fovea_4d_motion.glsl-7c1893c7810a608132324ba2b6790fb0.res"
+
+[deps]
+
+source_file="res://addons/foveacore/shaders/fovea_4d_motion.glsl"
+dest_files=["res://.godot/imported/fovea_4d_motion.glsl-7c1893c7810a608132324ba2b6790fb0.res"]
+
+[params]
+

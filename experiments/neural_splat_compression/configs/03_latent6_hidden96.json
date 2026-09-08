@@ -1,0 +1,11 @@
+{
+  "name": "latent6_hidden96",
+  "latent_dim": 6,
+  "hidden_dim": 96,
+  "latent_bits": 8,
+  "epochs": 800,
+  "learning_rate": 0.008,
+  "latent_penalty": 0.00002,
+  "seed": 20260825,
+  "threads": 4
+}

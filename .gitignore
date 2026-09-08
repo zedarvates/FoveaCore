@@ -101,3 +101,6 @@ import.log
 /tests/FoveaEngine.Tests/bin/
 /tests/FoveaEngine.Tests/obj/
 
+# Isolated implementation worktrees
+/.worktrees/
+
